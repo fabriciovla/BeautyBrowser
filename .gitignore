@@ -1,0 +1,12 @@
+bin/
+obj/
+.vs/
+*.user
+*.binlog
+
+# Built by installer/build-installer.ps1
+artifacts/
+installer/BeautyInstaller/payload.zip
+
+# CEF built with codecs by tools/build-cef-codecs.ps1 (~300 MB)
+third_party/cef-codecs/
