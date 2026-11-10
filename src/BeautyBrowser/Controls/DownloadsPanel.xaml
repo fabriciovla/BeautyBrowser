@@ -1,0 +1,122 @@
+﻿<UserControl
+    x:Class="BeautyBrowser.Controls.DownloadsPanel"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:BeautyBrowser"
+    xmlns:services="using:BeautyBrowser.Services">
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <Button
+            Height="44"
+            Margin="8,8,8,0"
+            Click="OpenFolder_Click"
+            Background="{StaticResource BeautySubtleFillBrush}"
+            CornerRadius="10"
+            Style="{StaticResource BeautyListRowButton}"
+            ToolTipService.ToolTip="{local:T En='Open the folder in File Explorer', Es='Abrir la carpeta en el Explorador'}">
+            <Grid ColumnSpacing="10">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <FontIcon FontSize="15" Glyph="&#xE8B7;" />
+                <TextBlock
+                    x:Name="FolderText"
+                    Grid.Column="1"
+                    VerticalAlignment="Center"
+                    FontSize="13"
+                    TextTrimming="CharacterEllipsis" />
+                <FontIcon
+                    Grid.Column="2"
+                    FontSize="11"
+                    Foreground="{StaticResource BeautyTextSecondaryBrush}"
+                    Glyph="&#xE8A7;" />
+            </Grid>
+        </Button>
+
+        <ScrollView
+            x:Name="Scroller"
+            Grid.Row="1"
+            ContentOrientation="Vertical"
+            HorizontalScrollBarVisibility="Hidden"
+            VerticalScrollBarVisibility="Auto">
+            <StackPanel Margin="6,0,6,6">
+                <TextBlock Style="{StaticResource BeautySectionLabel}" Text="{local:T En='Recent', Es='Recientes'}" />
+                <ItemsRepeater x:Name="List">
+                    <ItemsRepeater.ItemTemplate>
+                        <DataTemplate x:DataType="services:DownloadEntry">
+                            <Button
+                                MinHeight="52"
+                                Padding="10,8,10,8"
+                                Click="Item_Click"
+                                RightTapped="Item_RightTapped"
+                                Tag="{x:Bind}"
+                                Style="{StaticResource BeautyListRowButton}"
+                                ToolTipService.ToolTip="{x:Bind FullPath}">
+                                <Grid ColumnSpacing="12">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="32" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <Border
+                                        Width="32"
+                                        Height="32"
+                                        VerticalAlignment="Center"
+                                        Background="{StaticResource BeautySubtleFillBrush}"
+                                        CornerRadius="8">
+                                        <FontIcon
+                                            FontSize="15"
+                                            Foreground="{StaticResource BeautyTextSecondaryBrush}"
+                                            Glyph="&#xE8A5;" />
+                                    </Border>
+                                    <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+                                        <TextBlock
+                                            FontSize="13"
+                                            Foreground="{StaticResource BeautyTextBrush}"
+                                            MaxLines="1"
+                                            Text="{x:Bind FileName}"
+                                            TextTrimming="CharacterEllipsis" />
+                                        <TextBlock
+                                            FontSize="11"
+                                            Foreground="{StaticResource BeautyTextSecondaryBrush}"
+                                            MaxLines="1"
+                                            Text="{x:Bind Detail, Mode=OneWay}"
+                                            TextTrimming="CharacterEllipsis" />
+                                        <ProgressBar
+                                            Margin="0,4,0,0"
+                                            IsIndeterminate="{x:Bind IsIndeterminate, Mode=OneWay}"
+                                            Visibility="{x:Bind local:BindHelpers.VisibleIf(IsInProgress), Mode=OneWay}"
+                                            Value="{x:Bind Progress, Mode=OneWay}" />
+                                    </StackPanel>
+                                </Grid>
+                            </Button>
+                        </DataTemplate>
+                    </ItemsRepeater.ItemTemplate>
+                </ItemsRepeater>
+            </StackPanel>
+        </ScrollView>
+
+        <StackPanel
+            x:Name="EmptyState"
+            Grid.Row="1"
+            Margin="24,48,24,0"
+            HorizontalAlignment="Center"
+            Spacing="8">
+            <FontIcon
+                FontSize="22"
+                Foreground="{StaticResource BeautyTextSecondaryBrush}"
+                Glyph="&#xE896;" />
+            <TextBlock
+                HorizontalAlignment="Center"
+                FontSize="13"
+                Foreground="{StaticResource BeautyTextSecondaryBrush}"
+                Text="{local:T En='Nothing downloaded yet.', Es='Todavía no descargaste nada.'}" />
+        </StackPanel>
+    </Grid>
+</UserControl>

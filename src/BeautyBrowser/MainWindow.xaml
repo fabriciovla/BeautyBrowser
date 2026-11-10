@@ -1,0 +1,353 @@
+<Window
+    x:Class="BeautyBrowser.MainWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:controls="using:BeautyBrowser.Controls"
+    xmlns:kit="using:BeautyKit"
+    xmlns:local="using:BeautyBrowser"
+    Title="Beauty Browser">
+
+    <!--
+        Layers, bottom to top: glass (Mica), page (and DevTools), drag zone, caption buttons, sidebar, library,
+        floating downloads button, command palette and animations.
+    -->
+    <Grid x:Name="Root" KeyboardAcceleratorPlacementMode="Hidden">
+        <Grid.KeyboardAccelerators>
+            <KeyboardAccelerator Key="T" Invoked="NewTab_Invoked" Modifiers="Control" />
+            <KeyboardAccelerator Key="W" Invoked="CloseTab_Invoked" Modifiers="Control" />
+            <KeyboardAccelerator Key="L" Invoked="FocusAddress_Invoked" Modifiers="Control" />
+            <KeyboardAccelerator Key="H" Invoked="History_Invoked" Modifiers="Control" />
+            <KeyboardAccelerator Key="R" Invoked="Reload_Invoked" Modifiers="Control" />
+            <KeyboardAccelerator Key="F5" Invoked="Reload_Invoked" />
+            <KeyboardAccelerator Key="F12" Invoked="DevTools_Invoked" />
+            <KeyboardAccelerator Key="I" Invoked="DevTools_Invoked" Modifiers="Control,Shift" />
+            <KeyboardAccelerator Key="Escape" Invoked="Escape_Invoked" />
+            <KeyboardAccelerator Key="Tab" Invoked="NextTab_Invoked" Modifiers="Control" />
+            <KeyboardAccelerator Key="Tab" Invoked="PreviousTab_Invoked" Modifiers="Control,Shift" />
+            <KeyboardAccelerator Key="PageDown" Invoked="NextTab_Invoked" Modifiers="Control" />
+            <KeyboardAccelerator Key="PageUp" Invoked="PreviousTab_Invoked" Modifiers="Control" />
+            <KeyboardAccelerator Key="Number1" Invoked="TabNumber_Invoked" Modifiers="Control" />
+            <KeyboardAccelerator Key="Number2" Invoked="TabNumber_Invoked" Modifiers="Control" />
+            <KeyboardAccelerator Key="Number3" Invoked="TabNumber_Invoked" Modifiers="Control" />
+            <KeyboardAccelerator Key="Number4" Invoked="TabNumber_Invoked" Modifiers="Control" />
+            <KeyboardAccelerator Key="Number5" Invoked="TabNumber_Invoked" Modifiers="Control" />
+            <KeyboardAccelerator Key="Number6" Invoked="TabNumber_Invoked" Modifiers="Control" />
+            <KeyboardAccelerator Key="Number7" Invoked="TabNumber_Invoked" Modifiers="Control" />
+            <KeyboardAccelerator Key="Number8" Invoked="TabNumber_Invoked" Modifiers="Control" />
+            <KeyboardAccelerator Key="Number9" Invoked="TabNumber_Invoked" Modifiers="Control" />
+            <!-- Chrome's usual shortcuts; zoom ones are added in code because + and - have no name here. -->
+            <KeyboardAccelerator Key="J" Invoked="Downloads_Invoked" Modifiers="Control" />
+            <KeyboardAccelerator Key="S" Invoked="ToggleDock_Invoked" Modifiers="Control" />
+            <KeyboardAccelerator Key="T" Invoked="ReopenTab_Invoked" Modifiers="Control,Shift" />
+            <KeyboardAccelerator Key="D" Invoked="Favorite_Invoked" Modifiers="Control" />
+            <KeyboardAccelerator Key="F" Invoked="Find_Invoked" Modifiers="Control" />
+            <KeyboardAccelerator Key="G" Invoked="FindNext_Invoked" Modifiers="Control" />
+            <KeyboardAccelerator Key="G" Invoked="FindPrevious_Invoked" Modifiers="Control,Shift" />
+            <KeyboardAccelerator Key="F3" Invoked="FindNext_Invoked" />
+            <KeyboardAccelerator Key="F3" Invoked="FindPrevious_Invoked" Modifiers="Shift" />
+            <KeyboardAccelerator Key="P" Invoked="Print_Invoked" Modifiers="Control" />
+            <KeyboardAccelerator Key="U" Invoked="ViewSource_Invoked" Modifiers="Control" />
+            <KeyboardAccelerator Key="J" Invoked="DevTools_Invoked" Modifiers="Control,Shift" />
+            <KeyboardAccelerator Key="Left" Invoked="Back_Invoked" Modifiers="Menu" />
+            <KeyboardAccelerator Key="Right" Invoked="Forward_Invoked" Modifiers="Menu" />
+            <KeyboardAccelerator Key="Home" Invoked="Home_Invoked" Modifiers="Menu" />
+            <KeyboardAccelerator Key="D" Invoked="FocusAddress_Invoked" Modifiers="Menu" />
+            <KeyboardAccelerator Key="F6" Invoked="FocusAddress_Invoked" />
+        </Grid.KeyboardAccelerators>
+
+        <!-- The theme color over the window glass (transparent for Classic, see AppTheme) and its grain. -->
+        <Border x:Name="ThemeTint" IsHitTestVisible="False" />
+        <controls:NoiseLayer />
+
+        <!-- The page (and docked DevTools) inside a thin glass frame. PageSlider slides it right while the library is
+             open, without changing its width. -->
+        <Grid x:Name="PageSlider">
+        <Grid x:Name="PageArea" Margin="8">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition x:Name="SplitterColumn" Width="0" />
+                <ColumnDefinition x:Name="DevToolsColumn" Width="0" />
+            </Grid.ColumnDefinitions>
+
+            <kit:BrowserView x:Name="WebView" CornerRadius="{StaticResource BeautyContentCornerRadius}" />
+
+            <local:ResizeHandle
+                x:Name="DevToolsSplitter"
+                Grid.Column="1"
+                Visibility="Collapsed" />
+
+            <Grid
+                x:Name="DevToolsPanel"
+                Grid.Column="2"
+                Background="{StaticResource BeautyCardBrush}"
+                CornerRadius="{StaticResource BeautyContentCornerRadius}"
+                Visibility="Collapsed">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="32" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+                <!-- The X goes on the left: the caption buttons appear on the top right. -->
+                <StackPanel
+                    Padding="4,0,12,0"
+                    Background="#F3F3F6"
+                    Orientation="Horizontal"
+                    Spacing="6">
+                    <Button
+                        Padding="7"
+                        VerticalAlignment="Center"
+                        Click="CloseDevTools_Click"
+                        Style="{StaticResource BeautyIconButton}"
+                        ToolTipService.ToolTip="{local:T En='Close (F12)', Es='Cerrar (F12)'}">
+                        <FontIcon FontSize="10" Glyph="&#xE711;" />
+                    </Button>
+                    <TextBlock
+                        VerticalAlignment="Center"
+                        FontSize="12"
+                        Foreground="{StaticResource BeautyTextSecondaryBrush}"
+                        Text="{local:T En='Inspect', Es='Inspeccionar'}" />
+                </StackPanel>
+                <kit:BrowserView x:Name="DevToolsView" Grid.Row="1" />
+            </Grid>
+        </Grid>
+        </Grid>
+
+        <!--
+            When the caption buttons appear, the top of the page is clipped (not moved) so the same window glass shows
+            behind them. See SetCaptionShown.
+        -->
+
+        <!-- Load bar: a blue line on the top frame showing real progress. -->
+        <Border
+            x:Name="LoadBar"
+            Width="0"
+            Height="3"
+            HorizontalAlignment="Left"
+            VerticalAlignment="Top"
+            Background="{StaticResource BeautyAccentBrush}"
+            CornerRadius="1.5"
+            IsHitTestVisible="False"
+            Opacity="0" />
+
+        <!-- Find in page (Ctrl+F): a floating card at the top right of the page. -->
+        <Border
+            x:Name="FindBar"
+            Width="340"
+            Height="44"
+            Margin="0,20,28,0"
+            Padding="12,0,4,0"
+            HorizontalAlignment="Right"
+            VerticalAlignment="Top"
+            Background="{StaticResource BeautyCardBrush}"
+            BorderBrush="{StaticResource BeautyPanelBorderBrush}"
+            BorderThickness="1"
+            CornerRadius="{StaticResource BeautyItemCornerRadius}"
+            Visibility="Collapsed">
+            <Border.Resources>
+                <ResourceDictionary Source="ms-appx:///Theme/BeautySurface.xaml" />
+            </Border.Resources>
+            <Grid ColumnSpacing="2">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <FontIcon
+                    Margin="0,0,8,0"
+                    VerticalAlignment="Center"
+                    FontSize="13"
+                    Foreground="{StaticResource BeautyTextSecondaryBrush}"
+                    Glyph="&#xE721;" />
+                <TextBox
+                    x:Name="FindBox"
+                    Grid.Column="1"
+                    Padding="0,10"
+                    VerticalAlignment="Center"
+                    FontSize="13"
+                    IsSpellCheckEnabled="False"
+                    KeyDown="FindBox_KeyDown"
+                    PlaceholderText="{local:T En='Find in page', Es='Buscar en la página'}"
+                    TextChanged="FindBox_TextChanged" />
+                <TextBlock
+                    x:Name="FindCount"
+                    Grid.Column="2"
+                    Margin="6,0,6,0"
+                    VerticalAlignment="Center"
+                    FontSize="12"
+                    Foreground="{StaticResource BeautyTextSecondaryBrush}" />
+                <Button
+                    Grid.Column="3"
+                    Width="30"
+                    Height="30"
+                    Padding="0"
+                    Click="FindPrevious_Click"
+                    Style="{StaticResource BeautyIconButton}"
+                    ToolTipService.ToolTip="{local:T En='Previous (Shift+Enter)', Es='Anterior (Mayús+Enter)'}">
+                    <FontIcon FontSize="11" Glyph="&#xE70E;" />
+                </Button>
+                <Button
+                    Grid.Column="4"
+                    Width="30"
+                    Height="30"
+                    Padding="0"
+                    Click="FindNext_Click"
+                    Style="{StaticResource BeautyIconButton}"
+                    ToolTipService.ToolTip="{local:T En='Next (Enter)', Es='Siguiente (Enter)'}">
+                    <FontIcon FontSize="11" Glyph="&#xE70D;" />
+                </Button>
+                <Button
+                    Grid.Column="5"
+                    Width="30"
+                    Height="30"
+                    Padding="0"
+                    Click="FindClose_Click"
+                    Style="{StaticResource BeautyIconButton}"
+                    ToolTipService.ToolTip="{local:T En='Close (Esc)', Es='Cerrar (Esc)'}">
+                    <FontIcon FontSize="10" Glyph="&#xE711;" />
+                </Button>
+            </Grid>
+        </Border>
+
+        <!--
+            Peek: a link that would open another tab shows here over the page, growing from where it was clicked, with
+            close and open-as-tab buttons beside it.
+        -->
+        <Grid x:Name="PeekLayer" Visibility="Collapsed">
+            <Border x:Name="PeekScrim" Background="#3D000000" Tapped="PeekScrim_Tapped" />
+            <!-- PeekHost is animated on the GPU; inside is the card with its shadow. -->
+            <Grid x:Name="PeekHost" HorizontalAlignment="Left" VerticalAlignment="Top">
+                <Border
+                    x:Name="PeekCard"
+                    Background="White"
+                    BorderBrush="#29000000"
+                    BorderThickness="1"
+                    CornerRadius="12">
+                    <kit:BrowserView x:Name="PeekView" CornerRadius="11" />
+                </Border>
+            </Grid>
+            <StackPanel
+                x:Name="PeekActions"
+                HorizontalAlignment="Left"
+                VerticalAlignment="Top"
+                Spacing="10">
+                <StackPanel.Resources>
+                    <SolidColorBrush x:Key="ButtonBackground" Color="#E61D1D22" />
+                    <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#FF34343B" />
+                    <SolidColorBrush x:Key="ButtonBackgroundPressed" Color="#FF45454D" />
+                    <SolidColorBrush x:Key="ButtonForeground" Color="White" />
+                    <SolidColorBrush x:Key="ButtonForegroundPointerOver" Color="White" />
+                    <SolidColorBrush x:Key="ButtonForegroundPressed" Color="White" />
+                    <SolidColorBrush x:Key="ButtonBorderBrush" Color="#33FFFFFF" />
+                    <SolidColorBrush x:Key="ButtonBorderBrushPointerOver" Color="#4DFFFFFF" />
+                    <SolidColorBrush x:Key="ButtonBorderBrushPressed" Color="#4DFFFFFF" />
+                </StackPanel.Resources>
+                <Button
+                    Width="36"
+                    Height="36"
+                    Padding="0"
+                    Background="#E61D1D22"
+                    BorderThickness="1"
+                    Click="PeekClose_Click"
+                    CornerRadius="18"
+                    Foreground="White"
+                    ToolTipService.ToolTip="{local:T En='Close (Esc)', Es='Cerrar (Esc)'}"
+                    AutomationProperties.Name="{local:T En='Close mini window', Es='Cerrar mini ventana'}"
+                    UseSystemFocusVisuals="False">
+                    <FontIcon FontSize="12" Glyph="&#xE711;" />
+                </Button>
+                <Button
+                    Width="36"
+                    Height="36"
+                    Padding="0"
+                    Background="#E61D1D22"
+                    BorderThickness="1"
+                    Click="PeekExpand_Click"
+                    CornerRadius="18"
+                    Foreground="White"
+                    ToolTipService.ToolTip="{local:T En='Open as tab', Es='Abrir como pestaña'}"
+                    AutomationProperties.Name="{local:T En='Open as tab', Es='Abrir como pestaña'}"
+                    UseSystemFocusVisuals="False">
+                    <FontIcon FontSize="13" Glyph="&#xE740;" />
+                </Button>
+            </StackPanel>
+        </Grid>
+
+        <!-- Window drag zone: the top frame, which grows with the caption buttons. The top of the page also drags from
+             empty spots (BrowserView.WindowDragZone). -->
+        <Grid
+            x:Name="AppTitleBar"
+            Height="8"
+            VerticalAlignment="Top"
+            Background="Transparent" />
+
+        <!-- The sidebar sits on the window edge, sharing Windows' corners; it shows when the mouse reaches the left. -->
+        <controls:Sidebar
+            x:Name="Sidebar"
+            Width="{StaticResource BeautySidebarWidthValue}"
+            Margin="0"
+            HorizontalAlignment="Left"
+            IsHitTestVisible="False"
+            Opacity="0" />
+
+        <!--
+            The library: rail and list docked to the left edge on the sidebar glass, with the page still usable on the
+            right. LibraryHost slides on the GPU, so for XAML the panel never moves and its list is already built when
+            it comes in.
+        -->
+        <Grid
+            x:Name="LibraryHost"
+            Width="432"
+            HorizontalAlignment="Left">
+            <controls:LibraryPanel x:Name="Library" IsHitTestVisible="False" />
+        </Grid>
+
+        <!-- Tab preview, floating next to the sidebar. -->
+        <controls:TabPreview
+            x:Name="Preview"
+            HorizontalAlignment="Left"
+            VerticalAlignment="Top"
+            IsHitTestVisible="False"
+            Opacity="0"
+            PointerEntered="Preview_PointerEntered"
+            PointerExited="Preview_PointerExited" />
+
+        <!-- Floating downloads button: appears when something downloads while the sidebar is hidden. -->
+        <Button
+            x:Name="FloatingLibrary"
+            Width="44"
+            Height="44"
+            Margin="22"
+            Padding="0"
+            HorizontalAlignment="Left"
+            VerticalAlignment="Bottom"
+            Background="{StaticResource BeautyAccentBrush}"
+            BorderThickness="0"
+            Click="FloatingLibrary_Click"
+            CornerRadius="{StaticResource BeautyItemCornerRadius}"
+            IsHitTestVisible="False"
+            Opacity="0"
+            RenderTransformOrigin="0.5,0.5"
+            ToolTipService.ToolTip="{local:T En='Downloads', Es='Descargas'}">
+            <Button.Resources>
+                <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#2A63D4" />
+                <SolidColorBrush x:Key="ButtonBackgroundPressed" Color="#2558BD" />
+            </Button.Resources>
+            <Button.RenderTransform>
+                <ScaleTransform x:Name="FloatingLibraryScale" />
+            </Button.RenderTransform>
+            <FontIcon FontSize="17" Foreground="White" Glyph="&#xE896;" />
+        </Button>
+
+        <controls:CommandPalette x:Name="Palette" Visibility="Collapsed" />
+
+        <controls:TabSwitcher x:Name="Switcher" />
+
+        <!-- Animation layer (downloads). -->
+        <Canvas x:Name="EffectsLayer" IsHitTestVisible="False" />
+
+        <!-- Onboarding covers everything on first run. See Controls/Onboarding. -->
+        <Grid x:Name="OnboardingHost" Visibility="Collapsed" />
+    </Grid>
+</Window>

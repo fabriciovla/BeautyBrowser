@@ -1,0 +1,6 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/BeautyBrowser/BeautyBrowser.csproj" />
+    <Project Path="src/BeautyKit/BeautyKit.csproj" />
+  </Folder>
+</Solution>

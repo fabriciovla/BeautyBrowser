@@ -1,0 +1,143 @@
+﻿<UserControl
+    x:Class="BeautyBrowser.Controls.SpacesPanel"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:BeautyBrowser">
+
+    <UserControl.Resources>
+        <ResourceDictionary Source="ms-appx:///Theme/BeautySurface.xaml" />
+    </UserControl.Resources>
+
+    <!--
+        Spaces inside the library: the title and the + on top, a card with name and icon while creating one, and every
+        space below as a card (switch, rename, change icon, delete). No dialogs.
+    -->
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <Grid Padding="18,16,12,10" ColumnSpacing="12">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <StackPanel Spacing="2">
+                <TextBlock FontSize="18" FontWeight="SemiBold" Foreground="{StaticResource BeautyTextBrush}" Text="{local:T En='Spaces', Es='Espacios'}" />
+                <TextBlock
+                    x:Name="Summary"
+                    FontSize="12"
+                    Foreground="{StaticResource BeautyTextSecondaryBrush}"
+                    Text="{local:T En='Each space keeps its own tabs', Es='Cada space guarda sus propias pestañas'}" />
+            </StackPanel>
+            <Button
+                x:Name="NewSpaceButton"
+                Grid.Column="1"
+                Width="34"
+                Height="34"
+                Padding="0"
+                VerticalAlignment="Center"
+                Background="{StaticResource BeautyCardBrush}"
+                BorderBrush="{StaticResource BeautyInsetBorderBrush}"
+                BorderThickness="1"
+                Click="NewSpace_Click"
+                Style="{StaticResource BeautyIconButton}"
+                ToolTipService.ToolTip="{local:T En='New space', Es='Nuevo space'}"
+                AutomationProperties.Name="{local:T En='New space', Es='Nuevo space'}"
+                UseSystemFocusVisuals="False">
+                <Button.Resources>
+                    <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#F4F4F6" />
+                    <SolidColorBrush x:Key="ButtonBackgroundPressed" Color="#EAEAEE" />
+                </Button.Resources>
+                <FontIcon FontSize="13" Glyph="&#xE710;" />
+            </Button>
+        </Grid>
+
+        <ScrollView
+            Grid.Row="1"
+            ContentOrientation="Vertical"
+            HorizontalScrollBarVisibility="Hidden"
+            VerticalScrollBarVisibility="Auto">
+            <StackPanel Margin="10,0,10,10" Spacing="6">
+
+                <Border
+                    x:Name="Composer"
+                    Padding="14"
+                    Background="{StaticResource BeautyCardBrush}"
+                    BorderBrush="{StaticResource BeautyInsetBorderBrush}"
+                    BorderThickness="1"
+                    CornerRadius="12"
+                    Visibility="Collapsed">
+                    <StackPanel Spacing="14">
+                        <Grid ColumnSpacing="12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Border
+                                Width="44"
+                                Height="44"
+                                Background="{StaticResource BeautyTextBrush}"
+                                CornerRadius="11">
+                                <FontIcon x:Name="ComposerIcon" FontSize="19" Foreground="White" />
+                            </Border>
+                            <Border
+                                Grid.Column="1"
+                                Padding="12,0"
+                                VerticalAlignment="Center"
+                                Background="{StaticResource BeautySubtleFillBrush}"
+                                CornerRadius="10">
+                                <TextBox
+                                    x:Name="ComposerName"
+                                    Padding="0,11"
+                                    FontSize="14"
+                                    IsSpellCheckEnabled="False"
+                                    KeyDown="ComposerName_KeyDown"
+                                    PlaceholderText="{local:T En='Space name', Es='Nombre del space'}" />
+                            </Border>
+                        </Grid>
+
+                        <Grid x:Name="ComposerIcons" />
+
+                        <Grid ColumnSpacing="8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Button
+                                Height="38"
+                                HorizontalAlignment="Stretch"
+                                HorizontalContentAlignment="Center"
+                                Background="{StaticResource BeautySubtleFillBrush}"
+                                Click="CancelNew_Click"
+                                CornerRadius="10"
+                                Style="{StaticResource BeautyListRowButton}">
+                                <TextBlock FontSize="13" Text="{local:T En='Cancel', Es='Cancelar'}" />
+                            </Button>
+                            <Button
+                                Grid.Column="1"
+                                Height="38"
+                                HorizontalAlignment="Stretch"
+                                HorizontalContentAlignment="Center"
+                                Background="{StaticResource BeautyTextBrush}"
+                                Click="CreateSpace_Click"
+                                CornerRadius="10"
+                                Style="{StaticResource BeautyListRowButton}">
+                                <Button.Resources>
+                                    <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#38383F" />
+                                    <SolidColorBrush x:Key="ButtonBackgroundPressed" Color="#4A4A52" />
+                                    <SolidColorBrush x:Key="ButtonForegroundPointerOver" Color="White" />
+                                    <SolidColorBrush x:Key="ButtonForegroundPressed" Color="White" />
+                                </Button.Resources>
+                                <TextBlock FontSize="13" FontWeight="SemiBold" Foreground="White" Text="{local:T En='Create space', Es='Crear space'}" />
+                            </Button>
+                        </Grid>
+                    </StackPanel>
+                </Border>
+
+                <StackPanel x:Name="Rows" Spacing="6" />
+            </StackPanel>
+        </ScrollView>
+    </Grid>
+</UserControl>

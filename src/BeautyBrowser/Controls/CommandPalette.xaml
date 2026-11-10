@@ -1,0 +1,135 @@
+<UserControl
+    x:Class="BeautyBrowser.Controls.CommandPalette"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:controls="using:BeautyBrowser.Controls"
+    xmlns:local="using:BeautyBrowser">
+
+    <!-- Invisible backdrop: a click outside the card closes the palette. -->
+    <Grid x:Name="Backdrop" Background="#01000000" Tapped="Backdrop_Tapped">
+        <Grid
+            x:Name="Card"
+            MaxWidth="760"
+            Margin="40,0"
+            HorizontalAlignment="Stretch"
+            VerticalAlignment="Top"
+            Background="{StaticResource BeautyCardBrush}"
+            BorderBrush="{StaticResource BeautyPanelBorderBrush}"
+            BorderThickness="1"
+            CornerRadius="{StaticResource BeautyPanelCornerRadius}"
+            RenderTransformOrigin="0.5,0.5"
+            Tapped="Card_Tapped">
+            <Grid.RenderTransform>
+                <ScaleTransform x:Name="CardScale" />
+            </Grid.RenderTransform>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <Grid Height="58" Padding="20,0,12,0" ColumnSpacing="12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <FontIcon
+                    FontSize="16"
+                    Foreground="{StaticResource BeautyTextSecondaryBrush}"
+                    Glyph="&#xE721;" />
+                <TextBox
+                    x:Name="Query"
+                    Grid.Column="1"
+                    Padding="0,6"
+                    VerticalAlignment="Center"
+                    Background="Transparent"
+                    BorderThickness="0"
+                    FontSize="15"
+                    IsSpellCheckEnabled="False"
+                    PlaceholderText="{local:T En='Search or type a URL…', Es='Buscar o escribir una URL…'}"
+                    PreviewKeyDown="Query_PreviewKeyDown"
+                    TextChanged="Query_TextChanged">
+                    <TextBox.Resources>
+                        <SolidColorBrush x:Key="TextControlBackgroundPointerOver" Color="Transparent" />
+                        <SolidColorBrush x:Key="TextControlBackgroundFocused" Color="Transparent" />
+                        <SolidColorBrush x:Key="TextControlBorderBrushFocused" Color="Transparent" />
+                        <SolidColorBrush x:Key="TextControlBorderBrushPointerOver" Color="Transparent" />
+                    </TextBox.Resources>
+                </TextBox>
+            </Grid>
+
+            <Rectangle
+                x:Name="Divider"
+                Grid.Row="1"
+                Height="1"
+                Margin="14,0"
+                Fill="{StaticResource BeautyDividerBrush}" />
+
+            <ListView
+                x:Name="Results"
+                Grid.Row="2"
+                MaxHeight="430"
+                Padding="8,6,8,8"
+                IsItemClickEnabled="True"
+                ItemClick="Results_ItemClick"
+                SelectionMode="Single">
+                <ListView.Resources>
+                    <SolidColorBrush x:Key="ListViewItemBackgroundPointerOver" Color="#0A000000" />
+                    <SolidColorBrush x:Key="ListViewItemBackgroundSelected" Color="#0F000000" />
+                    <SolidColorBrush x:Key="ListViewItemBackgroundSelectedPointerOver" Color="#14000000" />
+                    <SolidColorBrush x:Key="ListViewItemBackgroundSelectedPressed" Color="#18000000" />
+                    <SolidColorBrush x:Key="ListViewItemSelectionIndicatorBrush" Color="Transparent" />
+                    <SolidColorBrush x:Key="ListViewItemSelectionIndicatorPointerOverBrush" Color="Transparent" />
+                    <SolidColorBrush x:Key="ListViewItemSelectionIndicatorPressedBrush" Color="Transparent" />
+                </ListView.Resources>
+                <ListView.ItemContainerStyle>
+                    <Style TargetType="ListViewItem" BasedOn="{StaticResource BeautyTabItemStyle}">
+                        <Setter Property="Padding" Value="12,0" />
+                    </Style>
+                </ListView.ItemContainerStyle>
+                <ListView.ItemTemplate>
+                    <DataTemplate x:DataType="controls:PaletteResult">
+                        <Grid Height="44" ColumnSpacing="14">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="18" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <FontIcon
+                                FontSize="15"
+                                Foreground="{StaticResource BeautyTextSecondaryBrush}"
+                                Glyph="{x:Bind Glyph}"
+                                Visibility="{x:Bind local:BindHelpers.VisibleIfNull(Icon)}" />
+                            <Image Width="16" Height="16" Source="{x:Bind Icon}" />
+                            <TextBlock
+                                Grid.Column="1"
+                                VerticalAlignment="Center"
+                                TextTrimming="CharacterEllipsis">
+                                <Run Foreground="{StaticResource BeautyTextBrush}" Text="{x:Bind Title}" />
+                                <Run Foreground="{StaticResource BeautyTextSecondaryBrush}" Text="{x:Bind SubtitleWithDash}" />
+                            </TextBlock>
+                            <StackPanel
+                                Grid.Column="2"
+                                Orientation="Horizontal"
+                                Spacing="8"
+                                Visibility="{x:Bind local:BindHelpers.VisibleIf(IsOpenTab)}">
+                                <TextBlock
+                                    VerticalAlignment="Center"
+                                    FontSize="12"
+                                    Foreground="{StaticResource BeautyTextSecondaryBrush}"
+                                    Text="{local:T En='Switch to tab', Es='Cambiar a la pestaña'}" />
+                                <Border
+                                    Width="20"
+                                    Height="20"
+                                    Background="{StaticResource BeautyTextSecondaryBrush}"
+                                    CornerRadius="5">
+                                    <FontIcon FontSize="10" Foreground="White" Glyph="&#xE72A;" />
+                                </Border>
+                            </StackPanel>
+                        </Grid>
+                    </DataTemplate>
+                </ListView.ItemTemplate>
+            </ListView>
+        </Grid>
+    </Grid>
+</UserControl>

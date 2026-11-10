@@ -1,0 +1,202 @@
+﻿<UserControl
+    x:Class="BeautyBrowser.Controls.HistoryPanel"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:controls="using:BeautyBrowser.Controls"
+    xmlns:local="using:BeautyBrowser"
+    xmlns:services="using:BeautyBrowser.Services">
+
+    <UserControl.Resources>
+        <!-- Day header: "Today", "Yesterday", "Monday"… -->
+        <DataTemplate x:Key="DayTemplate" x:DataType="controls:HistoryDay">
+            <TextBlock Style="{StaticResource BeautySectionLabel}" Text="{x:Bind Label}" />
+        </DataTemplate>
+
+        <DataTemplate x:Key="EntryTemplate" x:DataType="services:HistoryEntry">
+            <!-- The visit goes in Tag: ItemsRepeater with x:Bind does not set DataContext. -->
+            <Button
+                Height="46"
+                Click="Entry_Click"
+                Tag="{x:Bind}"
+                PointerEntered="Entry_PointerEntered"
+                PointerExited="Entry_PointerExited"
+                Style="{StaticResource BeautyListRowButton}"
+                ToolTipService.ToolTip="{x:Bind Url}">
+                <Grid ColumnSpacing="12">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="18" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <FontIcon
+                        FontSize="14"
+                        Foreground="{StaticResource BeautyTextSecondaryBrush}"
+                        Glyph="&#xE774;"
+                        Visibility="{x:Bind local:BindHelpers.VisibleIfNull(Favicon)}" />
+                    <Image
+                        Width="16"
+                        Height="16"
+                        Source="{x:Bind Favicon}"
+                        Visibility="{x:Bind local:BindHelpers.VisibleIfNotNull(Favicon)}" />
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="1">
+                        <TextBlock
+                            FontSize="13"
+                            Foreground="{StaticResource BeautyTextBrush}"
+                            MaxLines="1"
+                            Text="{x:Bind Title}"
+                            TextTrimming="CharacterEllipsis" />
+                        <TextBlock
+                            FontSize="11"
+                            Foreground="{StaticResource BeautyTextSecondaryBrush}"
+                            MaxLines="1"
+                            Text="{x:Bind DisplayUrl}"
+                            TextTrimming="CharacterEllipsis" />
+                    </StackPanel>
+                    <Grid Grid.Column="2" Width="28">
+                        <TextBlock
+                            HorizontalAlignment="Right"
+                            VerticalAlignment="Center"
+                            FontSize="11"
+                            Foreground="{StaticResource BeautyTextSecondaryBrush}"
+                            Text="{x:Bind TimeLabel}" />
+                        <Button
+                            Width="26"
+                            Height="26"
+                            Padding="0"
+                            HorizontalAlignment="Right"
+                            Click="DeleteItem_Click"
+                            Tag="{x:Bind}"
+                            Opacity="0"
+                            Style="{StaticResource BeautyIconButton}"
+                            Foreground="{StaticResource BeautyTextSecondaryBrush}"
+                            UseSystemFocusVisuals="False"
+                            ToolTipService.ToolTip="{local:T En='Remove from history', Es='Quitar del historial'}">
+                            <FontIcon FontSize="10" Glyph="&#xE711;" />
+                        </Button>
+                    </Grid>
+                </Grid>
+            </Button>
+        </DataTemplate>
+
+        <controls:HistoryTemplateSelector
+            x:Key="RowSelector"
+            DayTemplate="{StaticResource DayTemplate}"
+            EntryTemplate="{StaticResource EntryTemplate}" />
+    </UserControl.Resources>
+
+    <Grid RowSpacing="2">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />  <!-- search and filter -->
+            <RowDefinition Height="Auto" />  <!-- filter chips -->
+            <RowDefinition Height="*" />     <!-- list -->
+        </Grid.RowDefinitions>
+
+        <Grid Margin="8,8,8,0" ColumnSpacing="4">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <Grid
+                Height="36"
+                Padding="12,0,4,0"
+                Background="{StaticResource BeautySubtleFillBrush}"
+                ColumnSpacing="8"
+                CornerRadius="10">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <FontIcon
+                    FontSize="13"
+                    Foreground="{StaticResource BeautyTextSecondaryBrush}"
+                    Glyph="&#xE721;" />
+                <TextBox
+                    x:Name="SearchBox"
+                    Grid.Column="1"
+                    Padding="0,7"
+                    VerticalAlignment="Center"
+                    FontSize="13"
+                    IsSpellCheckEnabled="False"
+                    PlaceholderText="{local:T En='Search history', Es='Buscar en el historial'}"
+                    TextChanged="SearchBox_TextChanged" />
+            </Grid>
+            <Button
+                x:Name="FilterButton"
+                Grid.Column="1"
+                Height="36"
+                Padding="12,0"
+                Background="{StaticResource BeautySubtleFillBrush}"
+                Click="Filter_Click"
+                CornerRadius="10"
+                Style="{StaticResource BeautyIconButton}"
+                UseSystemFocusVisuals="False"
+                ToolTipService.ToolTip="{local:T En='Filter by date or clear history', Es='Filtrar por fecha o borrar el historial'}">
+                <StackPanel Orientation="Horizontal" Spacing="7">
+                    <FontIcon FontSize="12" Glyph="&#xE71C;" />
+                    <TextBlock x:Name="FilterLabel" FontSize="13" Text="{local:T En='Filter', Es='Filtro'}" />
+                </StackPanel>
+            </Button>
+        </Grid>
+
+        <StackPanel
+            x:Name="FilterChips"
+            Grid.Row="1"
+            Margin="8,6,8,0"
+            Spacing="6"
+            Visibility="Collapsed">
+            <Grid x:Name="RangeChips" ColumnSpacing="4">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition />
+                    <ColumnDefinition />
+                    <ColumnDefinition />
+                    <ColumnDefinition />
+                </Grid.ColumnDefinitions>
+                <Button Click="Range_Click" Content="{local:T En='All', Es='Todo'}" Style="{StaticResource BeautyChipButton}" Tag="0" />
+                <Button Grid.Column="1" Click="Range_Click" Content="{local:T En='Today', Es='Hoy'}" Style="{StaticResource BeautyChipButton}" Tag="1" />
+                <Button Grid.Column="2" Click="Range_Click" Content="{local:T En='7 days', Es='7 días'}" Style="{StaticResource BeautyChipButton}" Tag="7" />
+                <Button Grid.Column="3" Click="Range_Click" Content="{local:T En='30 days', Es='30 días'}" Style="{StaticResource BeautyChipButton}" Tag="30" />
+            </Grid>
+            <Button
+                x:Name="ClearAllButton"
+                Height="34"
+                Click="ClearAll_Click"
+                Foreground="{StaticResource BeautyTextSecondaryBrush}"
+                Style="{StaticResource BeautyListRowButton}">
+                <StackPanel Orientation="Horizontal" Spacing="10">
+                    <FontIcon FontSize="13" Glyph="&#xE74D;" />
+                    <TextBlock x:Name="ClearAllText" FontSize="13" Text="{local:T En='Clear all history', Es='Borrar todo el historial'}" />
+                </StackPanel>
+            </Button>
+        </StackPanel>
+
+        <ScrollView
+            x:Name="Scroller"
+            Grid.Row="2"
+            ContentOrientation="Vertical"
+            HorizontalScrollBarVisibility="Hidden"
+            VerticalScrollBarVisibility="Auto">
+            <ItemsRepeater Margin="6,0,6,6" x:Name="Rows" ItemTemplate="{StaticResource RowSelector}" />
+        </ScrollView>
+
+        <StackPanel
+            x:Name="EmptyState"
+            Grid.Row="2"
+            Margin="24,48,24,0"
+            HorizontalAlignment="Center"
+            Spacing="8"
+            Visibility="Collapsed">
+            <FontIcon
+                FontSize="22"
+                Foreground="{StaticResource BeautyTextSecondaryBrush}"
+                Glyph="&#xE81C;" />
+            <TextBlock
+                x:Name="EmptyText"
+                HorizontalAlignment="Center"
+                FontSize="13"
+                Foreground="{StaticResource BeautyTextSecondaryBrush}"
+                Text="{local:T En='Nothing in your history yet.', Es='Todavía no hay nada en el historial.'}"
+                TextAlignment="Center"
+                TextWrapping="Wrap" />
+        </StackPanel>
+    </Grid>
+</UserControl>

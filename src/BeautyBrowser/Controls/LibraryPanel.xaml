@@ -1,0 +1,140 @@
+<UserControl
+    x:Class="BeautyBrowser.Controls.LibraryPanel"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:controls="using:BeautyBrowser.Controls"
+    xmlns:local="using:BeautyBrowser"
+    KeyDown="Library_KeyDown">
+
+    <UserControl.Resources>
+        <ResourceDictionary Source="ms-appx:///Theme/BeautySurface.xaml" />
+    </UserControl.Resources>
+
+    <!-- The library: the section rail and the section's list, on the sidebar glass. The page stays open on the right. -->
+    <Grid
+        Background="{StaticResource BeautyPanelBrush}"
+        CornerRadius="{StaticResource BeautyPanelCornerRadius}">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="112" />  <!-- BeautyLibraryRailWidthValue -->
+            <ColumnDefinition Width="320" />  <!-- BeautyLibraryListWidthValue -->
+        </Grid.ColumnDefinitions>
+
+        <controls:NoiseLayer Grid.ColumnSpan="2" />
+
+        <Grid Padding="10,12,10,10">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <Grid VerticalAlignment="Center">
+                <!-- The selected section's card slides to it. -->
+                <Border
+                    x:Name="RailPill"
+                    Width="92"
+                    Height="80"
+                    VerticalAlignment="Top"
+                    Background="{StaticResource BeautyCardBrush}"
+                    BorderBrush="{StaticResource BeautyInsetBorderBrush}"
+                    BorderThickness="1"
+                    CornerRadius="{StaticResource BeautyItemCornerRadius}" />
+
+                <StackPanel x:Name="RailButtons" Spacing="8">
+                    <Button
+                        x:Name="DownloadsTab"
+                        AutomationProperties.Name="{local:T En='Downloads', Es='Descargas'}"
+                        Click="Rail_Click"
+                        RenderTransformOrigin="0.5,0.5"
+                        Style="{StaticResource BeautyRailButton}"
+                        Tag="Downloads"
+                        ToolTipService.ToolTip="{local:T En='Downloads', Es='Descargas'}">
+                        <Button.RenderTransform>
+                            <ScaleTransform x:Name="DownloadsScale" />
+                        </Button.RenderTransform>
+                        <StackPanel Spacing="7">
+                            <FontIcon x:Name="DownloadsIcon" FontSize="22" Glyph="&#xE896;" />
+                            <TextBlock HorizontalAlignment="Center" FontSize="12" Text="{local:T En='Downloads', Es='Descargas'}" />
+                        </StackPanel>
+                    </Button>
+                    <Button
+                        x:Name="SpacesTab"
+                        AutomationProperties.Name="{local:T En='Spaces', Es='Espacios'}"
+                        Click="Rail_Click"
+                        Style="{StaticResource BeautyRailButton}"
+                        Tag="Spaces"
+                        ToolTipService.ToolTip="{local:T En='Spaces', Es='Espacios'}">
+                        <StackPanel Spacing="7">
+                            <FontIcon FontSize="22" Glyph="&#xE8A9;" />
+                            <TextBlock HorizontalAlignment="Center" FontSize="12" Text="{local:T En='Spaces', Es='Espacios'}" />
+                        </StackPanel>
+                    </Button>
+                    <Button
+                        x:Name="HistoryTab"
+                        AutomationProperties.Name="{local:T En='History', Es='Historial'}"
+                        Click="Rail_Click"
+                        Style="{StaticResource BeautyRailButton}"
+                        Tag="History"
+                        ToolTipService.ToolTip="{local:T En='History (Ctrl+H)', Es='Historial (Ctrl+H)'}">
+                        <StackPanel Spacing="7">
+                            <FontIcon FontSize="22" Glyph="&#xE81C;" />
+                            <TextBlock HorizontalAlignment="Center" FontSize="12" Text="{local:T En='History', Es='Historial'}" />
+                        </StackPanel>
+                    </Button>
+                    <Button
+                        x:Name="ExtensionsTab"
+                        AutomationProperties.Name="{local:T En='Extensions', Es='Extensiones'}"
+                        Click="Rail_Click"
+                        Style="{StaticResource BeautyRailButton}"
+                        Tag="Extensions"
+                        ToolTipService.ToolTip="{local:T En='Extensions', Es='Extensiones'}">
+                        <StackPanel Spacing="7">
+                            <FontIcon FontSize="22" Glyph="&#xEA86;" />
+                            <TextBlock HorizontalAlignment="Center" FontSize="12" Text="{local:T En='Extensions', Es='Extensiones'}" />
+                        </StackPanel>
+                    </Button>
+                    <Button
+                        x:Name="SettingsTab"
+                        AutomationProperties.Name="{local:T En='Settings', Es='Ajustes'}"
+                        Click="Rail_Click"
+                        Style="{StaticResource BeautyRailButton}"
+                        Tag="Settings"
+                        ToolTipService.ToolTip="{local:T En='Settings', Es='Ajustes'}">
+                        <StackPanel Spacing="7">
+                            <FontIcon FontSize="22" Glyph="&#xE713;" />
+                            <TextBlock HorizontalAlignment="Center" FontSize="12" Text="{local:T En='Settings', Es='Ajustes'}" />
+                        </StackPanel>
+                    </Button>
+                </StackPanel>
+            </Grid>
+
+            <StackPanel
+                Grid.Row="1"
+                HorizontalAlignment="Center"
+                Orientation="Horizontal"
+                Spacing="6">
+                <Button
+                    Padding="10"
+                    Click="Back_Click"
+                    Foreground="{StaticResource BeautyTextSecondaryBrush}"
+                    Style="{StaticResource BeautyIconButton}"
+                    UseSystemFocusVisuals="False"
+                    ToolTipService.ToolTip="{local:T En='Back to the page (Esc)', Es='Volver a la página (Esc)'}">
+                    <FontIcon FontSize="14" Glyph="&#xE72B;" />
+                </Button>
+            </StackPanel>
+        </Grid>
+
+        <Grid
+            x:Name="SectionHost"
+            Grid.Column="1"
+            Margin="0,8,0,8"
+            Background="{StaticResource BeautyLibraryListBrush}"
+            CornerRadius="{StaticResource BeautyItemCornerRadius}">
+            <Grid x:Name="DownloadsHost" Visibility="Collapsed" />
+            <controls:SpacesPanel x:Name="SpacesView" Visibility="Collapsed" />
+            <controls:HistoryPanel x:Name="HistoryView" />
+            <controls:SettingsPanel x:Name="SettingsView" Visibility="Collapsed" />
+            <controls:ExtensionsPanel x:Name="ExtensionsView" Visibility="Collapsed" />
+        </Grid>
+    </Grid>
+</UserControl>

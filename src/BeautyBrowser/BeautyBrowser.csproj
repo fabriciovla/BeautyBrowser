@@ -1,0 +1,60 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <RootNamespace>BeautyBrowser</RootNamespace>
+    <AssemblyName>BeautyBrowser</AssemblyName>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>../../assets/BeautyBrowser.ico</ApplicationIcon>
+
+    <!-- Unpackaged .exe that carries the Windows App SDK, so no separate runtime has to be installed. -->
+    <WindowsPackageType>None</WindowsPackageType>
+    <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
+    <!-- Generates resources.pri (WinUI styles) even though the app is unpackaged. -->
+    <EnableMsixTooling>true</EnableMsixTooling>
+    <!-- Custom Main (Program.cs): the executable also serves as Chromium's helper process. -->
+    <DefineConstants>$(DefineConstants);DISABLE_XAML_GENERATED_MAIN</DefineConstants>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Content Include="../../assets/BeautyBrowser.ico" Link="BeautyBrowser.ico" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="../../assets/BeautyBrowser.png" Link="BeautyBrowser.png" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.14" />
+    <ProjectReference Include="..\BeautyKit\BeautyKit.csproj" />
+    <!-- Chromium binaries (CEF). The version has to match the one CefSharp expects in BeautyKit. -->
+    <PackageReference Include="chromiumembeddedframework.runtime.win-x64" Version="156.0.15" />
+  </ItemGroup>
+
+  <!-- Copies Chromium's resources (locales/, *.pak…) next to the executable; the CEF package defines the target but
+       does not run it. -->
+  <Target Name="CopyChromiumResources" AfterTargets="Build" DependsOnTargets="CefRedist64CopyResources" />
+
+    <!-- Publishing (the installer) also needs Chromium's locales/ next to the executable. -->
+  <Target Name="CopyChromiumLocalesOnPublish" AfterTargets="Publish">
+    <ItemGroup>
+      <_ChromiumLocales Include="$(NuGetPackageRoot)chromiumembeddedframework.runtime.win-x64\156.0.15\CEF\win-x64\locales\*.pak" />
+    </ItemGroup>
+    <Copy SourceFiles="@(_ChromiumLocales)" DestinationFolder="$(PublishDir)locales" SkipUnchangedFiles="true" />
+  </Target>
+
+  <!-- CEF with proprietary codecs (H.264/AAC): when tools/build-cef-codecs.ps1 left its binaries in
+       third_party/cef-codecs they replace the NuGet package's, which has no proprietary codecs. -->
+  <PropertyGroup>
+    <CefCodecsDir>$(MSBuildThisFileDirectory)..\..\third_party\cef-codecs\</CefCodecsDir>
+  </PropertyGroup>
+  <Target Name="UseCefWithCodecs" AfterTargets="CopyChromiumResources" Condition="Exists('$(CefCodecsDir)libcef.dll')">
+    <ItemGroup>
+      <_CefCodecs Include="$(CefCodecsDir)**\*.*" />
+    </ItemGroup>
+    <Message Importance="high" Text="Using CEF with codecs from $(CefCodecsDir)" />
+    <Copy SourceFiles="@(_CefCodecs)" DestinationFiles="@(_CefCodecs->'$(TargetDir)%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
+  </Target>
+  <Target Name="UseCefWithCodecsOnPublish" AfterTargets="CopyChromiumLocalesOnPublish" Condition="Exists('$(CefCodecsDir)libcef.dll')">
+    <ItemGroup>
+      <_CefCodecsPublish Include="$(CefCodecsDir)**\*.*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(_CefCodecsPublish)" DestinationFiles="@(_CefCodecsPublish->'$(PublishDir)%(RecursiveDir)%(Filename)%(Extension)')" />
+  </Target>
+</Project>
