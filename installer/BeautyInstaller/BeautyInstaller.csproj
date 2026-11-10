@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    A single executable (with .NET inside) that carries the compressed app (payload.zip, built by
+    installer\build-installer.ps1) and installs it for the current user.
+  -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <RootNamespace>BeautyInstaller</RootNamespace>
+    <AssemblyName>BeautyBrowserSetup</AssemblyName>
+    <ApplicationIcon>../../assets/BeautyBrowser.ico</ApplicationIcon>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <Version>0.1.1</Version>
+
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <SelfContained>true</SelfContained>
+    <PublishSingleFile>true</PublishSingleFile>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- The app to install. Without a payload (a standalone build, for instance) the installer says so and stops. -->
+    <EmbeddedResource Include="payload.zip" LogicalName="payload.zip" Condition="Exists('payload.zip')" />
+    <Resource Include="../../assets/BeautyBrowser.png" Link="Assets/BeautyBrowser.png" />
+  </ItemGroup>
+</Project>

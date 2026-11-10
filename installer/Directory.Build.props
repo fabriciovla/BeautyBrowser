@@ -1,0 +1,3 @@
+<Project>
+  <!-- The installer is a separate WPF app: this empty file stops the root Directory.Build.props (WinUI) from applying. -->
+</Project>
