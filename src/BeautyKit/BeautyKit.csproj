@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    BeautyKit is the engine layer. The UI only talks to BeautyKit, never to the engine directly. The engine is Chromium
+    through CEF (Chromium Embedded Framework) and CefSharp.
+  -->
+  <PropertyGroup>
+    <OutputType>Library</OutputType>
+    <RootNamespace>BeautyKit</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- The CefSharp version follows Chromium's: 156. -->
+    <PackageReference Include="CefSharp.OffScreen.NETCore" Version="156.0.150" />
+    <!-- Direct3D 11 and DXGI: pages go from Chromium's GPU textures to the screen without touching the CPU. -->
+    <PackageReference Include="Vortice.Direct3D11" Version="3.8.3" />
+  </ItemGroup>
+</Project>
