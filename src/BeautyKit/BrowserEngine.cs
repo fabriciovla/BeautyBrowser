@@ -120,6 +120,8 @@ public sealed class BrowserEngine : IDisposable
         var type = args.FirstOrDefault(a => a.StartsWith("--type=", StringComparison.Ordinal))?[7..];
         if (type is null) return -1;
 
+        SuppressCrashDialogs();
+
         // Render processes carry our injector (blocker scriptlets, cosmetic filters and the media detector), which has
         // to act before the site's scripts. This is SelfHost.Main with a render process handler.
         if (type == "renderer")
@@ -221,6 +223,30 @@ public sealed class BrowserEngine : IDisposable
 
     /// <summary>Chromium settings. CefSharp.OffScreen's own settings class is not used because it mutes audio.</summary>
     private sealed class EngineSettings : CefSettingsBase;
+
+    /// <summary>
+    /// A helper process that dies on a CHECK or breakpoint (0x80000003) would make Windows show "A breakpoint has been
+    /// reached" and keep the process alive behind the dialog. Like Chrome, helpers exit silently; the tab reports the crash.
+    /// </summary>
+    private static void SuppressCrashDialogs()
+    {
+        const uint SEM_FAILCRITICALERRORS = 0x0001, SEM_NOGPFAULTERRORBOX = 0x0002;
+        const uint WER_FAULT_REPORTING_NO_UI = 0x0020;
+        try
+        {
+            SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX);
+            WerSetFlags(WER_FAULT_REPORTING_NO_UI);
+        }
+        catch (Exception ex) when (ex is EntryPointNotFoundException or DllNotFoundException)
+        {
+        }
+    }
+
+    [System.Runtime.InteropServices.DllImport("kernel32.dll")]
+    private static extern uint SetErrorMode(uint mode);
+
+    [System.Runtime.InteropServices.DllImport("kernel32.dll")]
+    private static extern int WerSetFlags(uint flags);
 
     private static int DisplayRefreshRate()
     {
