@@ -164,6 +164,12 @@ public sealed partial class BrowserView : ContentControl
         }
     }
 
+    /// <summary>
+    /// Whether tabs opened in the background lay out at this view's size. Off for small views such as Peek or
+    /// DevTools, so a background tab does not come up at their size.
+    /// </summary>
+    public bool SizesBackgroundTabs { get; set; } = true;
+
     private void UpdateSize()
     {
         if (_tab is null || XamlRoot is null) return;
@@ -172,7 +178,7 @@ public sealed partial class BrowserView : ContentControl
         var origin = TransformToVisual(null).TransformPoint(default);
         _tab.Resize(
             (int)Math.Round(ActualWidth), (int)Math.Round(ActualHeight), scale,
-            ((int)Math.Round(origin.X * scale), (int)Math.Round(origin.Y * scale)));
+            ((int)Math.Round(origin.X * scale), (int)Math.Round(origin.Y * scale)), SizesBackgroundTabs);
         RefreshVisual(); // the display scale may have changed (frames are in physical pixels)
     }
 
@@ -373,18 +379,6 @@ public sealed partial class BrowserView : ContentControl
         }
         _tab.SendMouseClick((int)point.Position.X, (int)point.Position.Y, Flags(point.Properties), button, up: true, _clicks.Count);
         ReleasePointerCapture(e.Pointer);
-        e.Handled = true;
-    }
-
-    private void OnPointerWheelChanged(object sender, PointerRoutedEventArgs e)
-    {
-        if (_tab is null) return;
-        var point = e.GetCurrentPoint(this);
-        var delta = point.Properties.MouseWheelDelta;
-        // Shift turns the wheel horizontal, as in Chrome; offscreen, Chromium leaves that to the app.
-        var horizontal = point.Properties.IsHorizontalMouseWheel || IsDown(VirtualKey.Shift);
-        _tab.SendMouseWheel((int)point.Position.X, (int)point.Position.Y, Flags(point.Properties),
-            horizontal ? delta : 0, horizontal ? 0 : delta);
         e.Handled = true;
     }
 

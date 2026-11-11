@@ -14,6 +14,7 @@
     <Grid x:Name="Root" KeyboardAcceleratorPlacementMode="Hidden">
         <Grid.KeyboardAccelerators>
             <KeyboardAccelerator Key="T" Invoked="NewTab_Invoked" Modifiers="Control" />
+            <KeyboardAccelerator Key="N" Invoked="NewTab_Invoked" Modifiers="Control" />
             <KeyboardAccelerator Key="W" Invoked="CloseTab_Invoked" Modifiers="Control" />
             <KeyboardAccelerator Key="L" Invoked="FocusAddress_Invoked" Modifiers="Control" />
             <KeyboardAccelerator Key="H" Invoked="History_Invoked" Modifiers="Control" />
@@ -39,6 +40,7 @@
             <KeyboardAccelerator Key="J" Invoked="Downloads_Invoked" Modifiers="Control" />
             <KeyboardAccelerator Key="S" Invoked="ToggleDock_Invoked" Modifiers="Control" />
             <KeyboardAccelerator Key="T" Invoked="ReopenTab_Invoked" Modifiers="Control,Shift" />
+            <KeyboardAccelerator Key="N" Invoked="PrivateTab_Invoked" Modifiers="Control,Shift" />
             <KeyboardAccelerator Key="D" Invoked="Favorite_Invoked" Modifiers="Control" />
             <KeyboardAccelerator Key="F" Invoked="Find_Invoked" Modifiers="Control" />
             <KeyboardAccelerator Key="G" Invoked="FindNext_Invoked" Modifiers="Control" />
@@ -75,6 +77,26 @@
 
             <kit:BrowserView x:Name="WebView" CornerRadius="{StaticResource BeautyContentCornerRadius}" />
 
+            <!-- The zoom, for a moment, whenever it changes (Ctrl+wheel, Ctrl+plus/minus). -->
+            <Border
+                x:Name="ZoomToast"
+                Margin="0,14,0,0"
+                Padding="12,6"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Top"
+                Background="#E6202020"
+                CornerRadius="16"
+                IsHitTestVisible="False"
+                Opacity="0">
+                <Border.OpacityTransition>
+                    <ScalarTransition Duration="0:0:0.15" />
+                </Border.OpacityTransition>
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                    <FontIcon FontSize="13" Foreground="White" Glyph="&#xE71E;" />
+                    <TextBlock x:Name="ZoomToastText" FontSize="13" Foreground="White" />
+                </StackPanel>
+            </Border>
+
             <local:ResizeHandle
                 x:Name="DevToolsSplitter"
                 Grid.Column="1"
@@ -110,7 +132,7 @@
                         Foreground="{StaticResource BeautyTextSecondaryBrush}"
                         Text="{local:T En='Inspect', Es='Inspeccionar'}" />
                 </StackPanel>
-                <kit:BrowserView x:Name="DevToolsView" Grid.Row="1" />
+                <kit:BrowserView x:Name="DevToolsView" Grid.Row="1" SizesBackgroundTabs="False" />
             </Grid>
         </Grid>
         </Grid>
@@ -234,6 +256,76 @@
                     <Button
                         x:Name="NoticePrimary"
                         Click="NoticePrimary_Click"
+                        Style="{StaticResource BeautyChipButton}" />
+                </StackPanel>
+            </StackPanel>
+        </Border>
+
+        <!-- Saved accounts for the login field with focus, right under it (see MainWindow.Passwords). -->
+        <Canvas x:Name="LoginLayer" Canvas.ZIndex="5">
+            <Border
+                x:Name="LoginList"
+                MinWidth="240"
+                Padding="4"
+                Background="{StaticResource BeautyCardBrush}"
+                BorderBrush="{StaticResource BeautyPanelBorderBrush}"
+                BorderThickness="1"
+                CornerRadius="{StaticResource BeautyItemCornerRadius}"
+                Visibility="Collapsed">
+                <Border.Resources>
+                    <ResourceDictionary Source="ms-appx:///Theme/BeautySurface.xaml" />
+                </Border.Resources>
+                <StackPanel x:Name="LoginRows" />
+            </Border>
+        </Canvas>
+
+        <!-- A login was sent: offer to save it, at the top right of the page, like Chrome's key bubble. -->
+        <Border
+            x:Name="SaveLoginBar"
+            MaxWidth="380"
+            Margin="0,20,28,0"
+            Padding="14,12,12,12"
+            HorizontalAlignment="Right"
+            VerticalAlignment="Top"
+            Background="{StaticResource BeautyCardBrush}"
+            BorderBrush="{StaticResource BeautyPanelBorderBrush}"
+            BorderThickness="1"
+            CornerRadius="{StaticResource BeautyItemCornerRadius}"
+            Visibility="Collapsed">
+            <Border.Resources>
+                <ResourceDictionary Source="ms-appx:///Theme/BeautySurface.xaml" />
+            </Border.Resources>
+            <StackPanel Spacing="10">
+                <Grid ColumnSpacing="10">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <FontIcon
+                        Margin="0,2,0,0"
+                        VerticalAlignment="Top"
+                        FontSize="14"
+                        Foreground="{StaticResource BeautyTextSecondaryBrush}"
+                        Glyph="&#xE8D7;" />
+                    <TextBlock
+                        x:Name="SaveLoginText"
+                        Grid.Column="1"
+                        FontSize="13"
+                        Foreground="{StaticResource BeautyTextBrush}"
+                        TextWrapping="Wrap" />
+                </Grid>
+                <StackPanel HorizontalAlignment="Right" Orientation="Horizontal" Spacing="6">
+                    <Button
+                        Click="SaveLoginNever_Click"
+                        Content="{local:T En='Never for this site', Es='Nunca en este sitio'}"
+                        Style="{StaticResource BeautyChipButton}" />
+                    <Button
+                        Click="SaveLoginDismiss_Click"
+                        Content="{local:T En='Not now', Es='Ahora no'}"
+                        Style="{StaticResource BeautyChipButton}" />
+                    <Button
+                        Click="SaveLogin_Click"
+                        Content="{local:T En='Save', Es='Guardar'}"
                         Style="{StaticResource BeautyChipButton}" />
                 </StackPanel>
             </StackPanel>
@@ -391,7 +483,7 @@
                     BorderBrush="#29000000"
                     BorderThickness="1"
                     CornerRadius="12">
-                    <kit:BrowserView x:Name="PeekView" CornerRadius="11" />
+                    <kit:BrowserView x:Name="PeekView" CornerRadius="11" SizesBackgroundTabs="False" />
                 </Border>
             </Grid>
             <StackPanel
