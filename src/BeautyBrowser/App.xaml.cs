@@ -30,6 +30,9 @@ public partial class App : Application
         // bring it to the front and exit.
         _singleInstance = new Mutex(initiallyOwned: true, @"Local\BeautyBrowser.SingleInstance", out var firstInstance);
         var link = ExternalLinks.FromCommandLine();
+        // The running one may be closing (its window already hidden while Chromium shuts down): wait for it to finish
+        // and open normally, rather than bringing back a window that is going away.
+        if (!firstInstance && !OtherWindowVisible()) firstInstance = WaitForPreviousToExit();
         if (!firstInstance)
         {
             // A link from another app: the running window opens it as a new tab.
@@ -83,6 +86,33 @@ public partial class App : Application
             break;
         }
     }
+
+    private static bool OtherWindowVisible()
+    {
+        var current = (uint)Environment.ProcessId;
+        var hWnd = nint.Zero;
+        while ((hWnd = FindWindowEx(0, hWnd, "WinUIDesktopWin32WindowClass", null)) != 0)
+        {
+            GetWindowThreadProcessId(hWnd, out var pid);
+            if (pid != current && IsWindowVisible(hWnd)) return true;
+        }
+        return false;
+    }
+
+    private static bool WaitForPreviousToExit()
+    {
+        try
+        {
+            return _singleInstance!.WaitOne(TimeSpan.FromSeconds(20));
+        }
+        catch (AbandonedMutexException)
+        {
+            return true; // it ended without releasing it: ours now all the same
+        }
+    }
+
+    [DllImport("user32.dll")]
+    private static extern bool IsWindowVisible(nint hWnd);
 
     private const int SW_RESTORE = 9;
 

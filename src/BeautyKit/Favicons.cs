@@ -78,8 +78,26 @@ public static class Favicons
             SvgLoads.Remove(key);
             return null;
         }
-        if (await PixelsAsync(uri.OriginalString, pixels) is null) return null;
+        if (await PixelsAsync(uri.OriginalString, pixels) is null) return await SvgByContentAsync(uri.OriginalString, key, pixels);
         return FromUrl(url, pixels); // already decoded: filled in immediately
+    }
+
+    /// <summary>
+    /// Icons served as SVG at an address that does not say so ("/icon?v=2", "/favicon"): Windows cannot decode them as
+    /// a picture, so they are read as SVG when the file is one.
+    /// </summary>
+    private static async Task<ImageSource?> SvgByContentAsync(string url, string key, int pixels)
+    {
+        if (await DownloadAsync(url) is not { Length: > 0 } bytes) return null;
+        var head = System.Text.Encoding.UTF8.GetString(bytes, 0, Math.Min(bytes.Length, 512)).TrimStart('﻿', ' ', '\r', '\n', '\t');
+        if (!head.StartsWith("<svg", StringComparison.OrdinalIgnoreCase) &&
+            !(head.StartsWith("<?xml", StringComparison.OrdinalIgnoreCase) && head.Contains("<svg", StringComparison.OrdinalIgnoreCase)))
+            return null;
+
+        var svg = new SvgImageSource { RasterizePixelWidth = pixels, RasterizePixelHeight = pixels };
+        if (!await LoadSvgAsync(svg, url)) return null;
+        Images[key] = svg; // FromUrl gives this one from now on
+        return svg;
     }
 
     /// <summary>
@@ -259,6 +277,21 @@ public static class Favicons
     }
 
     private static readonly Dictionary<string, Task<byte[]?>> Downloads = [];
+
+    /// <summary>
+    /// The file of an icon the app could not download itself, as the page got it (a data: address): it is used for
+    /// <paramref name="url"/> from now on. Call it on the UI thread.
+    /// </summary>
+    public static void Remember(string url, string dataUrl)
+    {
+        var comma = dataUrl.IndexOf(',');
+        if (comma < 0 || !dataUrl[..comma].EndsWith(";base64", StringComparison.OrdinalIgnoreCase)) return;
+        try
+        {
+            Downloads[url] = Task.FromResult<byte[]?>(Convert.FromBase64String(dataUrl[(comma + 1)..]));
+        }
+        catch (FormatException) { }
+    }
 
     private static Task<byte[]?> DownloadAsync(string url)
     {

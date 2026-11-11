@@ -1,4 +1,4 @@
-﻿using System.Numerics;
+using System.Numerics;
 using System.Runtime.InteropServices;
 using BeautyBrowser.Controls;
 using BeautyBrowser.Shell;
@@ -114,6 +114,7 @@ public sealed partial class MainWindow : Window
         AddZoomAccelerators();
         SetupPageShortcuts();
         SetupPermissions();
+        SetupZoomToast();
         SetupUpdates();
         // Links other apps send while BeautyBrowser is open: a new tab, with the window brought to the front.
         ExternalLinks.Listen(url => DispatcherQueue.TryEnqueue(() =>
@@ -313,6 +314,9 @@ public sealed partial class MainWindow : Window
 
     private void Shutdown()
     {
+        // Closing every tab and shutting Chromium down takes a few seconds with many tabs: the window goes away right
+        // away instead of staying frozen on screen meanwhile.
+        AppWindow.Hide();
         _hoverTimer.Stop();
         WebView.Tab = null;
         DevToolsView.Tab = null;

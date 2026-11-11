@@ -489,10 +489,46 @@ public sealed partial class BrowserTab : INotifyPropertyChanged, IDisposable
                 _faviconHost = page?.Host;
                 return;
             }
+
+            // Sites behind bot protection or a sign-in refuse the app's own download, but give the icon to the page
+            // (which has their cookies): it is asked for it as a data: address.
+            foreach (var url in options.Take(3))
+            {
+                if (await FetchThroughPageAsync(url) is not { } data) continue;
+                Favicons.Remember(url, data); // every list showing this icon gets it too
+                var image = await Favicons.LoadAsync(url);
+                if (request != _faviconRequest || _disposed) return;
+                if (image is null) continue;
+                Favicon = image;
+                FaviconUrl = url;
+                _faviconHost = page?.Host;
+                return;
+            }
         }
         finally
         {
             if (request == _faviconRequest) _faviconPending = false;
+        }
+    }
+
+    /// <summary>Downloads a file from inside the page (same site, or one that allows it) as a data: address.</summary>
+    private async Task<string?> FetchThroughPageAsync(string url)
+    {
+        try
+        {
+            if (!url.StartsWith("http", StringComparison.OrdinalIgnoreCase) ||
+                !_browser.IsBrowserInitialized || _browser.GetMainFrame() is not { IsValid: true } frame) return null;
+            var script =
+                "(async u => { const r = await fetch(u, { credentials: 'include' }); if (!r.ok) return ''; const b = await r.blob();" +
+                " if (b.size > 512 * 1024) return '';" +
+                " return await new Promise(ok => { const f = new FileReader(); f.onload = () => ok(f.result); f.onerror = () => ok(''); f.readAsDataURL(b); }); })(" +
+                System.Text.Json.JsonSerializer.Serialize(url) + ")";
+            var response = await frame.EvaluateScriptAsync(script, timeout: TimeSpan.FromSeconds(4));
+            return response.Success && response.Result is string { Length: > 0 } data && data.StartsWith("data:") ? data : null;
+        }
+        catch
+        {
+            return null;
         }
     }
 

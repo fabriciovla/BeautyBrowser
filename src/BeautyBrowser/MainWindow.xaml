@@ -71,6 +71,26 @@
 
             <kit:BrowserView x:Name="WebView" CornerRadius="{StaticResource BeautyContentCornerRadius}" />
 
+            <!-- The zoom, for a moment, whenever it changes (Ctrl+wheel, Ctrl+plus/minus). -->
+            <Border
+                x:Name="ZoomToast"
+                Margin="0,14,0,0"
+                Padding="12,6"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Top"
+                Background="#E6202020"
+                CornerRadius="16"
+                IsHitTestVisible="False"
+                Opacity="0">
+                <Border.OpacityTransition>
+                    <ScalarTransition Duration="0:0:0.15" />
+                </Border.OpacityTransition>
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                    <FontIcon FontSize="13" Foreground="White" Glyph="&#xE71E;" />
+                    <TextBlock x:Name="ZoomToastText" FontSize="13" Foreground="White" />
+                </StackPanel>
+            </Border>
+
             <local:ResizeHandle
                 x:Name="DevToolsSplitter"
                 Grid.Column="1"
