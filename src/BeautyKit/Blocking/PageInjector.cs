@@ -46,7 +46,7 @@ internal sealed class PageInjector(string? pageToken) : IRenderProcessHandler
 
             if (DebugLog)
                 Debug($"{(frame.IsMain ? "main " : "frame")} {url[..Math.Min(url.Length, 90)]} code={code.Length} " +
-                      $"error={blockerError?.Message ?? mediaError?.Message ?? "-"}" +
+                      $"pw={frame.IsMain && !string.IsNullOrEmpty(pageToken)} error={blockerError?.Message ?? mediaError?.Message ?? "-"}" +
                       (blockerError is null ? "" : $" line={blockerError.LineNumber} «{blockerError.SourceLine?[..Math.Min(blockerError.SourceLine.Length, 120)]}»"));
         }
         catch (Exception ex)

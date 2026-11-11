@@ -62,9 +62,10 @@ public sealed class BrowserEngine : IDisposable
 
         StartPage.Register(settings); // beauty://newtab
 
-        // Secret of the password manager's messages: render processes get it on their command line and only the main
-        // frame's script holds it, so an iframe cannot pass itself off as the top page (see BrowserTab.OnJavascriptMessage).
-        settings.CefCommandLineArgs.Add(PageTokenSwitch, PageToken);
+        // Secret of the password manager's messages: render processes inherit it as an environment variable (Chromium
+        // does not forward custom switches) and only the main frame's script holds it, so an iframe cannot pass itself
+        // off as the top page (see BrowserTab.OnJavascriptMessage).
+        Environment.SetEnvironmentVariable(PageTokenVariable, PageToken);
 
         // Chromium's own popup blocker drops a popup before OnBeforePopup runs, so the browser could neither show the
         // "popup blocked" notice nor let the user allow the site. With it off, TabLifeSpanHandler decides (see
@@ -105,9 +106,9 @@ public sealed class BrowserEngine : IDisposable
         return new BrowserEngine(hostWindow, ui, pump);
     }
 
-    internal const string PageTokenSwitch = "bb-page-token";
+    internal const string PageTokenVariable = "BEAUTYBROWSER_PAGE_TOKEN";
 
-    /// <summary>Random per run; shared with the render processes through <see cref="PageTokenSwitch"/>.</summary>
+    /// <summary>Random per run; shared with the render processes through <see cref="PageTokenVariable"/>.</summary>
     internal static string PageToken { get; } = Convert.ToHexString(System.Security.Cryptography.RandomNumberGenerator.GetBytes(16));
 
     /// <summary>
@@ -131,7 +132,7 @@ public sealed class BrowserEngine : IDisposable
                 var executable = core.GetType("CefSharp.BrowserSubprocess.BrowserSubprocessExecutable", throwOnError: true)!;
                 var main = executable.GetMethod("Main", [typeof(IEnumerable<string>), typeof(CefSharp.RenderProcess.IRenderProcessHandler)])!;
                 var instance = main.IsStatic ? null : Activator.CreateInstance(executable);
-                return (int)main.Invoke(instance, [args, new Blocking.PageInjector(args.FirstOrDefault(a => a.StartsWith($"--{PageTokenSwitch}=", StringComparison.Ordinal))?[(PageTokenSwitch.Length + 3)..])])!;
+                return (int)main.Invoke(instance, [args, new Blocking.PageInjector(Environment.GetEnvironmentVariable(PageTokenVariable))])!;
             }
             catch (Exception ex)
             {
