@@ -73,9 +73,11 @@ public static class ContentBlocker
     {
         var lower = url.ToLowerInvariant();
         if (!RequestContext.TryHost(lower, out var start, out var end)) return "";
-        var engine = _engine;
-        return (engine?.Psl ?? PublicSuffix.Fallback).Domain(lower[start..end]);
+        return Psl.Domain(lower[start..end]);
     }
+
+    /// <summary>The Public Suffix List the blocker loaded, or the built-in approximation until it is ready.</summary>
+    internal static PublicSuffix Psl => _engine?.Psl ?? PublicSuffix.Fallback;
 
     public static bool IsSiteAllowed(string url)
     {

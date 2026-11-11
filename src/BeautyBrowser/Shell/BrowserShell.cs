@@ -23,6 +23,9 @@ public sealed class BrowserShell
         Settings = new SettingsService(Database);
         Updates = new UpdateService(ui);
 
+        // Sites where popups were allowed for good are read by Chromium's thread from here on.
+        foreach (var origin in SitePermissions.OriginsAllowing(PagePermission.Popups)) BrowserTab.AllowPopupsFrom(origin);
+
         // The start page's most visited sites, always up to date.
         StartPage.Sites = History.TopSites(8);
         try
@@ -68,6 +71,12 @@ public sealed class BrowserShell
 
     /// <summary>A page asks for the microphone, camera, location… Without a listener the request is denied.</summary>
     public event EventHandler<(BrowserTab Tab, PermissionRequest Request)>? PermissionRequested;
+
+    /// <summary>A tab blocked a popup the page opened without a click.</summary>
+    public event EventHandler<(BrowserTab Tab, string Origin, string Url)>? PopupBlocked;
+
+    /// <summary>A dangerous file is about to download; without a listener it downloads.</summary>
+    public event EventHandler<(BrowserTab Tab, DownloadApproval Approval)>? DownloadApprovalRequested;
 
     /// <summary>New versions from GitHub Releases (see UpdateService).</summary>
     public UpdateService Updates { get; }
@@ -595,6 +604,12 @@ public sealed class BrowserShell
         tab.FullscreenChanged += (_, fullscreen) => { if (tab == CurrentTab) FullscreenChanged?.Invoke(this, fullscreen); };
         tab.DownloadStarted += (_, download) => DownloadStarted?.Invoke(this, Downloads.Start(download));
         tab.DownloadUpdated += (_, download) => Downloads.Update(download);
+        tab.PopupBlocked += (_, blocked) => PopupBlocked?.Invoke(this, (tab, blocked.Origin, blocked.Url));
+        tab.DownloadApprovalRequested += (_, approval) =>
+        {
+            if (DownloadApprovalRequested is { } handler) handler(this, (tab, approval));
+            else approval.Decide(true);
+        };
         tab.InspectRequested += (_, point) => OpenDevTools(tab, point.X, point.Y);
         tab.PropertyChanged += (_, e) =>
         {
