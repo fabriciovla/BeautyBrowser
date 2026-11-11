@@ -43,6 +43,14 @@ public sealed partial class BrowserTab : INotifyPropertyChanged, IDisposable
     private IBrowserSettings? _pendingSettings;
     private string? _pendingUrl;
 
+    private readonly IRequestContext? _privateContext;
+
+    /// <summary>
+    /// Private tab: cookies, cache and storage live only in memory, shared by every private tab until the last one
+    /// closes, and nothing is written to the history or the session.
+    /// </summary>
+    public bool IsPrivate => _privateContext is not null;
+
     private string _title = L.T("New tab", "Nueva pestaña");
     private string _url;
     private ImageSource? _favicon;
@@ -56,9 +64,12 @@ public sealed partial class BrowserTab : INotifyPropertyChanged, IDisposable
     /// <see cref="TabCreation.Now"/> creates the browser right away; <see cref="TabCreation.WhenShown"/> waits until it
     /// is first shown (restored tabs); <see cref="TabCreation.Popup"/> lets Chromium create it as a page's popup.
     /// </param>
-    internal BrowserTab(nint hostWindow, DispatcherQueue ui, string url, TabCreation mode = TabCreation.Now)
+    /// <param name="privateContext">The in-memory profile of private tabs; null for the regular profile.</param>
+    internal BrowserTab(nint hostWindow, DispatcherQueue ui, string url, TabCreation mode = TabCreation.Now,
+        IRequestContext? privateContext = null)
     {
         _hostWindow = hostWindow;
+        _privateContext = privateContext;
         _ui = ui;
         _url = url;
 
@@ -67,7 +78,7 @@ public sealed partial class BrowserTab : INotifyPropertyChanged, IDisposable
         browserSettings.BackgroundColor = 0xFFFFFFFF; // opaque (see BrowserEngine)
         _zoomLevel = ZoomLevelFor(DefaultZoomPercent);
 
-        _browser = new ChromiumWebBrowser(url, browserSettings, automaticallyCreateBrowser: false)
+        _browser = new ChromiumWebBrowser(url, browserSettings, privateContext, automaticallyCreateBrowser: false)
         {
             DisplayHandler = new TabDisplayHandler(this),
             LifeSpanHandler = new TabLifeSpanHandler(this),
@@ -567,7 +578,7 @@ public sealed partial class BrowserTab : INotifyPropertyChanged, IDisposable
             // tab of ours so window.opener keeps working. Opening it as a plain tab instead would leave the sign-in hung.
             if (targetDisposition == WindowOpenDisposition.NewPopup)
             {
-                var popup = new BrowserTab(tab._hostWindow, tab._ui, string.IsNullOrEmpty(targetUrl) ? "about:blank" : targetUrl, TabCreation.Popup);
+                var popup = new BrowserTab(tab._hostWindow, tab._ui, string.IsNullOrEmpty(targetUrl) ? "about:blank" : targetUrl, TabCreation.Popup, tab._privateContext);
                 windowInfo.SetAsWindowless(tab._hostWindow);
                 windowInfo.SharedTextureEnabled = UseGpu;
                 browserSettings.WindowlessFrameRate = FrameRate;

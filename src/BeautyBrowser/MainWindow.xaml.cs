@@ -1310,7 +1310,7 @@ public sealed partial class MainWindow : Window
         }
 
         _peekVersion++;
-        _peekTab = popup ?? _shell.CreatePeekTab(url);
+        _peekTab = popup ?? _shell.CreatePeekTab(url, from.IsPrivate);
         PeekLayer.Visibility = Visibility.Visible;
         LayoutPeek();
         PeekView.Tab = _peekTab;
@@ -1448,6 +1448,13 @@ public sealed partial class MainWindow : Window
     {
         if (_fullscreen) return;
         _shell.Settings.SidebarDocked = !_sidebarDocked;
+    }
+
+    private void PrivateTab_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+    {
+        args.Handled = true;
+        if (_fullscreen) _shell.CurrentTab?.ExitFullscreen();
+        _shell.OpenPrivateTab();
     }
 
     private void ReopenTab_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
