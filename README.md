@@ -7,9 +7,9 @@
 <p align="center">A simple, beautiful browser for Windows, built on Chromium.</p>
 
 <p align="center">
-  <a href="https://github.com/fabriciovla/BeautyBrowser/releases/latest"><img src="https://img.shields.io/github/v/release/fabriciovla/BeautyBrowser?label=download" alt="Download"></a>
+  <a href="https://github.com/fabriciovla/BeautyBrowser/releases/latest"><img src="https://img.shields.io/github/v/release/fabriciovla/BeautyBrowser?label=download&cacheSeconds=3600" alt="Download"></a>
   <a href="https://github.com/fabriciovla/BeautyBrowser/actions/workflows/build.yml"><img src="https://github.com/fabriciovla/BeautyBrowser/actions/workflows/build.yml/badge.svg" alt="Build"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/github/license/fabriciovla/BeautyBrowser" alt="License"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/fabriciovla/BeautyBrowser?cacheSeconds=86400" alt="License"></a>
 </p>
 
 <p align="center">
