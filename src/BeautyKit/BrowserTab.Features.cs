@@ -240,12 +240,25 @@ public sealed partial class BrowserTab
         private readonly System.Collections.Concurrent.ConcurrentDictionary<int, string> _paths = [];
         private readonly System.Collections.Concurrent.ConcurrentDictionary<int, bool> _approved = [];
 
+        // Downloads not finished yet, including those waiting for the user's answer: the tab keeps its browser alive
+        // until they are done (see BrowserTab.Dispose).
+        private readonly System.Collections.Concurrent.ConcurrentDictionary<int, bool> _active = [];
+
+        public bool HasActive => !_active.IsEmpty;
+
+        private void Finished(int id)
+        {
+            if (_active.TryRemove(id, out _) && _active.IsEmpty) tab.OnDownloadsFinished();
+        }
+
         public bool CanDownload(IWebBrowser chromiumWebBrowser, IBrowser browser, string url, string requestMethod) => true;
 
         // Downloads go straight to the Downloads folder without a dialog; existing names get a number.
         public bool OnBeforeDownload(IWebBrowser chromiumWebBrowser, IBrowser browser, DownloadItem downloadItem,
             IBeforeDownloadCallback callback)
         {
+            _active[downloadItem.Id] = true;
+
             // A file that can run code waits for the user: keep it and this method runs again, or discard it.
             if (DangerousFile.IsDangerous(downloadItem.SuggestedFileName) && !_approved.TryRemove(downloadItem.Id, out _) &&
                 tab.AskAboutDownload(downloadItem.SuggestedFileName, downloadItem.Url ?? "", keep =>
@@ -258,6 +271,7 @@ public sealed partial class BrowserTab
                     else
                     {
                         callback.Dispose(); // not continuing cancels the download
+                        Finished(downloadItem.Id);
                     }
                 }))
                 return true;
@@ -280,26 +294,49 @@ public sealed partial class BrowserTab
         {
             if (!_paths.TryGetValue(downloadItem.Id, out var path)) return;
             // If another path was picked in Save As, Chromium reports the real one.
-            if (!string.IsNullOrEmpty(downloadItem.FullPath)) path = _paths[downloadItem.Id] = downloadItem.FullPath;
+            if (!string.IsNullOrEmpty(downloadItem.FullPath) && !string.Equals(path, downloadItem.FullPath, StringComparison.OrdinalIgnoreCase))
+            {
+                Release(path);
+                lock (Reserved) Reserved.Add(downloadItem.FullPath);
+                path = _paths[downloadItem.Id] = downloadItem.FullPath;
+            }
             var info = ToInfo(downloadItem, path);
-            if (info.IsComplete || info.IsCancelled) _paths.TryRemove(downloadItem.Id, out _);
+            var finished = info.IsComplete || info.IsCancelled;
+            if (finished)
+            {
+                _paths.TryRemove(downloadItem.Id, out _);
+                Release(path);
+            }
             tab.OnUi(() => tab.DownloadUpdated?.Invoke(tab, info));
+            if (finished) Finished(downloadItem.Id);
         }
 
         private static BrowserDownload ToInfo(DownloadItem item, string path) => new(
             item.Id, item.Url ?? "", Path.GetFileName(path), path,
-            item.TotalBytes, item.ReceivedBytes, item.IsComplete, item.IsCancelled);
+            // An interrupted download (network or disk error) is over too: Chromium does not resume it by itself.
+            item.TotalBytes, item.ReceivedBytes, item.IsComplete, item.IsCancelled || item.IsInterrupted);
 
+        // Paths handed out to downloads still in progress, across all tabs: the file may not exist on disk yet.
+        private static readonly HashSet<string> Reserved = new(StringComparer.OrdinalIgnoreCase);
+
+        private static void Release(string path)
+        {
+            lock (Reserved) Reserved.Remove(path);
+        }
+
+        /// <summary>A free path (neither on disk nor reserved by another running download), reserved for the caller.</summary>
         private static string UniquePath(string path)
         {
-            if (!File.Exists(path)) return path;
             var dir = Path.GetDirectoryName(path)!;
             var name = Path.GetFileNameWithoutExtension(path);
             var ext = Path.GetExtension(path);
-            for (var i = 1; ; i++)
+            lock (Reserved)
             {
-                var candidate = Path.Combine(dir, $"{name} ({i}){ext}");
-                if (!File.Exists(candidate)) return candidate;
+                var candidate = path;
+                for (var i = 1; File.Exists(candidate) || Reserved.Contains(candidate); i++)
+                    candidate = Path.Combine(dir, $"{name} ({i}){ext}");
+                Reserved.Add(candidate);
+                return candidate;
             }
         }
     }
