@@ -244,7 +244,7 @@ public sealed partial class BrowserTab
             IBeforeDownloadCallback callback)
         {
             Directory.CreateDirectory(DownloadsDirectory);
-            var name = string.IsNullOrWhiteSpace(downloadItem.SuggestedFileName) ? "descarga" : downloadItem.SuggestedFileName;
+            var name = string.IsNullOrWhiteSpace(downloadItem.SuggestedFileName) ? L.T("download", "descarga") : downloadItem.SuggestedFileName;
             var path = UniquePath(Path.Combine(DownloadsDirectory, name));
             _paths[downloadItem.Id] = path;
 
