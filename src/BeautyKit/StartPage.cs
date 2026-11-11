@@ -143,22 +143,22 @@ public static class StartPage
           h1 { margin: 44px 0 0; font-size: 29px; line-height: 1.3; font-weight: 600; letter-spacing: -.015em; text-align: center; }
 
           /* The app cards rise from the bottom edge, tilted, and lift under the pointer. */
-          .showcase { position: fixed; left: 50%; bottom: 0; width: min(920px, 100vw); height: 300px; transform: translateX(-50%); pointer-events: none; }
+          .showcase { position: fixed; left: 50%; bottom: 0; width: min(720px, 94vw); height: 200px; transform: translateX(-50%); pointer-events: none; }
           .card {
-            position: absolute; display: block; padding: 9px; background: #fff; border-radius: 22px; pointer-events: auto;
-            box-shadow: 0 0 0 1px rgba(0, 0, 0, .05), 0 18px 50px rgba(20, 20, 35, .16);
+            position: absolute; display: block; padding: 5px; background: #fff; border-radius: 13px; pointer-events: auto;
+            box-shadow: 0 0 0 1px rgba(0, 0, 0, .05), 0 10px 28px rgba(20, 20, 35, .11);
             transition: transform .45s cubic-bezier(.2, .8, .2, 1), box-shadow .45s;
             animation: rise .9s cubic-bezier(.2, .8, .2, 1) both;
           }
-          .card img { display: block; width: 100%; border-radius: 14px; }
-          .card:hover { box-shadow: 0 0 0 1px rgba(0, 0, 0, .05), 0 26px 60px rgba(20, 20, 35, .22); }
-          .c0 { left: 2%; width: 34%; top: 128px; transform: rotate(-9deg); animation-delay: .2s; }
-          .c0:hover { transform: translateY(-16px) rotate(-9deg); }
-          .c1 { left: 31%; width: 38%; top: 72px; transform: rotate(-4deg); z-index: 2; padding: 16px 12px 12px; border-radius: 26px; animation-delay: .1s; }
-          .c1::before { content: ""; position: absolute; top: 5px; left: 50%; width: 6px; height: 6px; margin-left: -3px; border-radius: 50%; background: #1d1d20; }
-          .c1:hover { transform: translateY(-16px) rotate(-4deg); }
-          .c2 { right: 2%; width: 34%; top: 118px; transform: rotate(11deg); animation-delay: .3s; }
-          .c2:hover { transform: translateY(-16px) rotate(11deg); }
+          .card img { display: block; width: 100%; border-radius: 9px; }
+          .card:hover { box-shadow: 0 0 0 1px rgba(0, 0, 0, .05), 0 16px 36px rgba(20, 20, 35, .16); }
+          .c0 { left: 5%; width: 30%; top: 92px; transform: rotate(-7deg); animation-delay: .2s; }
+          .c0:hover { transform: translateY(-10px) rotate(-7deg); }
+          .c1 { left: 34%; width: 32%; top: 62px; transform: rotate(-2deg); z-index: 2; padding: 10px 6px 6px; border-radius: 15px; animation-delay: .1s; }
+          .c1::before { content: ""; position: absolute; top: 3px; left: 50%; width: 4px; height: 4px; margin-left: -2px; border-radius: 50%; background: #1d1d20; }
+          .c1:hover { transform: translateY(-10px) rotate(-2deg); }
+          .c2 { right: 5%; width: 30%; top: 86px; transform: rotate(8deg); animation-delay: .3s; }
+          .c2:hover { transform: translateY(-10px) rotate(8deg); }
           @keyframes rise { from { opacity: 0; translate: 0 90px; } to { opacity: 1; translate: 0 0; } }
           @media (max-height: 660px) { .showcase { display: none; } main { margin-top: 0; } }
 
