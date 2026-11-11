@@ -62,6 +62,11 @@ public sealed class BrowserEngine : IDisposable
 
         StartPage.Register(settings); // beauty://newtab
 
+        // Secret of the password manager's messages: render processes inherit it as an environment variable (Chromium
+        // does not forward custom switches) and only the main frame's script holds it, so an iframe cannot pass itself
+        // off as the top page (see BrowserTab.OnJavascriptMessage).
+        Environment.SetEnvironmentVariable(PageTokenVariable, PageToken);
+
         // Chromium's own popup blocker drops a popup before OnBeforePopup runs, so the browser could neither show the
         // "popup blocked" notice nor let the user allow the site. With it off, TabLifeSpanHandler decides (see
         // BrowserTab.Notices): user-initiated popups open, the rest are blocked and reported.
@@ -101,6 +106,11 @@ public sealed class BrowserEngine : IDisposable
         return new BrowserEngine(hostWindow, ui, pump);
     }
 
+    internal const string PageTokenVariable = "BEAUTYBROWSER_PAGE_TOKEN";
+
+    /// <summary>Random per run; shared with the render processes through <see cref="PageTokenVariable"/>.</summary>
+    internal static string PageToken { get; } = Convert.ToHexString(System.Security.Cryptography.RandomNumberGenerator.GetBytes(16));
+
     /// <summary>
     /// When Chromium launched this executable as a helper process ("--type=renderer", "--type=gpu-process"…), runs it
     /// and returns its exit code; returns -1 for a normal browser start. Call it first thing in Main.
@@ -122,7 +132,7 @@ public sealed class BrowserEngine : IDisposable
                 var executable = core.GetType("CefSharp.BrowserSubprocess.BrowserSubprocessExecutable", throwOnError: true)!;
                 var main = executable.GetMethod("Main", [typeof(IEnumerable<string>), typeof(CefSharp.RenderProcess.IRenderProcessHandler)])!;
                 var instance = main.IsStatic ? null : Activator.CreateInstance(executable);
-                return (int)main.Invoke(instance, [args, new Blocking.PageInjector()])!;
+                return (int)main.Invoke(instance, [args, new Blocking.PageInjector(Environment.GetEnvironmentVariable(PageTokenVariable))])!;
             }
             catch (Exception ex)
             {
