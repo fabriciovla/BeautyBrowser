@@ -104,8 +104,14 @@ public sealed partial class BrowserView : ContentControl
         PointerReleased += OnPointerReleased;
         PointerWheelChanged += OnPointerWheelChanged;
         PointerExited += OnPointerExited;
-        PointerCaptureLost += (_, _) =>
+        PointerCanceled += (_, e) => { if (IsTouch(e)) SendTouch(e, TouchEventType.Cancelled); };
+        PointerCaptureLost += (_, e) =>
         {
+            if (IsTouch(e))
+            {
+                SendTouch(e, TouchEventType.Cancelled);
+                return;
+            }
             EndWindowDrag();
             _tab?.SendCaptureLost();
         };
@@ -134,6 +140,7 @@ public sealed partial class BrowserView : ContentControl
                 _tab.CursorChanged -= OnCursorChanged;
                 _tab.ContextMenuRequested -= ShowContextMenu;
                 _tab.KeyNotHandled -= OnPageKeyNotHandled;
+                _tab.VirtualKeyboardRequested -= OnVirtualKeyboardRequested;
                 _tab.SendFocus(false);
                 _tab.SetHidden(true);
             }
@@ -147,6 +154,7 @@ public sealed partial class BrowserView : ContentControl
                 _tab.CursorChanged += OnCursorChanged;
                 _tab.ContextMenuRequested += ShowContextMenu;
                 _tab.KeyNotHandled += OnPageKeyNotHandled;
+                _tab.VirtualKeyboardRequested += OnVirtualKeyboardRequested;
                 _tab.SetHidden(false);
                 UpdateSize();
                 if (FocusState != FocusState.Unfocused) _tab.SendFocus(true);
@@ -253,6 +261,11 @@ public sealed partial class BrowserView : ContentControl
     private void OnPointerMoved(object sender, PointerRoutedEventArgs e)
     {
         if (_tab is null) return;
+        if (IsTouch(e))
+        {
+            SendTouch(e, TouchEventType.Moved);
+            return;
+        }
         var point = e.GetCurrentPoint(this);
 
         if (_windowDragging)
@@ -294,7 +307,7 @@ public sealed partial class BrowserView : ContentControl
 
     private void OnPointerExited(object sender, PointerRoutedEventArgs e)
     {
-        if (_tab is null) return;
+        if (_tab is null || IsTouch(e)) return;
         var point = e.GetCurrentPoint(this);
         _tab.SendMouseMove((int)point.Position.X, (int)point.Position.Y, Flags(point.Properties), leave: true);
     }
@@ -305,6 +318,12 @@ public sealed partial class BrowserView : ContentControl
     private void OnPointerPressed(object sender, PointerRoutedEventArgs e)
     {
         if (_tab is null) return;
+        _lastInputWasTouch = IsTouch(e);
+        if (_lastInputWasTouch)
+        {
+            SendTouch(e, TouchEventType.Pressed);
+            return;
+        }
         var point = e.GetCurrentPoint(this);
 
         switch (point.Properties.PointerUpdateKind)
@@ -336,6 +355,11 @@ public sealed partial class BrowserView : ContentControl
     private void OnPointerReleased(object sender, PointerRoutedEventArgs e)
     {
         if (_tab is null) return;
+        if (IsTouch(e))
+        {
+            SendTouch(e, TouchEventType.Released);
+            return;
+        }
         var point = e.GetCurrentPoint(this);
         if (ButtonOf(point.Properties.PointerUpdateKind) is not { } button) return;
 

@@ -300,6 +300,11 @@ public sealed partial class BrowserTab : INotifyPropertyChanged, IDisposable
 
     internal void SendKey(KeyEvent keyEvent) => Host()?.SendKeyEvent(keyEvent);
 
+    internal void SendTouch(CefSharp.Structs.TouchEvent touchEvent) => Host()?.SendTouchEvent(touchEvent);
+
+    /// <summary>A text field in the page got focus (true) or lost it (false): the touch keyboard may be needed.</summary>
+    internal event Action<bool>? VirtualKeyboardRequested;
+
     /// <summary>A key went through the page and the page did not take it (no preventDefault): code and modifiers.</summary>
     internal event Action<int, CefEventFlags>? KeyNotHandled;
 
@@ -442,7 +447,8 @@ public sealed partial class BrowserTab : INotifyPropertyChanged, IDisposable
 
         public void OnImeCompositionRangeChanged(CefSharp.Structs.Range selectedRange, Rect[] characterBounds) { }
 
-        public void OnVirtualKeyboardRequested(IBrowser browser, TextInputMode inputMode) { }
+        public void OnVirtualKeyboardRequested(IBrowser browser, TextInputMode inputMode) =>
+            tab.OnUi(() => tab.VirtualKeyboardRequested?.Invoke(inputMode != TextInputMode.None));
 
         public void Dispose() { }
     }
