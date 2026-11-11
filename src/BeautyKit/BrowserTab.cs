@@ -618,6 +618,8 @@ public sealed partial class BrowserTab : INotifyPropertyChanged, IDisposable
                     return true;
                 }
             }
+            // A link to an app (target=_blank mailto:…) opens no tab: the app is offered instead.
+            if (tab.TryHandleExternal(targetUrl, browser?.MainFrame?.Url)) return true;
             // Ads that open "on your click" (popunders on streaming sites) are closed by the blocker.
             if (Blocking.ContentBlocker.IsAdPopup(targetUrl, frame?.Url ?? browser?.MainFrame?.Url))
             {
