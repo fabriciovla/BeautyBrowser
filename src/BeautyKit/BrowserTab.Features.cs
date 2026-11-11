@@ -87,6 +87,7 @@ public sealed partial class BrowserTab
     }
     public void Print() => Host()?.Print();
     internal void ReplaceMisspelling(string word) => Host()?.ReplaceMisspelling(word);
+    internal void AddToDictionary(string word) => Host()?.AddWordToDictionary(word);
 
     internal void Undo() => _browser.Undo();
     internal void Redo() => _browser.Redo();

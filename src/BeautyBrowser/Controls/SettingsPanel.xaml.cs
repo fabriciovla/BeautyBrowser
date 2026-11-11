@@ -423,6 +423,12 @@ public sealed partial class SettingsPanel : UserControl
         FolderText.Text = folder.Path;
     }
 
+    /// <summary>Brings the "clear history" and "clear cookies" rows into view (Ctrl+Shift+Delete).</summary>
+    public void RevealClearData() =>
+        // After the section is laid out: the library may have just opened.
+        DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, () =>
+            ClearHistoryRow.StartBringIntoView(new BringIntoViewOptions { AnimationDesired = true, VerticalAlignmentRatio = 0.3 }));
+
     // Clear and reset: the first tap asks, the second one acts.
 
     private long _historyConfirmUntil;
