@@ -28,8 +28,18 @@ running a development build.
 - The UI only talks to `BeautyKit`, never to CefSharp directly.
 - Follow the style in `.editorconfig`.
 
+## Branches
+
+| Branch | Purpose |
+| --- | --- |
+| `main` | Released versions only. Every merge is tagged (`v0.1.1`, `v0.2.0`…). |
+| `develop` | Integration branch for the next release. Pull requests target it. |
+| `feat/…`, `fix/…`, `docs/…` | One change each, branched from `develop` and deleted after merging. |
+| `release/x.y.z` | Final polish of a release, branched from `develop` and merged into `main` and `develop`. |
+| `hotfix/x.y.z` | Urgent fixes to a release, branched from `main` and merged into `main` and `develop`. |
+
 ## Commits and pull requests
 
-- Branch from `main` (`feat/…`, `fix/…`, `docs/…`).
+- Branch from `develop` (`feat/…`, `fix/…`, `docs/…`) and open the pull request against it.
 - Use [Conventional Commits](https://www.conventionalcommits.org): `feat(sidebar): …`, `fix(kit): …`, `docs: …`.
 - Keep pull requests focused on one change and describe how you tested it.
