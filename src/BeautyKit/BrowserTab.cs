@@ -639,7 +639,7 @@ public sealed partial class BrowserTab : INotifyPropertyChanged, IDisposable
                            title.StartsWith("https://", StringComparison.OrdinalIgnoreCase);
         if (!looksLikeUrl) return title!;
         return Uri.TryCreate(string.IsNullOrWhiteSpace(title) ? url : title, UriKind.Absolute, out var uri) && uri.Host.Length > 0
-            ? uri.Host.Replace("www.", "")
+            ? HostName.WithoutWww(uri.Host)
             : url;
     }
 

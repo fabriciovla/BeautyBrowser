@@ -209,7 +209,7 @@ public sealed partial class Sidebar : UserControl
     private static string ShortUrl(string? url) =>
         StartPage.Is(url) ? L.T("New tab", "Nueva pestaña")
         : Uri.TryCreate(url, UriKind.Absolute, out var uri) && uri.Scheme is "http" or "https"
-            ? uri.Host.Replace("www.", "")
+            ? HostName.WithoutWww(uri.Host)
             : url ?? "";
 
     private void TrackFlyout(FlyoutBase flyout)

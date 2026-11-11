@@ -127,5 +127,5 @@ public sealed partial class MainWindow
     }
 
     private static string SiteName(string origin) =>
-        Uri.TryCreate(origin, UriKind.Absolute, out var uri) ? uri.Host.Replace("www.", "") : "";
+        Uri.TryCreate(origin, UriKind.Absolute, out var uri) ? HostName.WithoutWww(uri.Host) : "";
 }

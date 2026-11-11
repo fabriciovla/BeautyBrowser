@@ -149,7 +149,7 @@ public sealed partial class BrowserTab
     }
 
     private static string HostOf(string url) =>
-        Uri.TryCreate(url, UriKind.Absolute, out var uri) ? uri.Host.Replace("www.", "") : "";
+        Uri.TryCreate(url, UriKind.Absolute, out var uri) ? HostName.WithoutWww(uri.Host) : "";
 
 
     internal void CountBlocked()
