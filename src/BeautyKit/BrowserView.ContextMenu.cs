@@ -84,8 +84,9 @@ public sealed partial class BrowserView
             Add(L.T("Copy", "Copiar"), tab.Copy, shortcut: "Ctrl+C");
             var query = info.SelectionText.Trim();
             var preview = query.Length > 24 ? query[..24] + "…" : query;
-            Add(L.T($"Search Google for \"{preview}\"", $"Buscar \"{preview}\" en Google"),
-                () => tab.OpenInNewTab("https://www.google.com/search?q=" + Uri.EscapeDataString(query)));
+            var engine = StartPage.SearchEngineName;
+            Add(L.T($"Search {engine} for \"{preview}\"", $"Buscar \"{preview}\" en {engine}"),
+                () => tab.OpenInNewTab(string.Format(BrowserTab.SearchUrlTemplate, Uri.EscapeDataString(query))));
             Separator();
         }
 
