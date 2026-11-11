@@ -95,6 +95,25 @@
                 <TextBlock x:Name="UrlText" TextTrimming="CharacterEllipsis" />
             </Button>
             <StackPanel Grid.Column="1" Margin="0,0,4,0" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
+                <!-- The page's zoom while it is not the default one, as in Chrome; a click restores it. -->
+                <Button
+                    x:Name="ZoomBadge"
+                    Height="24"
+                    Padding="6,0"
+                    Click="ZoomReset_Click"
+                    Style="{StaticResource BeautyIconButton}"
+                    ToolTipService.ToolTip="{local:T En='Reset zoom', Es='Restablecer zoom'}"
+                    Visibility="Collapsed">
+                    <Button.Resources>
+                        <SolidColorBrush x:Key="ButtonBackground" Color="#10000000" />
+                        <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#1C000000" />
+                        <SolidColorBrush x:Key="ButtonBackgroundPressed" Color="#26000000" />
+                    </Button.Resources>
+                    <StackPanel Orientation="Horizontal" Spacing="4">
+                        <FontIcon FontSize="11" Glyph="&#xE71E;" />
+                        <TextBlock x:Name="ZoomBadgeText" FontSize="11" />
+                    </StackPanel>
+                </Button>
                 <Button
                     Width="28"
                     Height="28"
@@ -265,10 +284,15 @@
             Margin="-4,0"
             Padding="0,4"
             Background="Transparent"
+            ContainerContentChanging="TabList_ContainerContentChanging"
             ItemContainerStyle="{StaticResource BeautyTabItemStyle}"
             Loaded="TabList_Loaded"
             SelectionChanged="TabList_SelectionChanged"
             SelectionMode="Single">
+            <!-- No theme animations: Sidebar.TabMotion.cs moves the rows in step with the active tab's card. -->
+            <ListView.ItemContainerTransitions>
+                <TransitionCollection />
+            </ListView.ItemContainerTransitions>
             <ListView.Resources>
                 <ResourceDictionary Source="ms-appx:///Theme/BeautyLists.xaml" />
             </ListView.Resources>

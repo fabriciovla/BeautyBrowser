@@ -43,6 +43,14 @@ public sealed partial class BrowserTab : INotifyPropertyChanged, IDisposable
     private IBrowserSettings? _pendingSettings;
     private string? _pendingUrl;
 
+    private readonly IRequestContext? _privateContext;
+
+    /// <summary>
+    /// Private tab: cookies, cache and storage live only in memory, shared by every private tab until the last one
+    /// closes, and nothing is written to the history or the session.
+    /// </summary>
+    public bool IsPrivate => _privateContext is not null;
+
     private string _title = L.T("New tab", "Nueva pestaña");
     private string _url;
     private ImageSource? _favicon;
@@ -56,9 +64,12 @@ public sealed partial class BrowserTab : INotifyPropertyChanged, IDisposable
     /// <see cref="TabCreation.Now"/> creates the browser right away; <see cref="TabCreation.WhenShown"/> waits until it
     /// is first shown (restored tabs); <see cref="TabCreation.Popup"/> lets Chromium create it as a page's popup.
     /// </param>
-    internal BrowserTab(nint hostWindow, DispatcherQueue ui, string url, TabCreation mode = TabCreation.Now)
+    /// <param name="privateContext">The in-memory profile of private tabs; null for the regular profile.</param>
+    internal BrowserTab(nint hostWindow, DispatcherQueue ui, string url, TabCreation mode = TabCreation.Now,
+        IRequestContext? privateContext = null)
     {
         _hostWindow = hostWindow;
+        _privateContext = privateContext;
         _ui = ui;
         _url = url;
 
@@ -67,7 +78,7 @@ public sealed partial class BrowserTab : INotifyPropertyChanged, IDisposable
         browserSettings.BackgroundColor = 0xFFFFFFFF; // opaque (see BrowserEngine)
         _zoomLevel = ZoomLevelFor(DefaultZoomPercent);
 
-        _browser = new ChromiumWebBrowser(url, browserSettings, automaticallyCreateBrowser: false)
+        _browser = new ChromiumWebBrowser(url, browserSettings, privateContext, automaticallyCreateBrowser: false)
         {
             DisplayHandler = new TabDisplayHandler(this),
             LifeSpanHandler = new TabLifeSpanHandler(this),
@@ -76,8 +87,7 @@ public sealed partial class BrowserTab : INotifyPropertyChanged, IDisposable
             RequestHandler = new TabRequestHandler(this),
             FindHandler = new TabFindHandler(this),
             KeyboardHandler = new TabKeyboardHandler(this),
-            PermissionHandler = new TabPermissionHandler(this),
-        };
+            PermissionHandler = new TabPermissionHandler(this),        };
         _browser.RenderHandler = new TabRenderHandler(this);
         _browser.JavascriptMessageReceived += OnJavascriptMessage; // playing media (BrowserTab.Media)
 
@@ -86,8 +96,7 @@ public sealed partial class BrowserTab : INotifyPropertyChanged, IDisposable
         _browser.LoadingStateChanged += (_, e) => OnUi(() =>
         {
             IsLoading = e.IsLoading;
-            CanGoBack = e.CanGoBack;
-            CanGoForward = e.CanGoForward;
+            OnHistoryChanged(e.CanGoBack, e.CanGoForward); // plus the restored pages (BrowserTab.History)
         });
         // Pages that declare no icon fall back to the site's /favicon.ico, as Chrome does.
         _browser.FrameLoadEnd += (_, e) =>
@@ -176,7 +185,10 @@ public sealed partial class BrowserTab : INotifyPropertyChanged, IDisposable
     /// </summary>
     public event EventHandler<BrowserTab>? PopupOpened;
 
-    /// <summary>The page closed itself (window.close(), usually a popup when it is done). The app removes the tab.</summary>
+    /// <summary>
+    /// The tab may close: the page closed itself (window.close(), usually a popup when it is done) or it let a
+    /// <see cref="RequestClose"/> through. The app removes the tab.
+    /// </summary>
     public event EventHandler? CloseRequested;
 
     /// <summary>The page wants a new window (target=_blank, window.open…).</summary>
@@ -206,19 +218,24 @@ public sealed partial class BrowserTab : INotifyPropertyChanged, IDisposable
     public void Navigate(string input)
     {
         var url = InputToUrl(input);
-        if (!_browser.IsBrowserInitialized)
+        if (!_created)
         {
-            // Not created yet (restored tab) or still starting: it loads once it exists.
-            _pendingUrl = url;
+            // A restored tab not created yet: it is created straight at the new address, so its old page never loads.
+            _browser.LoadUrl(url); // before creation this only sets the address CreateBrowser uses
             Url = url;
             EnsureCreated();
+            return;
+        }
+        if (!_browser.IsBrowserInitialized)
+        {
+            // Still starting: it loads once it exists.
+            _pendingUrl = url;
+            Url = url;
             return;
         }
         _browser.LoadUrl(url);
     }
 
-    public void GoBack() { if (_browser.IsBrowserInitialized) _browser.Back(); }
-    public void GoForward() { if (_browser.IsBrowserInitialized) _browser.Forward(); }
     /// <param name="ignoreCache">Ctrl+Shift+R, Ctrl+F5: fetch everything again instead of using the cache.</param>
     public void Reload(bool ignoreCache = false) { if (_browser.IsBrowserInitialized) _browser.Reload(ignoreCache); }
 
@@ -242,7 +259,8 @@ public sealed partial class BrowserTab : INotifyPropertyChanged, IDisposable
 
     internal event Action<CursorType>? CursorChanged;
 
-    internal void Resize(int widthDip, int heightDip, double scale, (int X, int Y) offsetPx)
+    /// <param name="sizesBackgroundTabs">Whether background tabs should take this size (see BrowserView).</param>
+    internal void Resize(int widthDip, int heightDip, double scale, (int X, int Y) offsetPx, bool sizesBackgroundTabs = true)
     {
         _viewOffsetPx = offsetPx;
         widthDip = Math.Max(widthDip, 1);
@@ -253,11 +271,11 @@ public sealed partial class BrowserTab : INotifyPropertyChanged, IDisposable
         _viewWidth = widthDip;
         _viewHeight = heightDip;
         _scale = scale;
-        _lastViewSize = (widthDip, heightDip, scale, offsetPx);
+        if (sizesBackgroundTabs) _lastViewSize = (widthDip, heightDip, scale, offsetPx);
 
         if (!_browser.IsBrowserInitialized) return;
         var host = _browser.GetBrowserHost();
-        if (scaleChanged) host.NotifyScreenInfoChanged();
+        if (scaleChanged || sizeChanged) host.NotifyScreenInfoChanged(); // the "screen" is the view (GetScreenInfo)
         if (sizeChanged || scaleChanged) host.WasResized();
     }
 
@@ -380,7 +398,13 @@ public sealed partial class BrowserTab : INotifyPropertyChanged, IDisposable
 
     private sealed class TabRenderHandler(BrowserTab tab) : IRenderHandler
     {
-        public ScreenInfo? GetScreenInfo() => new ScreenInfo { DeviceScaleFactor = (float)tab._scale };
+        // The view is the "screen", as in CEF's own sample: dropdowns (<select>) and other popups are drawn inside the
+        // view, so Chromium must fit them there (near the bottom they open upwards instead of being cut off).
+        public ScreenInfo? GetScreenInfo()
+        {
+            var view = new Rect(0, 0, tab._viewWidth, tab._viewHeight);
+            return new ScreenInfo { DeviceScaleFactor = (float)tab._scale, Rect = view, AvailableRect = view };
+        }
 
         public Rect GetViewRect() => new(0, 0, tab._viewWidth, tab._viewHeight);
 
@@ -475,10 +499,46 @@ public sealed partial class BrowserTab : INotifyPropertyChanged, IDisposable
                 _faviconHost = page?.Host;
                 return;
             }
+
+            // Sites behind bot protection or a sign-in refuse the app's own download, but give the icon to the page
+            // (which has their cookies): it is asked for it as a data: address.
+            foreach (var url in options.Take(3))
+            {
+                if (await FetchThroughPageAsync(url) is not { } data) continue;
+                Favicons.Remember(url, data); // every list showing this icon gets it too
+                var image = await Favicons.LoadAsync(url);
+                if (request != _faviconRequest || _disposed) return;
+                if (image is null) continue;
+                Favicon = image;
+                FaviconUrl = url;
+                _faviconHost = page?.Host;
+                return;
+            }
         }
         finally
         {
             if (request == _faviconRequest) _faviconPending = false;
+        }
+    }
+
+    /// <summary>Downloads a file from inside the page (same site, or one that allows it) as a data: address.</summary>
+    private async Task<string?> FetchThroughPageAsync(string url)
+    {
+        try
+        {
+            if (!url.StartsWith("http", StringComparison.OrdinalIgnoreCase) ||
+                !_browser.IsBrowserInitialized || _browser.GetMainFrame() is not { IsValid: true } frame) return null;
+            var script =
+                "(async u => { const r = await fetch(u, { credentials: 'include' }); if (!r.ok) return ''; const b = await r.blob();" +
+                " if (b.size > 512 * 1024) return '';" +
+                " return await new Promise(ok => { const f = new FileReader(); f.onload = () => ok(f.result); f.onerror = () => ok(''); f.readAsDataURL(b); }); })(" +
+                System.Text.Json.JsonSerializer.Serialize(url) + ")";
+            var response = await frame.EvaluateScriptAsync(script, timeout: TimeSpan.FromSeconds(4));
+            return response.Success && response.Result is string { Length: > 0 } data && data.StartsWith("data:") ? data : null;
+        }
+        catch
+        {
+            return null;
         }
     }
 
@@ -562,7 +622,7 @@ public sealed partial class BrowserTab : INotifyPropertyChanged, IDisposable
             // tab of ours so window.opener keeps working. Opening it as a plain tab instead would leave the sign-in hung.
             if (targetDisposition == WindowOpenDisposition.NewPopup)
             {
-                var popup = new BrowserTab(tab._hostWindow, tab._ui, string.IsNullOrEmpty(targetUrl) ? "about:blank" : targetUrl, TabCreation.Popup);
+                var popup = new BrowserTab(tab._hostWindow, tab._ui, string.IsNullOrEmpty(targetUrl) ? "about:blank" : targetUrl, TabCreation.Popup, tab._privateContext);
                 windowInfo.SetAsWindowless(tab._hostWindow);
                 windowInfo.SharedTextureEnabled = UseGpu;
                 browserSettings.WindowlessFrameRate = FrameRate;
@@ -584,8 +644,8 @@ public sealed partial class BrowserTab : INotifyPropertyChanged, IDisposable
             return true; // cancel the popup: the app opens it
         }
 
-        // window.close() from the page (a sign-in popup that finished). Closes run through here too when the app
-        // disposes the tab; those are not reported back.
+        // window.close() from the page (a sign-in popup that finished) or a RequestClose the page let through. Closes
+        // run through here too when the app disposes the tab; those are not reported back.
         //
         // The app removes and disposes the tab in response, which must not happen inside this callback: Chromium is in
         // the middle of closing the browser and crashed (access violation) when it was destroyed under it, as when

@@ -11,6 +11,7 @@ namespace BeautyKit;
 public sealed partial class BrowserView
 {
     private bool _externalDrag;
+    private readonly LinkDragVisual _linkVisual = new();
 
     private void SetupDragAndDrop()
     {
@@ -31,6 +32,8 @@ public sealed partial class BrowserView
 
                 var point = e.GetPosition(this);
                 tab.ExternalDragEnter(data, (int)point.X, (int)point.Y);
+                await _linkVisual.PrepareAsync(e.DataView, _layers, tab.Favicon,
+                    Uri.TryCreate(tab.Url, UriKind.Absolute, out var page) ? page.Host : null);
                 _externalDrag = true;
                 e.AcceptedOperation = DataPackageOperation.Copy;
             }
@@ -46,6 +49,7 @@ public sealed partial class BrowserView
             var point = e.GetPosition(this);
             var operation = _tab.ExternalDragOver((int)point.X, (int)point.Y);
             e.AcceptedOperation = ToDataPackageOperation(operation);
+            _linkVisual.Apply(e.DragUIOverride);
             e.Handled = true;
         };
 
@@ -73,9 +77,10 @@ public sealed partial class BrowserView
 
         if (view.Contains(StandardDataFormats.StorageItems))
         {
-            var files = (await view.GetStorageItemsAsync()).OfType<StorageFile>().ToList();
-            if (files.Count == 0) return null;
-            foreach (var file in files) data.AddFile(file.Path, file.Name);
+            // Folders too: pages that take them (Drive, WeTransfer…) read their contents through the drop's entries.
+            var items = (await view.GetStorageItemsAsync()).Where(i => !string.IsNullOrEmpty(i.Path)).ToList();
+            if (items.Count == 0) return null;
+            foreach (var item in items) data.AddFile(item.Path, item.Name);
             data.IsFile = true;
             return data;
         }

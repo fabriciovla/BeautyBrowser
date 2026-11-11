@@ -1,4 +1,4 @@
-﻿using System.Numerics;
+using System.Numerics;
 using System.Runtime.InteropServices;
 using BeautyBrowser.Controls;
 using BeautyBrowser.Shell;
@@ -116,6 +116,7 @@ public sealed partial class MainWindow : Window
         SetupPageShortcuts();
         SetupPermissions();
         SetupPasswords();
+        SetupZoomToast();
         SetupNotices();
         SetupUpdates();
         // Links other apps send while BeautyBrowser is open: a new tab, with the window brought to the front.
@@ -319,6 +320,9 @@ public sealed partial class MainWindow : Window
 
     private void Shutdown()
     {
+        // Closing every tab and shutting Chromium down takes a few seconds with many tabs: the window goes away right
+        // away instead of staying frozen on screen meanwhile.
+        AppWindow.Hide();
         _hoverTimer.Stop();
         WebView.Tab = null;
         DevToolsView.Tab = null;
@@ -1311,7 +1315,7 @@ public sealed partial class MainWindow : Window
         _shell.TabCloseRequested += (_, tab) =>
         {
             if (tab == _peekTab) ClosePeek();
-            else _shell.CloseTab(tab);
+            else _shell.RemoveTab(tab);
         };
         PageArea.SizeChanged += (_, _) => { if (PeekOpen) LayoutPeek(); };
         PeekCard.Shadow = new ThemeShadow();
@@ -1358,7 +1362,7 @@ public sealed partial class MainWindow : Window
         }
 
         _peekVersion++;
-        _peekTab = popup ?? _shell.CreatePeekTab(url);
+        _peekTab = popup ?? _shell.CreatePeekTab(url, from.IsPrivate);
         PeekLayer.Visibility = Visibility.Visible;
         LayoutPeek();
         PeekView.Tab = _peekTab;
@@ -1496,6 +1500,13 @@ public sealed partial class MainWindow : Window
     {
         if (_fullscreen) return;
         _shell.Settings.SidebarDocked = !_sidebarDocked;
+    }
+
+    private void PrivateTab_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+    {
+        args.Handled = true;
+        if (_fullscreen) _shell.CurrentTab?.ExitFullscreen();
+        _shell.OpenPrivateTab();
     }
 
     private void ReopenTab_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
