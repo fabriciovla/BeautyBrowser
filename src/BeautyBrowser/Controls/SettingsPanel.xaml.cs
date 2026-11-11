@@ -31,7 +31,9 @@ public sealed partial class SettingsPanel : UserControl
     public void Attach(BrowserShell shell)
     {
         _shell = shell;
-        VersionText.Text = $"Beauty Browser · Chromium {BrowserEngine.ChromiumVersion}\n" + L.T("Your data stays on this PC.", "Tus datos se guardan solo en esta PC.");
+        VersionText.Text = $"Beauty Browser {UpdateService.CurrentVersion} · Chromium {BrowserEngine.ChromiumVersion}\n" + L.T("Your data stays on this PC.", "Tus datos se guardan solo en esta PC.");
+        shell.Updates.StateChanged += (_, _) => ShowUpdateState();
+        ShowUpdateState();
         _hardwareAtStart = shell.Settings.HardwareAcceleration; // what Chromium started with
         Build();
         shell.Settings.SettingsChanged += (_, _) =>
@@ -434,6 +436,37 @@ public sealed partial class SettingsPanel : UserControl
     private void ClearCookies_Click(object sender, RoutedEventArgs e) =>
         ConfirmThen(ref _cookiesConfirmUntil, ClearCookiesHint, L.T("You will have to sign in to sites again", "Vas a tener que volver a iniciar sesión en los sitios"), () =>
             _shell?.Settings.ClearBrowsingData(clearHistory: false, clearCookies: true, clearCache: true, _shell.History));
+
+    private void ShowUpdateState()
+    {
+        var updates = _shell!.Updates;
+        var (title, hint, glyph) = updates.State switch
+        {
+            UpdateState.Checking => (L.T("Checking for updates…", "Buscando actualizaciones…"), "", "\uE895"),
+            UpdateState.Downloading => (L.T("Downloading the new version…", "Descargando la versión nueva…"),
+                L.T("It installs when you close the browser.", "Se instala cuando cerrás el navegador."), "\uE896"),
+            UpdateState.Ready => (L.T($"Restart to update to {updates.ReadyVersion}", $"Reiniciar para actualizar a la {updates.ReadyVersion}"),
+                L.T("Your tabs come back as they were.", "Tus pestañas vuelven como estaban."), "\uE72C"),
+            UpdateState.UpToDate => (L.T("Check for updates", "Buscar actualizaciones"),
+                L.T($"You have the latest version ({UpdateService.CurrentVersion}).", $"Tenés la última versión ({UpdateService.CurrentVersion})."), "\uE895"),
+            UpdateState.Failed => (L.T("Check for updates", "Buscar actualizaciones"),
+                L.T("Could not check. Try again later.", "No se pudo buscar. Probá más tarde."), "\uE895"),
+            UpdateState.NotInstalled => (L.T("Check for updates", "Buscar actualizaciones"),
+                L.T("Only the installed browser updates itself.", "Solo se actualiza el navegador instalado."), "\uE895"),
+            _ => (L.T("Check for updates", "Buscar actualizaciones"),
+                L.T("It updates by itself, like Chrome.", "Se actualiza sola, como Chrome."), "\uE895"),
+        };
+        UpdateTitle.Text = title;
+        UpdateHint.Text = hint;
+        UpdateIcon.Glyph = glyph;
+        UpdateRow.IsEnabled = updates.State is not (UpdateState.Checking or UpdateState.Downloading or UpdateState.NotInstalled);
+    }
+
+    private void Update_Click(object sender, RoutedEventArgs e)
+    {
+        if (_shell!.Updates.State == UpdateState.Ready) App.Restart(); // the installer runs and opens the browser again
+        else _ = _shell.Updates.CheckNowAsync();
+    }
 
     private void Reset_Click(object sender, RoutedEventArgs e) =>
         ConfirmThen(ref _resetConfirmUntil, ResetHint, L.T("Restores the defaults. History and favorites stay.", "Vuelve todo a como venía. No borra historial ni favoritos."), () =>

@@ -46,6 +46,17 @@ public partial class App : Application
             return;
         }
 
+        // Update started by the browser itself, without a window: it waits for the browser to close, replaces the app
+        // and, with --relaunch, opens it again.
+        //   BeautyBrowserSetup.exe --silent [--relaunch]
+        if (e.Args.Contains("--silent"))
+        {
+            ShutdownMode = ShutdownMode.OnExplicitShutdown;
+            var updated = await Installer.UpdateSilentlyAsync(relaunch: e.Args.Contains("--relaunch"));
+            Shutdown(updated ? 0 : 1);
+            return;
+        }
+
         new SetupWindow().Show();
     }
 }

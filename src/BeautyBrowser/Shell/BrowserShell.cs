@@ -21,6 +21,7 @@ public sealed class BrowserShell
         Database = database ?? new DatabaseService();
         History = new HistoryService(ui, Database);
         Settings = new SettingsService(Database);
+        Updates = new UpdateService(ui);
 
         // The start page's most visited sites, always up to date.
         StartPage.Sites = History.TopSites(8);
@@ -67,6 +68,9 @@ public sealed class BrowserShell
 
     /// <summary>A page asks for the microphone, camera, location… Without a listener the request is denied.</summary>
     public event EventHandler<(BrowserTab Tab, PermissionRequest Request)>? PermissionRequested;
+
+    /// <summary>New versions from GitHub Releases (see UpdateService).</summary>
+    public UpdateService Updates { get; }
 
     /// <summary>The visible tab changed (selection, close or space switch).</summary>
     public event EventHandler? CurrentTabChanged;

@@ -33,6 +33,9 @@
 Get the installer from the [latest release](https://github.com/fabriciovla/BeautyBrowser/releases/latest). It installs
 for the current user, without administrator rights, on Windows 10 version 2004 or later and Windows 11 (x64).
 
+After that it keeps itself up to date: it checks for a new release every few hours, downloads it in the background
+(verifying its SHA-256) and installs it when you close the browser.
+
 ## How it works
 
 Beauty Browser is a C# app with a WinUI 3 interface. The engine is Chromium through CEF and CefSharp, rendered

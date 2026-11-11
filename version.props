@@ -1,0 +1,8 @@
+<Project>
+  <!-- The version of Beauty Browser, shared by the app and the installer. Releases are tagged with it (v0.1.2). -->
+  <PropertyGroup>
+    <Version>0.1.2</Version>
+    <!-- Just "0.1.2", without the commit hash .NET would append: the app compares it with the release tag. -->
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
+  </PropertyGroup>
+</Project>

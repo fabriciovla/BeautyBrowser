@@ -38,6 +38,16 @@ running a development build.
 | `release/x.y.z` | Final polish of a release, branched from `develop` and merged into `main` and `develop`. |
 | `hotfix/x.y.z` | Urgent fixes to a release, branched from `main` and merged into `main` and `develop`. |
 
+## Releases
+
+1. Raise `<Version>` in `version.props` (the app and the installer both take it from there).
+2. Merge into `main` and push.
+3. Run `powershell -ExecutionPolicy Bypass -File tools\publish-release.ps1`. It builds the installer, tags `vX.Y.Z`
+   and publishes the GitHub release with `BeautyBrowserSetup.exe` and its `.sha256`.
+
+Installed copies find the new release within a few hours and update themselves when they close. Releases are built
+locally rather than on GitHub Actions because they ship CEF with proprietary codecs (see the README).
+
 ## Commits and pull requests
 
 - Branch from `develop` (`feat/…`, `fix/…`, `docs/…`) and open the pull request against it.
