@@ -29,7 +29,12 @@ public sealed partial class MainWindow
             }
         };
         _shell.DownloadApprovalRequested += (_, item) => AddNotice(DangerousDownloadNotice(item.Approval));
-        _shell.ExternalAppRequested += (_, item) => AddNotice(ExternalAppNotice(item.Tab, item.Request));
+        _shell.ExternalAppRequested += (_, item) =>
+        {
+            // While one is pending the new request is ignored: a page could swap the app right before the click.
+            if (_notices.Any(n => n.Key.Equals((item.Tab, "app")))) return;
+            AddNotice(ExternalAppNotice(item.Tab, item.Request));
+        };
     }
 
     private void AddNotice(Notice notice)

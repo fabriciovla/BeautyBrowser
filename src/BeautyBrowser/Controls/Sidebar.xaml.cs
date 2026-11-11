@@ -177,6 +177,9 @@ public sealed partial class Sidebar : UserControl
         BackButton.IsEnabled = tab?.CanGoBack ?? false;
         ForwardButton.IsEnabled = tab?.CanGoForward ?? false;
         UrlText.Text = ShortUrl(tab?.Url);
+        UrlInsecureIcon.Visibility = Uri.TryCreate(tab?.Url, UriKind.Absolute, out var uri) && uri.Scheme == "http"
+            ? Visibility.Visible
+            : Visibility.Collapsed;
     }
 
     private void RefreshDots()
