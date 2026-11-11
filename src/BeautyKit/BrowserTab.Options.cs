@@ -43,6 +43,10 @@ public sealed partial class BrowserTab
 
     private sealed class TabRequestHandler(BrowserTab tab) : CefSharp.Handler.RequestHandler
     {
+        // Runs on Chromium's thread. Crash, kill or out of memory: the page would stay frozen without a word.
+        protected override void OnRenderProcessTerminated(IWebBrowser chromiumWebBrowser, IBrowser browser,
+            CefTerminationStatus status, int errorCode, string errorMessage) => tab.RendererTerminated();
+
         protected override IResourceRequestHandler? GetResourceRequestHandler(IWebBrowser chromiumWebBrowser,
             IBrowser browser, IFrame frame, IRequest request, bool isNavigation, bool isDownload,
             string requestInitiator, ref bool disableDefaultHandling)

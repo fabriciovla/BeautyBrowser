@@ -19,6 +19,15 @@ public sealed partial class MainWindow
         _shell.CurrentTabChanged += (_, _) => ShowNextNotice();
 
         _shell.PopupBlocked += (_, blocked) => AddNotice(PopupNotice(blocked.Tab, blocked.Origin, blocked.Url));
+        _shell.TabCrashChanged += (_, e) =>
+        {
+            if (e.Crashed) AddNotice(CrashNotice(e.Tab));
+            else
+            {
+                _notices.RemoveAll(n => n.Key.Equals((e.Tab, "crashed")));
+                ShowNextNotice();
+            }
+        };
         _shell.DownloadApprovalRequested += (_, item) => AddNotice(DangerousDownloadNotice(item.Approval));
     }
 
@@ -83,6 +92,13 @@ public sealed partial class MainWindow
             SecondaryLabel: L.T("Dismiss", "Cerrar"),
             Secondary: () => { });
     }
+
+    private static Notice CrashNotice(BrowserTab tab) => new(
+        Key: (tab, "crashed"), Tab: tab, Glyph: "",
+        Text: L.T("This page ran into a problem.", "Esta página tuvo un problema."),
+        Detail: null,
+        PrimaryLabel: L.T("Reload", "Recargar"), Primary: () => tab.Reload(),
+        SecondaryLabel: L.T("Dismiss", "Cerrar"), Secondary: () => { });
 
     private Notice DangerousDownloadNotice(DownloadApproval approval)
     {
