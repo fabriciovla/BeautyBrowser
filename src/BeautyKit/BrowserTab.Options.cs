@@ -43,6 +43,16 @@ public sealed partial class BrowserTab
 
     private sealed class TabRequestHandler(BrowserTab tab) : CefSharp.Handler.RequestHandler
     {
+        // A link to an app (mailto:, zoommtg:…), in the page or in a frame: cancelled so the page stays, and offered to
+        // the user (see BrowserTab.ExternalApps).
+        protected override bool OnBeforeBrowse(IWebBrowser chromiumWebBrowser, IBrowser browser, IFrame frame,
+            IRequest request, bool userGesture, bool isRedirect)
+        {
+            string? pageUrl = null;
+            try { pageUrl = browser?.MainFrame?.Url; } catch { }
+            return tab.TryHandleExternal(request.Url, pageUrl);
+        }
+
         // Runs on Chromium's thread. Crash, kill or out of memory: the page would stay frozen without a word.
         protected override void OnRenderProcessTerminated(IWebBrowser chromiumWebBrowser, IBrowser browser,
             CefTerminationStatus status, int errorCode, string errorMessage) => tab.RendererTerminated();
