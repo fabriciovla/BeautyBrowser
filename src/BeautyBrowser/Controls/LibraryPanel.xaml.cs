@@ -58,6 +58,9 @@ public sealed partial class LibraryPanel : UserControl
             Focus(FocusState.Programmatic);
     }
 
+    /// <summary>Scrolls the settings to the rows that clear history, cookies and cache.</summary>
+    public void RevealClearData() => SettingsView.RevealClearData();
+
     /// <summary>Spaces, with the new space form open above the existing ones.</summary>
     public void StartNewSpace()
     {
