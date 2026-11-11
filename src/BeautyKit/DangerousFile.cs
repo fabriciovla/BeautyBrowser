@@ -14,6 +14,9 @@ public static class DangerousFile
         "lnk", "url", "chm",
         // Office documents with macros
         "docm", "xlsm", "pptm", "dotm", "xlam",
+        // Disk images (mounted with a double click), OneNote and Excel add-ins, remote desktop and Windows shell files
+        "iso", "img", "vhd", "vhdx", "one", "xll", "rdp", "settingcontent-ms", "library-ms", "wsc", "sct", "ws", "cab",
+        "diagcab", "appinstaller", "mht", "mhtml",
     };
 
     /// <summary>Whether a file with this name can run code once opened. Looks at the last extension only.</summary>
