@@ -22,4 +22,10 @@ internal sealed record ContextMenuInfo(
     public bool IsVideo => MediaType == ContextMenuMediaType.Video && !string.IsNullOrEmpty(SourceUrl);
     public bool IsAudio => MediaType == ContextMenuMediaType.Audio && !string.IsNullOrEmpty(SourceUrl);
     public bool Can(ContextMenuEditState state) => EditState.HasFlag(state);
+
+    // Read from the page at (X, Y) when the menu opens (CEF does not give the link text or the video state).
+    public string LinkText { get; init; } = "";
+    public bool VideoLoop { get; init; }
+    public bool VideoControls { get; init; }
+    public bool CanPictureInPicture { get; init; }
 }
