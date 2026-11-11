@@ -26,19 +26,6 @@ public sealed class BrowserShell
         // Sites where popups were allowed for good are read by Chromium's thread from here on.
         foreach (var origin in SitePermissions.OriginsAllowing(PagePermission.Popups)) BrowserTab.AllowPopupsFrom(origin);
 
-        // The start page's most visited sites, always up to date.
-        StartPage.Sites = History.TopSites(8);
-        try
-        {
-            var logo = Path.Combine(AppContext.BaseDirectory, "BeautyBrowser.png");
-            if (File.Exists(logo)) StartPage.LogoDataUri = "data:image/png;base64," + Convert.ToBase64String(File.ReadAllBytes(logo));
-        }
-        catch
-        {
-            // without a logo the start page shows its sphere
-        }
-        History.HistoryChanged += (_, _) => StartPage.Sites = History.TopSites(8);
-
         CurrentSpace = new Space("Space");
         Spaces.Add(CurrentSpace);
 

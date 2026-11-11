@@ -13,4 +13,8 @@
     <!-- Direct3D 11 and DXGI: pages go from Chromium's GPU textures to the screen without touching the CPU. -->
     <PackageReference Include="Vortice.Direct3D11" Version="3.8.3" />
   </ItemGroup>
+  <ItemGroup>
+    <!-- Icons of the apps on the start page (beauty://newtab). -->
+    <EmbeddedResource Include="Assets\StartPage\*.png" LogicalName="BeautyKit.StartPage.%(Filename)%(Extension)" />
+  </ItemGroup>
 </Project>
