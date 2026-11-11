@@ -77,6 +77,7 @@ public sealed partial class BrowserTab : INotifyPropertyChanged, IDisposable
             FindHandler = new TabFindHandler(this),
             KeyboardHandler = new TabKeyboardHandler(this),
             PermissionHandler = new TabPermissionHandler(this),
+            JsDialogHandler = new TabJsDialogHandler(this),
         };
         _browser.RenderHandler = new TabRenderHandler(this);
         _browser.JavascriptMessageReceived += OnJavascriptMessage; // playing media (BrowserTab.Media)
@@ -176,7 +177,10 @@ public sealed partial class BrowserTab : INotifyPropertyChanged, IDisposable
     /// </summary>
     public event EventHandler<BrowserTab>? PopupOpened;
 
-    /// <summary>The page closed itself (window.close(), usually a popup when it is done). The app removes the tab.</summary>
+    /// <summary>
+    /// The tab may close: the page closed itself (window.close(), usually a popup when it is done) or it let a
+    /// <see cref="RequestClose"/> through. The app removes the tab.
+    /// </summary>
     public event EventHandler? CloseRequested;
 
     /// <summary>The page wants a new window (target=_blank, window.open…).</summary>
@@ -589,8 +593,8 @@ public sealed partial class BrowserTab : INotifyPropertyChanged, IDisposable
             return true; // cancel the popup: the app opens it
         }
 
-        // window.close() from the page (a sign-in popup that finished). Closes run through here too when the app
-        // disposes the tab; those are not reported back.
+        // window.close() from the page (a sign-in popup that finished) or a RequestClose the page let through. Closes
+        // run through here too when the app disposes the tab; those are not reported back.
         protected override bool DoClose(IWebBrowser chromiumWebBrowser, IBrowser browser)
         {
             if (!tab._disposed) tab.OnUi(() => tab.CloseRequested?.Invoke(tab, EventArgs.Empty));
