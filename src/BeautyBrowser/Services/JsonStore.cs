@@ -12,15 +12,28 @@ internal static class JsonStore
 
     public static T Load<T>(string fileName) where T : new()
     {
+        var path = Path.Combine(Folder, fileName);
+        string text;
         try
         {
-            var path = Path.Combine(Folder, fileName);
             if (!File.Exists(path)) return new T();
-            return JsonSerializer.Deserialize<T>(File.ReadAllText(path), Options) ?? new T();
+            text = File.ReadAllText(path);
         }
         catch
         {
-            return new T(); // corrupt or from another version: start over
+            return new T(); // unreadable right now (locked, permissions): the next Save may still overwrite it
+        }
+
+        try
+        {
+            return JsonSerializer.Deserialize<T>(text, Options) ?? new T();
+        }
+        catch
+        {
+            // Corrupt or from another version: keep it aside so the next Save doesn't destroy the user's data.
+            try { File.Move(path, $"{path}.corrupt-{DateTime.Now:yyyyMMdd-HHmmss}", overwrite: true); }
+            catch { /* best effort */ }
+            return new T();
         }
     }
 
