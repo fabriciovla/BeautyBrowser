@@ -32,6 +32,10 @@ public sealed class SitePermissionsService
         return answer;
     }
 
+    /// <summary>The sites where this permission was allowed for good.</summary>
+    public IEnumerable<string> OriginsAllowing(PagePermission permission) =>
+        _decisions.Where(site => site.Value.TryGetValue(permission.ToString(), out var allowed) && allowed).Select(site => site.Key);
+
     public void Remember(string origin, PagePermission permissions, bool allowed)
     {
         var key = Key(origin);

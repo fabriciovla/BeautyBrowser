@@ -15,6 +15,9 @@ public enum PagePermission
     Clipboard = 32,
     Midi = 64,
     Other = 128,
+
+    /// <summary>Opening popup windows without a click. Not asked by the page: offered after one was blocked.</summary>
+    Popups = 256,
 }
 
 /// <summary>
