@@ -659,6 +659,15 @@ public sealed partial class BrowserTab : INotifyPropertyChanged, IDisposable
         }
     }
 
+    /// <summary>The schemes a page (or a link menu) may open in a new tab or popup: http, https, blob and about:blank.</summary>
+    internal static bool IsPopupUrlAllowed(string? url)
+    {
+        if (string.IsNullOrEmpty(url)) return true; // window.open() with no URL: about:blank
+        if (url.Equals("about:blank", StringComparison.OrdinalIgnoreCase)) return true;
+        return Uri.TryCreate(url, UriKind.Absolute, out var uri)
+               && uri.Scheme is "http" or "https" or "blob";
+    }
+
     private sealed class TabLifeSpanHandler(BrowserTab tab) : CefSharp.Handler.LifeSpanHandler
     {
         protected override bool OnBeforePopup(IWebBrowser chromiumWebBrowser, IBrowser browser, IFrame frame,
@@ -680,6 +689,8 @@ public sealed partial class BrowserTab : INotifyPropertyChanged, IDisposable
             }
             // A link to an app (target=_blank mailto:…) opens no tab: the app is offered instead.
             if (tab.TryHandleExternal(targetUrl, browser?.MainFrame?.Url)) return true;
+            // A page may only open web pages: window.open("data:text/html,…") would be a ready-made phishing tab.
+            if (!IsPopupUrlAllowed(targetUrl)) return true;
             // Ads that open "on your click" (popunders on streaming sites) are closed by the blocker.
             if (Blocking.ContentBlocker.IsAdPopup(targetUrl, frame?.Url ?? browser?.MainFrame?.Url))
             {
