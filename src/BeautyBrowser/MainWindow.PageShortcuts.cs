@@ -1,3 +1,4 @@
+using BeautyBrowser.Controls;
 using BeautyKit;
 using Microsoft.UI.Xaml.Input;
 using VirtualKey = Windows.System.VirtualKey;
@@ -27,6 +28,8 @@ public sealed partial class MainWindow
         Page(VirtualKey.D, Ctrl, () => OnTab(_shell.ToggleFavorite));
         Page(VirtualKey.P, Ctrl, () => OnTab(t => t.Print()));
         Page(VirtualKey.U, Ctrl, ViewSourceOfCurrent);
+        Page(VirtualKey.K, Ctrl, () => OpenPalette(PaletteMode.Navigate, search: true));
+        Page(VirtualKey.E, Ctrl, () => OpenPalette(PaletteMode.Navigate, search: true));
         Page(VirtualKey.F, Ctrl, OpenFindBar);
         Page(VirtualKey.G, Ctrl, () => FindNextOrOpen(forward: true));
         Page(VirtualKey.G, Ctrl | Shift, () => FindNextOrOpen(forward: false));
@@ -57,8 +60,12 @@ public sealed partial class MainWindow
             Root.KeyboardAccelerators.Add(accelerator);
         }
 
+        // Esc goes to the page first too: if the page does not take it, the app closes what it has open or, with
+        // nothing open, stops the page from loading (PageEscape).
+        Page(VirtualKey.Escape, NoModifiers, () => PageEscape(stopLoading: true));
+
         // Everything else the app has an accelerator for is reserved. Esc is not: it reaches the page unless the app
-        // has something open to close (see Escape_Invoked).
+        // has something open to close (see CloseWithEscape).
         var reserved = Root.KeyboardAccelerators
             .Select(a => (a.Key, a.Modifiers))
             .Where(k => k.Key != VirtualKey.Escape && !_pageShortcuts.ContainsKey(k))
@@ -68,9 +75,11 @@ public sealed partial class MainWindow
         {
             view.ReservedShortcuts.UnionWith(reserved);
             view.PageShortcuts.UnionWith(_pageShortcuts.Keys);
-            view.PageShortcutNotHandled += (_, shortcut) =>
+            view.PageShortcutNotHandled += (sender, shortcut) =>
             {
-                if (_pageShortcuts.TryGetValue(shortcut, out var action)) action();
+                // Only a page in the main view is stopped by Esc: not Peek's or DevTools'.
+                if (shortcut == (VirtualKey.Escape, NoModifiers)) PageEscape(stopLoading: ReferenceEquals(sender, WebView));
+                else if (_pageShortcuts.TryGetValue(shortcut, out var action)) action();
             };
         }
     }

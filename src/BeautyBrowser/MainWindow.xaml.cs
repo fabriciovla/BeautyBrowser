@@ -70,6 +70,7 @@ public sealed partial class MainWindow : Window
     private bool _libraryShown;
     private bool _captionShown;
     private bool _fullscreen;
+    private bool _userFullscreen; // F11, as opposed to the page asking for it (a video)
     private double _devToolsWidth = 560;
 
     private Point _lastCursor;
@@ -170,7 +171,10 @@ public sealed partial class MainWindow : Window
             }
         };
         _shell.DevToolsChanged += (_, _) => RefreshDevTools();
-        _shell.FullscreenChanged += (_, fullscreen) => SetFullscreen(fullscreen);
+        _shell.FullscreenChanged += (_, fullscreen) =>
+        {
+            if (!_userFullscreen) SetFullscreen(fullscreen); // with F11 the window stays full screen when a video leaves it
+        };
         _shell.DownloadStarted += (_, _) => PlayDownloadAnimation();
 
         // The mouse position is checked ~40 times per second, also over the page and outside the window.
@@ -976,14 +980,15 @@ public sealed partial class MainWindow : Window
     }
 
 
-    private void OpenPalette(PaletteMode mode)
+    /// <param name="search">Starts empty, ready to search (Ctrl+K, Ctrl+E), instead of showing the current address.</param>
+    private void OpenPalette(PaletteMode mode, bool search = false)
     {
         HidePreview();
         if (_fullscreen) _shell.CurrentTab?.ExitFullscreen();
         CloseLibrary(returnToSidebar: false);
         if (!_sidebarDocked) SetSidebarShown(false);
         var current = _shell.CurrentTab?.Url;
-        var initial = mode == PaletteMode.Navigate && !StartPage.Is(current) ? current ?? "" : "";
+        var initial = mode == PaletteMode.Navigate && !search && !StartPage.Is(current) ? current ?? "" : "";
         Palette.Open(_shell, mode, initial);
     }
 
@@ -1124,29 +1129,70 @@ public sealed partial class MainWindow : Window
         else OpenLibrary(LibrarySection.History);
     }
 
+    // Esc with focus outside the page (sidebar, find bar…): closes whatever is open.
     private void Escape_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
     {
+        if (CloseWithEscape()) args.Handled = true;
+    }
+
+    /// <summary>Esc closes the topmost thing the app has open. False when there was nothing to close.</summary>
+    private bool CloseWithEscape()
+    {
+        if (_userFullscreen)
+        {
+            SetWindowFullscreen(false);
+            return true;
+        }
         if (PeekOpen)
         {
-            args.Handled = true;
             ClosePeek();
-            return;
+            return true;
         }
         if (Switcher.IsOpen)
         {
-            args.Handled = true;
             CancelSwitcher();
-            return;
+            return true;
         }
         if (FindBar.Visibility == Visibility.Visible)
         {
-            args.Handled = true;
             CloseFindBar();
-            return;
+            return true;
         }
-        if (!_libraryShown) return; // without the library open, Esc reaches the page
-        args.Handled = true;
+        if (!_libraryShown) return false; // without the library open, Esc reaches the page
         CloseLibrary(returnToSidebar: true);
+        return true;
+    }
+
+    /// <summary>
+    /// Esc went through the page and the page did not take it: the app closes what it has open and, if there is
+    /// nothing, stops the page from loading, like Chrome.
+    /// </summary>
+    private void PageEscape(bool stopLoading)
+    {
+        if (CloseWithEscape()) return;
+        if (stopLoading && _shell.CurrentTab is { IsLoading: true } tab) tab.Stop();
+    }
+
+    // F11: the window goes full screen (and F11 or Esc brings it back). An HTML full screen in progress just ends.
+    private void Fullscreen_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+    {
+        args.Handled = true;
+        if (_fullscreen && !_userFullscreen) _shell.CurrentTab?.ExitFullscreen();
+        else SetWindowFullscreen(!_userFullscreen);
+    }
+
+    private void SetWindowFullscreen(bool fullscreen)
+    {
+        _userFullscreen = fullscreen;
+        // The page may still be in HTML full screen (a video): it stays until the page leaves it.
+        if (fullscreen || _shell.CurrentTab is not { IsFullscreen: true }) SetFullscreen(fullscreen);
+    }
+
+    // Ctrl+K and Ctrl+E: the palette with nothing in it, ready to search.
+    private void Search_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+    {
+        args.Handled = true;
+        OpenPalette(PaletteMode.Navigate, search: true);
     }
 
     private void Reload_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
