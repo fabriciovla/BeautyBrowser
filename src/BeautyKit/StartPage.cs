@@ -32,6 +32,13 @@ public static class StartPage
             SchemeHandlerFactory = new Factory(),
         });
 
+    /// <summary>
+    /// The scheme is registered for the global context only; a private tab has its own context, which needs the
+    /// factory too or beauty://newtab fails with ERR_UNKNOWN_URL_SCHEME.
+    /// </summary>
+    internal static void Register(IRequestContext context) =>
+        context.RegisterSchemeHandlerFactory(Scheme, "newtab", new Factory());
+
     private sealed class Factory : ISchemeHandlerFactory
     {
         public IResourceHandler Create(IBrowser browser, IFrame frame, string schemeName, IRequest request) =>
