@@ -62,6 +62,11 @@ public sealed class BrowserEngine : IDisposable
 
         StartPage.Register(settings); // beauty://newtab
 
+        // Chromium's own popup blocker drops a popup before OnBeforePopup runs, so the browser could neither show the
+        // "popup blocked" notice nor let the user allow the site. With it off, TabLifeSpanHandler decides (see
+        // BrowserTab.Notices): user-initiated popups open, the rest are blocked and reported.
+        settings.CefCommandLineArgs.Add("disable-popup-blocking");
+
         if (!hardwareAcceleration)
         {
             settings.CefCommandLineArgs.Add("disable-gpu");

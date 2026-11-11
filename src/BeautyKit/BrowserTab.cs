@@ -237,21 +237,7 @@ public sealed partial class BrowserTab : INotifyPropertyChanged, IDisposable
     public static string DefaultHomePage { get; set; } = "https://www.google.com";
 
     public static string InputToUrl(string input)
-    {
-        input = input.Trim();
-
-        if (input.StartsWith("localhost", StringComparison.OrdinalIgnoreCase))
-            return "http://" + input;
-
-        if (Uri.TryCreate(input, UriKind.Absolute, out var uri) &&
-            uri.Scheme is "http" or "https" or "file" or "about" or "chrome" or "view-source" or StartPage.Scheme)
-            return uri.ToString();
-
-        if (!input.Contains(' ') && input.Contains('.'))
-            return "https://" + input;
-
-        return string.Format(SearchUrlTemplate, Uri.EscapeDataString(input));
-    }
+        => AddressInput.ToUrl(input, SearchUrlTemplate, Blocking.ContentBlocker.Psl, StartPage.Scheme);
 
 
     internal WriteableBitmap? Frame { get; private set; }
@@ -567,7 +553,16 @@ public sealed partial class BrowserTab : INotifyPropertyChanged, IDisposable
         {
             newBrowser = null;
             // Popups the page opens without a user gesture are blocked when the setting is on.
-            if (BlockPopups && !userGesture) return true;
+            if (BlockPopups && !userGesture)
+            {
+                // Unless the user chose to always allow them for this site; otherwise the app can offer that.
+                var origin = OriginOf(browser?.MainFrame?.Url);
+                if (!ArePopupsAllowedFrom(origin))
+                {
+                    tab.ReportBlockedPopup(origin, targetUrl);
+                    return true;
+                }
+            }
             // Ads that open "on your click" (popunders on streaming sites) are closed by the blocker.
             if (Blocking.ContentBlocker.IsAdPopup(targetUrl, frame?.Url ?? browser?.MainFrame?.Url))
             {
@@ -602,9 +597,14 @@ public sealed partial class BrowserTab : INotifyPropertyChanged, IDisposable
 
         // window.close() from the page (a sign-in popup that finished). Closes run through here too when the app
         // disposes the tab; those are not reported back.
+        //
+        // The app removes and disposes the tab in response, which must not happen inside this callback: Chromium is in
+        // the middle of closing the browser and crashed (access violation) when it was destroyed under it, as when
+        // Google's sign-in popup closed itself. So the report always waits for the next turn of the UI loop (this runs
+        // on the UI thread, where OnUi would call it right away).
         protected override bool DoClose(IWebBrowser chromiumWebBrowser, IBrowser browser)
         {
-            if (!tab._disposed) tab.OnUi(() => tab.CloseRequested?.Invoke(tab, EventArgs.Empty));
+            if (!tab._disposed) tab._ui.TryEnqueue(() => { if (!tab._disposed) tab.CloseRequested?.Invoke(tab, EventArgs.Empty); });
             return false;
         }
     }
