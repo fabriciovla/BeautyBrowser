@@ -83,7 +83,7 @@ public sealed partial class BrowserTab : INotifyPropertyChanged, IDisposable
             DisplayHandler = new TabDisplayHandler(this),
             LifeSpanHandler = new TabLifeSpanHandler(this),
             MenuHandler = new TabContextMenuHandler(this),
-            DownloadHandler = new TabDownloadHandler(this),
+            DownloadHandler = _downloads = new TabDownloadHandler(this),
             RequestHandler = new TabRequestHandler(this),
             FindHandler = new TabFindHandler(this),
             KeyboardHandler = new TabKeyboardHandler(this),
@@ -115,6 +115,11 @@ public sealed partial class BrowserTab : INotifyPropertyChanged, IDisposable
             if (!e.Frame.IsMain) return;
             OnUi(() =>
             {
+                if (_crashed)
+                {
+                    _crashed = false;
+                    CrashChanged?.Invoke(this, false);
+                }
                 Host()?.SetZoomLevel(_zoomLevel);
                 ResetBlockedCount(); // another page: the blocked counter starts over
                 ClearMedia();        // and whatever played on the previous one stopped
@@ -284,7 +289,23 @@ public sealed partial class BrowserTab : INotifyPropertyChanged, IDisposable
         _hidden = hidden;
         if (!hidden) EnsureCreated();
         if (_browser.IsBrowserInitialized) _browser.GetBrowserHost().WasHidden(hidden);
+        if (!hidden && _crashed) Reload(); // it crashed in the background: reloaded when shown, as in Chrome
     }
+
+    private bool _crashed;
+
+    /// <summary>
+    /// The page's process died. True when the tab is on screen and the user should be told (it can reload it); false
+    /// when it recovered (a new page started loading). A tab that crashed hidden reloads when it is shown instead.
+    /// </summary>
+    public event EventHandler<bool>? CrashChanged;
+
+    private void RendererTerminated() => OnUi(() =>
+    {
+        if (_disposed) return;
+        _crashed = true;
+        if (!_hidden) CrashChanged?.Invoke(this, true);
+    });
 
 
     internal void SendMouseMove(int x, int y, CefEventFlags flags, bool leave)
@@ -365,13 +386,52 @@ public sealed partial class BrowserTab : INotifyPropertyChanged, IDisposable
         if (replaced) VisualChanged?.Invoke();
     }
 
+    private readonly TabDownloadHandler _downloads;
+
+    // Closed tabs whose downloads are still running (see Dispose).
+    private static readonly List<BrowserTab> Lingering = [];
+    private bool _lingering;
+
+    /// <summary>
+    /// Closes the tab. Chromium cancels a browser's downloads when the browser closes, so a tab with downloads still
+    /// running keeps its browser, hidden and muted, until they finish (a link that opened a tab only to download a
+    /// file, a popup that closed itself), as Chrome lets them go on.
+    /// </summary>
     public void Dispose()
+    {
+        if (_disposed || _lingering) return;
+        if (_downloads.HasActive && Host() is { } host)
+        {
+            _lingering = true;
+            Lingering.Add(this);
+            DismissPermissionRequests();
+            _hidden = true;
+            host.WasHidden(true);
+            host.SetAudioMuted(true);
+            return;
+        }
+        DisposeNow();
+    }
+
+    private void DisposeNow()
     {
         if (_disposed) return;
         _disposed = true;
+        Lingering.Remove(this);
         DismissPermissionRequests();
         _browser.Dispose();
         DisposeGpu();
+    }
+
+    /// <summary>The tab's last download finished: a closed tab that waited for it can go now.</summary>
+    private void OnDownloadsFinished() =>
+        // Never from inside Chromium's callback (see DoClose).
+        _ui.TryEnqueue(() => { if (_lingering && !_downloads.HasActive) DisposeNow(); });
+
+    /// <summary>On exit, before Chromium shuts down: closed tabs still downloading go too (Chrome cancels them as well).</summary>
+    internal static void DisposeLingering()
+    {
+        foreach (var tab in Lingering.ToList()) tab.DisposeNow();
     }
 
 
@@ -662,7 +722,9 @@ public sealed partial class BrowserTab : INotifyPropertyChanged, IDisposable
         protected override bool DoClose(IWebBrowser chromiumWebBrowser, IBrowser browser)
         {
             if (!tab._disposed) tab._ui.TryEnqueue(() => { if (!tab._disposed) tab.CloseRequested?.Invoke(tab, EventArgs.Empty); });
-            return false;
+            // With downloads running the browser stays open: closing it would cancel them. The app still removes the
+            // tab, which then waits for them (see Dispose).
+            return !tab._disposed && tab._downloads.HasActive;
         }
     }
 }
