@@ -22,6 +22,9 @@ public sealed class DownloadEntry : INotifyPropertyChanged
     public string FullPath { get; set; } = "";
     public DateTime Started { get; set; }
 
+    /// <summary>Started from a private tab: never written to downloads.json, and dropped when the private space closes.</summary>
+    [JsonIgnore] public bool IsPrivate { get; init; }
+
     public long TotalBytes { get => _totalBytes; set => Set(ref _totalBytes, value); }
     public long ReceivedBytes { get => _receivedBytes; set => Set(ref _receivedBytes, value); }
     public bool IsComplete { get => _isComplete; set => Set(ref _isComplete, value); }
@@ -93,7 +96,7 @@ public sealed class DownloadsService
     /// <summary>Newest first.</summary>
     public ObservableCollection<DownloadEntry> Items { get; } = [];
 
-    public DownloadEntry Start(BrowserDownload download)
+    public DownloadEntry Start(BrowserDownload download, bool isPrivate = false)
     {
         var entry = new DownloadEntry
         {
@@ -102,6 +105,7 @@ public sealed class DownloadsService
             FileName = download.FileName,
             FullPath = download.FullPath,
             Started = DateTime.Now,
+            IsPrivate = isPrivate,
         };
         entry.Apply(download);
 
@@ -122,5 +126,12 @@ public sealed class DownloadsService
         }
     }
 
-    public void Save() => JsonStore.Save(FileName, Items.Where(e => e.IsComplete).ToList());
+    /// <summary>The private space closed: its downloads leave the list (the files stay on disk).</summary>
+    public void RemovePrivate()
+    {
+        foreach (var entry in Items.Where(e => e.IsPrivate).ToList()) Items.Remove(entry);
+        foreach (var id in _active.Where(kv => kv.Value.IsPrivate).Select(kv => kv.Key).ToList()) _active.Remove(id);
+    }
+
+    public void Save() => JsonStore.Save(FileName, Items.Where(e => e.IsComplete && !e.IsPrivate).ToList());
 }
