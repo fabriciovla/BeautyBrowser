@@ -14,7 +14,7 @@
     <PackageReference Include="Vortice.Direct3D11" Version="3.8.3" />
   </ItemGroup>
   <ItemGroup>
-    <!-- Icons of the apps on the start page (beauty://newtab). -->
-    <EmbeddedResource Include="Assets\StartPage\*.png" LogicalName="BeautyKit.StartPage.%(Filename)%(Extension)" />
+    <!-- Previews of the apps shown on the start page (beauty://newtab). -->
+    <EmbeddedResource Include="Assets\StartPage\*.webp" LogicalName="BeautyKit.StartPage.%(Filename)%(Extension)" />
   </ItemGroup>
 </Project>
