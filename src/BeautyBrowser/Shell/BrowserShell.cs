@@ -1,4 +1,4 @@
-﻿using System.Collections.ObjectModel;
+using System.Collections.ObjectModel;
 using System.ComponentModel;
 using BeautyBrowser.Services;
 using BeautyKit;
@@ -232,12 +232,12 @@ public sealed class BrowserShell
 
 
     private const int MaxClosedTabs = 25;
-    private readonly List<(string Url, Space Space)> _closedTabs = [];
+    private readonly List<(string Url, Space Space, (List<string> Urls, int Index) History)> _closedTabs = [];
 
-    private void RememberClosed(string url, Space space)
+    private void RememberClosed(string url, Space space, (List<string> Urls, int Index) history)
     {
         if (string.IsNullOrEmpty(url)) return;
-        _closedTabs.Add((url, space));
+        _closedTabs.Add((url, space, history));
         if (_closedTabs.Count > MaxClosedTabs) _closedTabs.RemoveAt(0);
     }
 
@@ -245,7 +245,7 @@ public sealed class BrowserShell
     public void ReopenClosedTab()
     {
         if (_closedTabs.Count == 0) return;
-        var (url, space) = _closedTabs[^1];
+        var (url, space, history) = _closedTabs[^1];
         _closedTabs.RemoveAt(_closedTabs.Count - 1);
 
         if (Spaces.Contains(space) && space != CurrentSpace)
@@ -261,11 +261,18 @@ public sealed class BrowserShell
         }
         else
         {
-            NewTab(url);
+            NewTab(url).SetRestoredHistory(history.Urls, history.Index); // back/forward come back too, as in Chrome
         }
     }
 
-    public void CloseTab(BrowserTab tab)
+    /// <summary>
+    /// Closes a tab the way Chrome does: the page may first ask "Leave site?" (beforeunload). The tab is removed once
+    /// it lets go (see <see cref="TabCloseRequested"/>); if the user stays, it stays.
+    /// </summary>
+    public void CloseTab(BrowserTab tab) => tab.RequestClose();
+
+    /// <summary>Removes a tab right away, without asking the page.</summary>
+    public void RemoveTab(BrowserTab tab)
     {
         if (IsFavoriteTab(tab))
         {
@@ -278,7 +285,7 @@ public sealed class BrowserShell
 
         var index = space.Tabs.IndexOf(tab);
         var wasActive = space.ActiveTab == tab;
-        if (!StartPage.Is(tab.Url) && !space.IsPrivate) RememberClosed(tab.Url, space);
+        if (!StartPage.Is(tab.Url) && !space.IsPrivate) RememberClosed(tab.Url, space, tab.GetHistory());
         space.Tabs.RemoveAt(index);
         if (wasActive) space.ActiveTab = null;
 
@@ -529,7 +536,15 @@ public sealed class BrowserShell
         public string Name { get; set; } = "";
         public string? Icon { get; set; }
         public List<string> Tabs { get; set; } = [];
+        /// <summary>Each tab's back/forward list, in the same order as Tabs (missing in older sessions).</summary>
+        public List<TabHistoryData>? History { get; set; }
         public int Active { get; set; }
+    }
+
+    public sealed class TabHistoryData
+    {
+        public List<string> Urls { get; set; } = [];
+        public int Index { get; set; }
     }
 
     /// <summary>Reopens last session's spaces and tabs. Returns false when nothing was saved.</summary>
@@ -545,9 +560,12 @@ public sealed class BrowserShell
             var space = new Space(string.IsNullOrWhiteSpace(saved.Name) ? $"Space {Spaces.Count + 1}" : saved.Name, saved.Icon);
             // Tabs load the first time they are shown, as in Chrome: until then they show the title and icon history
             // remembers, without starting a page (or its audio) for each one.
-            foreach (var url in saved.Tabs.Where(u => !string.IsNullOrWhiteSpace(u)))
+            for (var i = 0; i < saved.Tabs.Count; i++)
             {
+                var url = saved.Tabs[i];
+                if (string.IsNullOrWhiteSpace(url)) continue;
                 var tab = _engine.CreateTab(url, TabCreation.WhenShown);
+                if (saved.History?.ElementAtOrDefault(i) is { } history) tab.SetRestoredHistory(history.Urls, history.Index);
                 if (History.Lookup(url) is { } entry) tab.SetPlaceholder(entry.Title, entry.FaviconUrl);
                 Wire(tab);
                 space.Tabs.Add(tab);
@@ -585,6 +603,7 @@ public sealed class BrowserShell
                 Name = space.Name,
                 Icon = space.Icon,
                 Tabs = space.Tabs.Select(t => t.Url).ToList(),
+                History = space.Tabs.Select(t => t.GetHistory()).Select(h => new TabHistoryData { Urls = h.Urls, Index = h.Index }).ToList(),
                 Active = space.ActiveTab is null ? 0 : Math.Max(0, space.Tabs.IndexOf(space.ActiveTab)),
             }).ToList(),
         });
@@ -597,7 +616,10 @@ public sealed class BrowserShell
     /// </summary>
     public event EventHandler<(BrowserTab From, BrowserTab Popup)>? PopupOpened;
 
-    /// <summary>A page closed itself (window.close()). Without a listener its tab is closed.</summary>
+    /// <summary>
+    /// A tab may close: its page closed itself (window.close()) or let a <see cref="CloseTab"/> through. Without a
+    /// listener the tab is removed.
+    /// </summary>
     public event EventHandler<BrowserTab>? TabCloseRequested;
 
     private void Wire(BrowserTab tab)
@@ -617,7 +639,7 @@ public sealed class BrowserShell
         tab.CloseRequested += (_, _) =>
         {
             if (TabCloseRequested is { } handler) handler(this, tab);
-            else CloseTab(tab);
+            else RemoveTab(tab);
         };
         tab.PeekRequested += (_, url) =>
         {

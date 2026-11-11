@@ -162,9 +162,28 @@ public sealed partial class CommandPalette : UserControl
             });
         }
 
-        // 5) History, without repeating open tabs or the best site.
+        // 5) Without text, the sites visited most often (one per site, as on the start page).
+        if (query.Length == 0)
+        {
+            foreach (var site in _shell.History.TopSites(MaxResults))
+            {
+                if (results.Count >= MaxResults) break;
+                results.Add(new PaletteResult
+                {
+                    Kind = PaletteResultKind.Url,
+                    Title = site.Title,
+                    Subtitle = ShortUrl(site.Url),
+                    Icon = IconFor(site.Icon),
+                    Url = site.Url,
+                });
+            }
+            Show(results.Take(MaxResults).ToList());
+            return;
+        }
+
+        // 6) History, without repeating open tabs or the best site.
         var openUrls = _shell.Spaces.SelectMany(s => s.Tabs).Select(t => t.Url).ToHashSet();
-        var history = query.Length == 0 ? _shell.History.Recent(12) : _shell.History.Search(query, 12);
+        var history = _shell.History.Search(query, 12);
         foreach (var entry in history.Where(h => !openUrls.Contains(h.Url) && h != bestSite))
         {
             if (results.Count >= MaxResults) break;
@@ -293,11 +312,30 @@ public sealed partial class CommandPalette : UserControl
             case VirtualKey.Escape:
                 Close();
                 break;
+            // Tab completes the box with the highlighted result ("you" → "youtube.com"), to keep typing after it.
+            case VirtualKey.Tab when Completion(Results.SelectedItem as PaletteResult) is { } completion
+                                     && !completion.Equals(Query.Text.Trim(), StringComparison.OrdinalIgnoreCase):
+                Query.Text = completion;
+                Query.SelectionStart = completion.Length;
+                break;
+            case VirtualKey.Tab:
+                break; // focus stays in the box
             default:
                 return;
         }
         e.Handled = true;
     }
+
+    // What Tab writes in the box for a result: the address without "https://www." for pages, the text for searches.
+    private static string? Completion(PaletteResult? result) => result switch
+    {
+        null => null,
+        { Kind: PaletteResultKind.Search } => result.Title,
+        { Kind: PaletteResultKind.OpenTab, Tab: { } tab } => ShortUrl(tab.Url, keepPath: true),
+        { Url: { Length: > 0 } url } when Uri.TryCreate(url, UriKind.Absolute, out _) => ShortUrl(url, keepPath: true),
+        { Url: { Length: > 0 } url } => url,
+        _ => null,
+    };
 
     private void Results_ItemClick(object sender, ItemClickEventArgs e) => Execute(e.ClickedItem as PaletteResult);
 

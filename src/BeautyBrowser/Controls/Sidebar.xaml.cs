@@ -33,6 +33,46 @@ public sealed partial class Sidebar : UserControl
     {
         InitializeComponent();
         TrackFlyout(SiteFlyout);
+        SetupLinkDrop();
+    }
+
+    // As on Chrome's tab strip: a link (or text) dropped on the sidebar opens in a new tab; text is searched.
+    private void SetupLinkDrop()
+    {
+        AllowDrop = true;
+        var visual = new LinkDragVisual();
+        DragEnter += async (_, e) =>
+        {
+            if (Content is not Panel root) return;
+            var deferral = e.GetDeferral();
+            try { await visual.PrepareAsync(e.DataView, root); }
+            finally { deferral.Complete(); }
+        };
+        DragOver += (_, e) =>
+        {
+            if (_shell is null || !(e.DataView.Contains(StandardDataFormats.WebLink) || e.DataView.Contains(StandardDataFormats.Text))) return;
+            e.AcceptedOperation = DataPackageOperation.Link | DataPackageOperation.Copy;
+            e.DragUIOverride.Caption = L.T("Open in new tab", "Abrir en pestaña nueva");
+            visual.Apply(e.DragUIOverride);
+            e.Handled = true;
+        };
+        Drop += async (_, e) =>
+        {
+            if (_shell is not { } shell) return;
+            var deferral = e.GetDeferral();
+            try
+            {
+                var input = e.DataView.Contains(StandardDataFormats.WebLink) ? (await e.DataView.GetWebLinkAsync()).AbsoluteUri
+                    : e.DataView.Contains(StandardDataFormats.Text) ? (await e.DataView.GetTextAsync()).Trim()
+                    : "";
+                if (input.Length > 0) shell.Open(input, inNewTab: true);
+                e.AcceptedOperation = DataPackageOperation.Link;
+            }
+            finally
+            {
+                deferral.Complete();
+            }
+        };
     }
 
     /// <summary>Asks to open the command palette (Ctrl+T, Ctrl+L).</summary>
@@ -102,6 +142,7 @@ public sealed partial class Sidebar : UserControl
         SpaceIcon.Glyph = _shell.CurrentSpace.Icon;
         _indicatorSnapNext = true; // another space: the card appears in place without traveling
         TabList.ItemsSource = _shell.CurrentSpace.Tabs;
+        WatchTabMotion(_shell.CurrentSpace.Tabs);
         RefreshDots();
         RefreshCurrentTab();
     }
@@ -121,9 +162,14 @@ public sealed partial class Sidebar : UserControl
         if (_watchedTab is not null) _watchedTab.PropertyChanged += WatchedTab_PropertyChanged;
         RefreshNavigation();
         RefreshActiveFavorite();
+        RefreshZoom();
     }
 
-    private void WatchedTab_PropertyChanged(object? sender, PropertyChangedEventArgs e) => RefreshNavigation();
+    private void WatchedTab_PropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(BrowserTab.ZoomPercent)) RefreshZoom();
+        else RefreshNavigation();
+    }
 
     private void RefreshNavigation()
     {
@@ -235,7 +281,13 @@ public sealed partial class Sidebar : UserControl
     private void ZoomIn_Click(object sender, RoutedEventArgs e) { _shell?.CurrentTab?.ZoomIn(); RefreshZoom(); }
     private void ZoomOut_Click(object sender, RoutedEventArgs e) { _shell?.CurrentTab?.ZoomOut(); RefreshZoom(); }
     private void ZoomReset_Click(object sender, RoutedEventArgs e) { _shell?.CurrentTab?.ResetZoom(); RefreshZoom(); }
-    private void RefreshZoom() => ZoomText.Text = $"{_shell?.CurrentTab?.ZoomPercent ?? 100} %";
+    private void RefreshZoom()
+    {
+        var percent = _shell?.CurrentTab?.ZoomPercent ?? BrowserTab.DefaultZoomPercent;
+        ZoomText.Text = $"{percent} %";
+        ZoomBadgeText.Text = $"{percent} %";
+        ZoomBadge.Visibility = percent == BrowserTab.DefaultZoomPercent ? Visibility.Collapsed : Visibility.Visible;
+    }
 
 
     private const double FavoriteHeight = 44;
