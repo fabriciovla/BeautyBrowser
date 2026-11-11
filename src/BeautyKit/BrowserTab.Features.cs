@@ -67,6 +67,7 @@ public sealed partial class BrowserTab
     internal void Download(string url) => Host()?.StartDownload(url);
     public void Print() => Host()?.Print();
     internal void ReplaceMisspelling(string word) => Host()?.ReplaceMisspelling(word);
+    internal void AddToDictionary(string word) => Host()?.AddWordToDictionary(word);
 
     internal void Undo() => _browser.Undo();
     internal void Redo() => _browser.Redo();

@@ -52,6 +52,8 @@ public sealed partial class BrowserView
             foreach (var suggestion in info.Suggestions.Take(5))
                 Add(suggestion, () => tab.ReplaceMisspelling(suggestion));
             Separator();
+            Add(L.T("Add to dictionary", "Agregar al diccionario"), () => tab.AddToDictionary(info.MisspelledWord));
+            Separator();
         }
 
         if (info.HasLink)
@@ -83,6 +85,7 @@ public sealed partial class BrowserView
                 // Only when the page says Picture in Picture is available (document.pictureInPictureEnabled).
                 if (info.CanPictureInPicture)
                     Add(L.T("Picture in picture", "Pantalla en pantalla"), () => tab.TogglePictureInPicture(info.X, info.Y));
+                Add(L.T("Copy video frame", "Copiar fotograma del video"), () => CopyVideoFrame(tab, info));
                 Separator();
             }
             Add(L.T($"Open {kind} in new tab", $"Abrir {kind} en una pestaña nueva"), () => tab.OpenInNewTab(info.SourceUrl));
