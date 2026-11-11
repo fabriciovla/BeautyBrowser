@@ -77,9 +77,10 @@ public sealed partial class BrowserView
 
         if (view.Contains(StandardDataFormats.StorageItems))
         {
-            var files = (await view.GetStorageItemsAsync()).OfType<StorageFile>().ToList();
-            if (files.Count == 0) return null;
-            foreach (var file in files) data.AddFile(file.Path, file.Name);
+            // Folders too: pages that take them (Drive, WeTransfer…) read their contents through the drop's entries.
+            var items = (await view.GetStorageItemsAsync()).Where(i => !string.IsNullOrEmpty(i.Path)).ToList();
+            if (items.Count == 0) return null;
+            foreach (var item in items) data.AddFile(item.Path, item.Name);
             data.IsFile = true;
             return data;
         }
