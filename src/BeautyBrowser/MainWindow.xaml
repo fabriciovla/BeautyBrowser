@@ -106,7 +106,7 @@
                         Foreground="{StaticResource BeautyTextSecondaryBrush}"
                         Text="{local:T En='Inspect', Es='Inspeccionar'}" />
                 </StackPanel>
-                <kit:BrowserView x:Name="DevToolsView" Grid.Row="1" />
+                <kit:BrowserView x:Name="DevToolsView" Grid.Row="1" SizesBackgroundTabs="False" />
             </Grid>
         </Grid>
         </Grid>
@@ -331,7 +331,7 @@
                     BorderBrush="#29000000"
                     BorderThickness="1"
                     CornerRadius="12">
-                    <kit:BrowserView x:Name="PeekView" CornerRadius="11" />
+                    <kit:BrowserView x:Name="PeekView" CornerRadius="11" SizesBackgroundTabs="False" />
                 </Border>
             </Grid>
             <StackPanel
