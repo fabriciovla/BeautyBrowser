@@ -58,6 +58,10 @@ public sealed class BrowserEngine : IDisposable
             // Chromium's helper processes are this same executable (see RunSubprocessIfRequested), so they use the
             // .NET runtime bundled with the app.
             BrowserSubprocessPath = Environment.ProcessPath!,
+            // Chromium switches come only from CefCommandLineArgs below, never from this process's command line. A link
+            // from another app arrives in it (as the default browser), and one carrying a quote could otherwise add
+            // switches such as --renderer-cmd-prefix, which runs any program.
+            CommandLineArgsDisabled = true,
         };
 
         StartPage.Register(settings); // beauty://newtab
@@ -117,7 +121,9 @@ public sealed class BrowserEngine : IDisposable
     /// </summary>
     public static int RunSubprocessIfRequested(string[] args)
     {
-        var type = args.FirstOrDefault(a => a.StartsWith("--type=", StringComparison.Ordinal))?[7..];
+        // Chromium always puts --type first when it starts a helper. Anywhere else it came from somewhere else, such as
+        // a link passed on the command line.
+        var type = args.Length > 0 && args[0].StartsWith("--type=", StringComparison.Ordinal) ? args[0][7..] : null;
         if (type is null) return -1;
 
         // Render processes carry our injector (blocker scriptlets, cosmetic filters and the media detector), which has
