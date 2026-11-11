@@ -115,6 +115,11 @@ public sealed partial class BrowserTab : INotifyPropertyChanged, IDisposable
             if (!e.Frame.IsMain) return;
             OnUi(() =>
             {
+                if (_crashed)
+                {
+                    _crashed = false;
+                    CrashChanged?.Invoke(this, false);
+                }
                 Host()?.SetZoomLevel(_zoomLevel);
                 ResetBlockedCount(); // another page: the blocked counter starts over
                 ClearMedia();        // and whatever played on the previous one stopped
@@ -284,7 +289,23 @@ public sealed partial class BrowserTab : INotifyPropertyChanged, IDisposable
         _hidden = hidden;
         if (!hidden) EnsureCreated();
         if (_browser.IsBrowserInitialized) _browser.GetBrowserHost().WasHidden(hidden);
+        if (!hidden && _crashed) Reload(); // it crashed in the background: reloaded when shown, as in Chrome
     }
+
+    private bool _crashed;
+
+    /// <summary>
+    /// The page's process died. True when the tab is on screen and the user should be told (it can reload it); false
+    /// when it recovered (a new page started loading). A tab that crashed hidden reloads when it is shown instead.
+    /// </summary>
+    public event EventHandler<bool>? CrashChanged;
+
+    private void RendererTerminated() => OnUi(() =>
+    {
+        if (_disposed) return;
+        _crashed = true;
+        if (!_hidden) CrashChanged?.Invoke(this, true);
+    });
 
 
     internal void SendMouseMove(int x, int y, CefEventFlags flags, bool leave)
