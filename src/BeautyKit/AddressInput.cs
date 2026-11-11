@@ -40,13 +40,13 @@ public static partial class AddressInput
         // Never turn script URLs into something that loads, whatever follows them ("javascript:1" parses as host:port).
         if (input.StartsWith("javascript:", StringComparison.OrdinalIgnoreCase)) return null;
 
-        // authority = [userinfo@]host[:port]; the path, query and fragment follow it.
+        // authority = host[:port]; the path, query and fragment follow it. Without an explicit scheme an "@" before the
+        // host ("usuario@gmail.com", an email) is a search, as in Chrome, never user info.
         var authorityEnd = input.IndexOfAny(['/', '?', '#']);
         var authority = authorityEnd < 0 ? input : input[..authorityEnd];
         var rest = authorityEnd < 0 ? "" : input[authorityEnd..];
-        var at = authority.LastIndexOf('@');
-        var userInfo = at < 0 ? "" : authority[..(at + 1)];
-        var hostPort = authority[(at + 1)..];
+        if (authority.Contains('@')) return null;
+        var hostPort = authority;
         if (hostPort.Length == 0) return null;
 
         string host, port = "";
@@ -94,7 +94,7 @@ public static partial class AddressInput
             scheme = "https://";
         }
 
-        var candidate = scheme + userInfo + host + (port.Length > 0 ? ":" + port : "") + rest;
+        var candidate = scheme + host + (port.Length > 0 ? ":" + port : "") + rest;
         return Uri.TryCreate(candidate, UriKind.Absolute, out var uri) ? uri.AbsoluteUri : null;
     }
 

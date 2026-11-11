@@ -40,7 +40,6 @@ public class AddressInputTests
     [InlineData("EXAMPLE.COM", "https://example.com/")]
     [InlineData("miapp.vercel.app", "https://miapp.vercel.app/")]
     [InlineData("foo.github.io", "https://foo.github.io/")]
-    [InlineData("user@example.com/x", "https://user@example.com/x")]
     public void DomainsWithARealTldGoOverHttps(string input, string expected) => Assert.Equal(expected, Url(input));
 
     [Theory]
@@ -51,6 +50,10 @@ public class AddressInputTests
     [InlineData("3.14")]
     [InlineData("e.g.")]
     [InlineData("hola")]
+    [InlineData("usuario@gmail.com")]
+    [InlineData("user@example.com/x")]
+    [InlineData("user:pass@example.com")]
+    [InlineData("@example.com")]
     [InlineData("hola mundo.com")]
     [InlineData("a.b.")]
     [InlineData("foo.com:")]
@@ -72,6 +75,7 @@ public class AddressInputTests
     [InlineData("about:blank", "about:blank")]
     [InlineData("chrome://settings", "chrome://settings/")]
     [InlineData("beauty://newtab", "beauty://newtab/")]
+    [InlineData("https://user@example.com/x", "https://user@example.com/x")]
     public void ExplicitSchemesKeepTheirEscaping(string input, string expected) => Assert.Equal(expected, Url(input));
 
     [Fact]
@@ -101,5 +105,21 @@ public class PublicSuffixTests
         Assert.NotEqual(psl.Domain("a.vercel.app"), psl.Domain("b.vercel.app"));
         Assert.Equal("foo.github.io", psl.Domain("x.foo.github.io"));
         Assert.Equal("google.com", psl.Domain("www.google.com"));
+    }
+}
+
+public class PublicSuffixIpTests
+{
+    // The third-party cookie filter compares ContentBlocker.SiteOf, which is PublicSuffix.Domain on the host: two
+    // different IPs must never collapse into the same "site" (192.168.1.1 → "1.1" would).
+    [Theory]
+    [InlineData("192.168.1.1")]
+    [InlineData("10.0.0.1")]
+    [InlineData("[::1]")]
+    [InlineData("[fe80::1]")]
+    public void IpsAreTheirOwnSite(string host)
+    {
+        Assert.Equal(host, PublicSuffix.Fallback.Domain(host));
+        Assert.Equal(host, PublicSuffix.Parse("com\nar\n").Domain(host));
     }
 }
