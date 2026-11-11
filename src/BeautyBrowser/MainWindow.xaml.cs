@@ -96,6 +96,7 @@ public sealed partial class MainWindow : Window
         SetupOverlays();
 
         _shell = new BrowserShell(_engine, DispatcherQueue, database);
+        _updates = _shell.Updates;
         Title = "Beauty Browser";
 
         Sidebar.Attach(_shell);
@@ -111,6 +112,9 @@ public sealed partial class MainWindow : Window
             Library.StartNewSpace(); // the new space form on top, existing spaces below
         };
         AddZoomAccelerators();
+        SetupPageShortcuts();
+        SetupPermissions();
+        SetupUpdates();
         // Links other apps send while BeautyBrowser is open: a new tab, with the window brought to the front.
         ExternalLinks.Listen(url => DispatcherQueue.TryEnqueue(() =>
         {
@@ -314,6 +318,10 @@ public sealed partial class MainWindow : Window
         DevToolsView.Tab = null;
         _shell.Shutdown();
         _engine.Dispose();
+
+        // A downloaded update installs now that Chromium is done with the files; on a restart the installer opens the
+        // browser again when it finishes.
+        if (_updates.ApplyOnExit(relaunch: App.RestartRequested)) return;
 
         // A restart was requested: only now, with Chromium done with the profile, the app starts again.
         if (App.RestartRequested && Environment.ProcessPath is { } exe)
@@ -1107,6 +1115,11 @@ public sealed partial class MainWindow : Window
     private void History_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
     {
         args.Handled = true;
+        ToggleHistory();
+    }
+
+    private void ToggleHistory()
+    {
         if (_libraryShown && Library.Section == LibrarySection.History) CloseLibrary(returnToSidebar: false);
         else OpenLibrary(LibrarySection.History);
     }
@@ -1240,6 +1253,18 @@ public sealed partial class MainWindow : Window
             if (_peekTab is not null && request.From == _peekTab) _peekTab.Navigate(request.Url);
             else OpenPeek(request.From, request.Url);
         };
+        // A sign-in or payment popup shows in Peek, as a real popup of the page; when Peek is busy, as a tab.
+        _shell.PopupOpened += (_, request) =>
+        {
+            if (_peekTab is not null || _fullscreen) _shell.AdoptTab(request.Popup);
+            else OpenPeek(request.From, popup: request.Popup);
+        };
+        // The page closed itself (the popup finished signing in).
+        _shell.TabCloseRequested += (_, tab) =>
+        {
+            if (tab == _peekTab) ClosePeek();
+            else _shell.CloseTab(tab);
+        };
         PageArea.SizeChanged += (_, _) => { if (PeekOpen) LayoutPeek(); };
         PeekCard.Shadow = new ThemeShadow();
         PeekCard.Translation = new Vector3(0, 0, 48);
@@ -1269,22 +1294,23 @@ public sealed partial class MainWindow : Window
             new Vector3((float)bounds.Width / 2, (float)bounds.Height / 2, 0);
     }
 
-    private void OpenPeek(BrowserTab from, string url)
+    private void OpenPeek(BrowserTab from, string? url = null, BrowserTab? popup = null)
     {
+        url ??= popup?.Url ?? "";
         if (_fullscreen) { _shell.NewTab(url); return; }
         HidePreview();
         CloseFindBar(focusPage: false);
         if (Switcher.IsOpen) CancelSwitcher();
 
         // One was already open: replace the page without animating again.
-        if (_peekTab is { } current)
+        if (_peekTab is { } current && popup is null)
         {
             current.Navigate(url);
             return;
         }
 
         _peekVersion++;
-        _peekTab = _shell.CreatePeekTab(url);
+        _peekTab = popup ?? _shell.CreatePeekTab(url);
         PeekLayer.Visibility = Visibility.Visible;
         LayoutPeek();
         PeekView.Tab = _peekTab;
@@ -1402,6 +1428,11 @@ public sealed partial class MainWindow : Window
     private void Downloads_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
     {
         args.Handled = true;
+        ToggleDownloads();
+    }
+
+    private void ToggleDownloads()
+    {
         if (_libraryShown && Library.Section == LibrarySection.Downloads) CloseLibrary(returnToSidebar: false);
         else OpenLibrary(LibrarySection.Downloads);
     }
@@ -1410,6 +1441,11 @@ public sealed partial class MainWindow : Window
     private void ToggleDock_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
     {
         args.Handled = true;
+        ToggleDock();
+    }
+
+    private void ToggleDock()
+    {
         if (_fullscreen) return;
         _shell.Settings.SidebarDocked = !_sidebarDocked;
     }
@@ -1435,6 +1471,11 @@ public sealed partial class MainWindow : Window
     private void ViewSource_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
     {
         args.Handled = true;
+        ViewSourceOfCurrent();
+    }
+
+    private void ViewSourceOfCurrent()
+    {
         if (_shell.CurrentTab?.Url is { Length: > 0 } url && !StartPage.Is(url) && !url.StartsWith("view-source:"))
             _shell.NewTab("view-source:" + url);
     }
@@ -1492,15 +1533,19 @@ public sealed partial class MainWindow : Window
     private void FindNext_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
     {
         args.Handled = true;
-        if (FindBar.Visibility == Visibility.Visible) FindStep(forward: true);
+        FindNextOrOpen(forward: true);
+    }
+
+    private void FindNextOrOpen(bool forward)
+    {
+        if (FindBar.Visibility == Visibility.Visible) FindStep(forward);
         else OpenFindBar();
     }
 
     private void FindPrevious_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
     {
         args.Handled = true;
-        if (FindBar.Visibility == Visibility.Visible) FindStep(forward: false);
-        else OpenFindBar();
+        FindNextOrOpen(forward: false);
     }
 
     private void OpenFindBar()

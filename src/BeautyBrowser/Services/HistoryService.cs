@@ -62,10 +62,22 @@ public sealed class HistoryService
 
     public event EventHandler? HistoryChanged;
 
+    // Database writes run in order on a background thread: a page that changes its title often (WhatsApp with each
+    // unread message) must not make the UI thread, which also runs Chromium, wait on the disk.
+    private readonly object _writeLock = new();
+    private Task _writes = Task.CompletedTask;
+
+    // HistoryChanged is raised at most twice per second (the start page and the history panel rebuild on it).
+    private readonly DispatcherQueueTimer _notifyTimer;
+
     public HistoryService(DispatcherQueue ui, DatabaseService db)
     {
         _ui = ui;
         _db = db;
+        _notifyTimer = ui.CreateTimer();
+        _notifyTimer.Interval = TimeSpan.FromMilliseconds(500);
+        _notifyTimer.IsRepeating = false;
+        _notifyTimer.Tick += (_, _) => HistoryChanged?.Invoke(this, EventArgs.Empty);
 
         MigrateFromJsonIfPresent();
         ReloadCache();
@@ -116,7 +128,7 @@ public sealed class HistoryService
         var title = existing?.Title ?? url;
         var favicon = existing?.FaviconUrl;
 
-        _db.RecordVisit(url, title, favicon);
+        Write(() => _db.RecordVisit(url, title, favicon));
 
         if (existing is null)
         {
@@ -147,26 +159,29 @@ public sealed class HistoryService
         var existing = Find(url);
         if (existing is not null)
         {
+            var sameTitle = string.IsNullOrWhiteSpace(title) || existing.Title == title;
+            var sameIcon = faviconUrl is null || existing.FaviconUrl == faviconUrl;
+            if (sameTitle && sameIcon) return; // nothing new
             if (!string.IsNullOrWhiteSpace(title)) existing.Title = title;
             if (faviconUrl is not null) existing.FaviconUrl = faviconUrl;
         }
 
-        _db.UpdateDescription(url, title, faviconUrl);
+        Write(() => _db.UpdateDescription(url, title, faviconUrl));
         NotifyChanged();
     }
 
     public void Delete(string url)
     {
-        _db.DeleteHistoryEntry(url);
+        Write(() => _db.DeleteHistoryEntry(url));
         _cache.RemoveAll(e => e.Url == url);
-        NotifyChanged();
+        NotifyChanged(immediate: true);
     }
 
     public void ClearAll()
     {
-        _db.ClearAllHistory();
+        Write(_db.ClearAllHistory);
         _cache.Clear();
-        NotifyChanged();
+        NotifyChanged(immediate: true);
     }
 
     public IEnumerable<HistoryEntry> Recent(int max) =>
@@ -241,21 +256,39 @@ public sealed class HistoryService
         return name.Length == 0 ? host : char.ToUpperInvariant(name[0]) + name[1..].ToLowerInvariant();
     }
 
+    /// <summary>Waits (briefly) for pending writes, on exit.</summary>
     public void Flush()
     {
-        // SQLite operations are transactional and immediate; there are no loose files to sync.
+        Task pending;
+        lock (_writeLock) pending = _writes;
+        pending.Wait(TimeSpan.FromSeconds(3));
     }
 
-    private void NotifyChanged()
+    /// <summary>The history entry of an address, if it was visited (title and icon for restored tabs).</summary>
+    public HistoryEntry? Lookup(string url) => Find(url);
+
+    private void Write(Action write)
     {
-        if (_ui.HasThreadAccess)
+        lock (_writeLock)
         {
-            HistoryChanged?.Invoke(this, EventArgs.Empty);
+            _writes = _writes.ContinueWith(_ =>
+            {
+                try { write(); }
+                catch { /* losing one history write must never break browsing */ }
+            }, TaskScheduler.Default);
         }
-        else
+    }
+
+    private void NotifyChanged(bool immediate = false)
+    {
+        if (!_ui.HasThreadAccess)
         {
-            _ui.TryEnqueue(() => HistoryChanged?.Invoke(this, EventArgs.Empty));
+            _ui.TryEnqueue(() => NotifyChanged(immediate));
+            return;
         }
+        _notifyTimer.Stop();
+        if (immediate) HistoryChanged?.Invoke(this, EventArgs.Empty);
+        else _notifyTimer.Start();
     }
 
     private static double Score(HistoryEntry entry, string query)

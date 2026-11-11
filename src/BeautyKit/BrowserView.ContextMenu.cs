@@ -93,7 +93,7 @@ public sealed partial class BrowserView
         {
             Add(L.T("Back", "Atrás"), tab.GoBack, tab.CanGoBack);
             Add(L.T("Forward", "Adelante"), tab.GoForward, tab.CanGoForward);
-            Add(L.T("Reload", "Volver a cargar"), tab.Reload, shortcut: "Ctrl+R");
+            Add(L.T("Reload", "Volver a cargar"), () => tab.Reload(), shortcut: "Ctrl+R");
             Separator();
             Add(L.T("Save as…", "Guardar como…"), () => tab.Download(tab.Url));
             Add(L.T("Print…", "Imprimir…"), tab.Print);
