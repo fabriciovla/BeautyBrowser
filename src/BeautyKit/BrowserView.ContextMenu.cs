@@ -52,7 +52,7 @@ public sealed partial class BrowserView
         {
             Add(L.T("Open image in new tab", "Abrir imagen en una pestaña nueva"), () => tab.OpenInNewTab(info.SourceUrl));
             Add(L.T("Save image as…", "Guardar imagen como…"), () => tab.Download(info.SourceUrl));
-            Add(L.T("Copy image", "Copiar imagen"), () => CopyImage(info.SourceUrl), enabled: IsWebUrl(info.SourceUrl));
+            Add(L.T("Copy image", "Copiar imagen"), () => CopyImage(tab, info), enabled: info.SourceUrl.Length > 0);
             Add(L.T("Copy image address", "Copiar dirección de la imagen"), () => CopyText(info.SourceUrl));
             Separator();
         }

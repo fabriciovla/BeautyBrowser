@@ -53,6 +53,7 @@
             <KeyboardAccelerator Key="Home" Invoked="Home_Invoked" Modifiers="Menu" />
             <KeyboardAccelerator Key="D" Invoked="FocusAddress_Invoked" Modifiers="Menu" />
             <KeyboardAccelerator Key="F6" Invoked="FocusAddress_Invoked" />
+            <KeyboardAccelerator Key="Delete" Invoked="ClearData_Invoked" Modifiers="Control,Shift" />
         </Grid.KeyboardAccelerators>
 
         <!-- The theme color over the window glass (transparent for Classic, see AppTheme) and its grain. -->

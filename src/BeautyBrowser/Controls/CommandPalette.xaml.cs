@@ -78,7 +78,8 @@ public sealed partial class CommandPalette : UserControl
         _userMovedSelection = false;
 
         Visibility = Visibility.Visible;
-        Query.Text = initialText;
+        // The address is shown readable ("España", not "Espa%C3%B1a") without changing where it goes.
+        Query.Text = mode == PaletteMode.Navigate ? AddressDisplay.ToDisplay(initialText) : initialText;
         Query.SelectAll();
         Refresh();
         Query.Focus(FocusState.Programmatic);
