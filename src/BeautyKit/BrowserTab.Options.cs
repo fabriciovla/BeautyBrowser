@@ -145,19 +145,14 @@ public sealed partial class BrowserTab
             return Site(request.Url) == Site(topLevel);
         }
 
-        /// <summary>Approximate registrable domain: "a.b.google.com" → "google.com".</summary>
+        /// <summary>
+        /// Registrable domain from the Public Suffix List the blocker loaded: "a.b.google.com" → "google.com", while
+        /// a.vercel.app and b.vercel.app (or any *.github.io) stay different sites.
+        /// </summary>
         private static string Site(string url)
         {
-            if (!Uri.TryCreate(url, UriKind.Absolute, out var uri)) return url;
-            var labels = uri.Host.Split('.');
-            if (labels.Length <= 2 || uri.HostNameType != UriHostNameType.Dns) return uri.Host;
-
-            // Common two-part suffixes (com.ar, co.uk, gob.ar…): the site is the last three labels.
-            var second = labels[^2];
-            var twoPartSuffix = labels[^1].Length == 2 &&
-                                second is "com" or "co" or "org" or "net" or "gov" or "gob" or "edu" or "ac" or "or" or "ne";
-            var take = twoPartSuffix ? 3 : 2;
-            return string.Join('.', labels[^Math.Min(take, labels.Length)..]);
+            var site = Blocking.ContentBlocker.SiteOf(url);
+            return site.Length > 0 ? site : url; // Not an http(s) URL with a host: compare it as is.
         }
     }
 }

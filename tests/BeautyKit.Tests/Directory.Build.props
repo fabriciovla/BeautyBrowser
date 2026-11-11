@@ -1,0 +1,3 @@
+<Project>
+  <!-- Plain test project: it must not inherit the WinUI settings of src\ (the code under test has no UI dependencies). -->
+</Project>
