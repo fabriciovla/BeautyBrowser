@@ -115,6 +115,7 @@ public sealed partial class MainWindow : Window
         AddZoomAccelerators();
         SetupPageShortcuts();
         SetupPermissions();
+        SetupNotices();
         SetupUpdates();
         // Links other apps send while BeautyBrowser is open: a new tab, with the window brought to the front.
         ExternalLinks.Listen(url => DispatcherQueue.TryEnqueue(() =>
