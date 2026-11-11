@@ -24,10 +24,24 @@ public sealed partial class BrowserTab : INotifyPropertyChanged, IDisposable
     private readonly nint _hostWindow;
     private bool _disposed;
 
-    private int _viewWidth = 1;
-    private int _viewHeight = 1;
-    private double _scale = 1;
-    private (int X, int Y) _viewOffsetPx; // the view's position inside the window, in pixels
+    // The size of the last shown tab: tabs that load in the background lay out at that size, not at 1×1 px, so the
+    // page does not come up broken (or in its mobile layout) when it is shown.
+    private static (int Width, int Height, double Scale, (int X, int Y) Offset) _lastViewSize = (1, 1, 1, (0, 0));
+
+    private int _viewWidth = _lastViewSize.Width;
+    private int _viewHeight = _lastViewSize.Height;
+    private double _scale = _lastViewSize.Scale;
+    private (int X, int Y) _viewOffsetPx = _lastViewSize.Offset; // the view's position inside the window, in pixels
+
+    // Hidden until a view shows it: tabs opened in the background stay hidden for Chromium (visibilityState
+    // "hidden", throttled timers, no painting), as in Chrome.
+    private bool _hidden = true;
+
+    // Restored tabs create their Chromium browser the first time they are shown (see EnsureCreated).
+    private bool _created;
+    private IWindowInfo? _pendingWindowInfo;
+    private IBrowserSettings? _pendingSettings;
+    private string? _pendingUrl;
 
     private string _title = L.T("New tab", "Nueva pestaña");
     private string _url;
@@ -38,7 +52,11 @@ public sealed partial class BrowserTab : INotifyPropertyChanged, IDisposable
     private bool _canGoBack;
     private bool _canGoForward;
 
-    internal BrowserTab(nint hostWindow, DispatcherQueue ui, string url)
+    /// <param name="mode">
+    /// <see cref="TabCreation.Now"/> creates the browser right away; <see cref="TabCreation.WhenShown"/> waits until it
+    /// is first shown (restored tabs); <see cref="TabCreation.Popup"/> lets Chromium create it as a page's popup.
+    /// </param>
+    internal BrowserTab(nint hostWindow, DispatcherQueue ui, string url, TabCreation mode = TabCreation.Now)
     {
         _hostWindow = hostWindow;
         _ui = ui;
@@ -57,6 +75,8 @@ public sealed partial class BrowserTab : INotifyPropertyChanged, IDisposable
             DownloadHandler = new TabDownloadHandler(this),
             RequestHandler = new TabRequestHandler(this),
             FindHandler = new TabFindHandler(this),
+            KeyboardHandler = new TabKeyboardHandler(this),
+            PermissionHandler = new TabPermissionHandler(this),
         };
         _browser.RenderHandler = new TabRenderHandler(this);
         _browser.JavascriptMessageReceived += OnJavascriptMessage; // playing media (BrowserTab.Media)
@@ -94,15 +114,70 @@ public sealed partial class BrowserTab : INotifyPropertyChanged, IDisposable
 
         // If the view focused the tab before Chromium finished creating the browser, that focus event was lost and
         // the page would never get keyboard input, so it is sent again now.
-        _browser.BrowserInitialized += (_, _) => OnUi(() => { if (_focused) Host()?.SendFocusEvent(true); });
+        // The same goes for the hidden state, the size the tab may have been given meanwhile and an address it was sent
+        // to before it existed.
+        _browser.BrowserInitialized += (_, _) => OnUi(() =>
+        {
+            if (Host() is not { } host) return;
+            if (_hidden) host.WasHidden(true);
+            host.NotifyScreenInfoChanged();
+            host.WasResized();
+            if (_focused) host.SendFocusEvent(true);
+            if (_pendingUrl is { } pending)
+            {
+                _pendingUrl = null;
+                _browser.LoadUrl(pending);
+            }
+        });
+
+        if (mode == TabCreation.Popup)
+        {
+            _created = true; // Chromium creates it (see TabLifeSpanHandler.OnBeforePopup)
+            return;
+        }
 
         var windowInfo = CefSharp.Core.ObjectFactory.CreateWindowInfo();
         windowInfo.SetAsWindowless(hostWindow); // the main window owns native dialogs and menus
         windowInfo.SharedTextureEnabled = UseGpu; // frames stay on the GPU (OnAcceleratedPaint)
+        if (mode == TabCreation.WhenShown)
+        {
+            _pendingWindowInfo = windowInfo;
+            _pendingSettings = browserSettings;
+            if (!StartPage.Is(url)) _title = ReadableTitle(null, url); // the start page keeps "New tab"
+            return;
+        }
+        _created = true;
         _browser.CreateBrowser(windowInfo, browserSettings);
     }
 
+    /// <summary>Creates the Chromium browser of a restored tab, the first time it is shown or used.</summary>
+    private void EnsureCreated()
+    {
+        if (_created || _disposed || _pendingWindowInfo is null) return;
+        _created = true;
+        _browser.CreateBrowser(_pendingWindowInfo, _pendingSettings);
+        _pendingWindowInfo = null;
+        _pendingSettings = null;
+    }
+
+    /// <summary>Title and icon to show for a restored tab until its page loads (from history).</summary>
+    public void SetPlaceholder(string? title, string? faviconUrl)
+    {
+        if (_created) return;
+        if (!string.IsNullOrWhiteSpace(title)) Title = ReadableTitle(title, Url);
+        if (!string.IsNullOrEmpty(faviconUrl)) _ = ResolveFaviconAsync([faviconUrl]);
+    }
+
     public event PropertyChangedEventHandler? PropertyChanged;
+
+    /// <summary>
+    /// The page opened a popup window (window.open with a size: "Sign in with Google", payments…). It is a real popup:
+    /// it keeps window.opener, so it can hand its result back to the page and close itself.
+    /// </summary>
+    public event EventHandler<BrowserTab>? PopupOpened;
+
+    /// <summary>The page closed itself (window.close(), usually a popup when it is done). The app removes the tab.</summary>
+    public event EventHandler? CloseRequested;
 
     /// <summary>The page wants a new window (target=_blank, window.open…).</summary>
     public event EventHandler<string>? NewTabRequested;
@@ -128,11 +203,24 @@ public sealed partial class BrowserTab : INotifyPropertyChanged, IDisposable
 
 
     /// <summary>Navigates to a URL, or searches the text when it does not look like one.</summary>
-    public void Navigate(string input) => _browser.LoadUrl(InputToUrl(input));
+    public void Navigate(string input)
+    {
+        var url = InputToUrl(input);
+        if (!_browser.IsBrowserInitialized)
+        {
+            // Not created yet (restored tab) or still starting: it loads once it exists.
+            _pendingUrl = url;
+            Url = url;
+            EnsureCreated();
+            return;
+        }
+        _browser.LoadUrl(url);
+    }
 
     public void GoBack() { if (_browser.IsBrowserInitialized) _browser.Back(); }
     public void GoForward() { if (_browser.IsBrowserInitialized) _browser.Forward(); }
-    public void Reload() { if (_browser.IsBrowserInitialized) _browser.Reload(); }
+    /// <param name="ignoreCache">Ctrl+Shift+R, Ctrl+F5: fetch everything again instead of using the cache.</param>
+    public void Reload(bool ignoreCache = false) { if (_browser.IsBrowserInitialized) _browser.Reload(ignoreCache); }
 
     public static string SearchUrlTemplate { get; set; } = "https://www.google.com/search?q={0}";
     public static string DefaultHomePage { get; set; } = "https://www.google.com";
@@ -179,6 +267,7 @@ public sealed partial class BrowserTab : INotifyPropertyChanged, IDisposable
         _viewWidth = widthDip;
         _viewHeight = heightDip;
         _scale = scale;
+        _lastViewSize = (widthDip, heightDip, scale, offsetPx);
 
         if (!_browser.IsBrowserInitialized) return;
         var host = _browser.GetBrowserHost();
@@ -188,6 +277,8 @@ public sealed partial class BrowserTab : INotifyPropertyChanged, IDisposable
 
     internal void SetHidden(bool hidden)
     {
+        _hidden = hidden;
+        if (!hidden) EnsureCreated();
         if (_browser.IsBrowserInitialized) _browser.GetBrowserHost().WasHidden(hidden);
     }
 
@@ -208,6 +299,23 @@ public sealed partial class BrowserTab : INotifyPropertyChanged, IDisposable
         Host()?.SendMouseWheelEvent(new MouseEvent(x, y, flags), deltaX, deltaY);
 
     internal void SendKey(KeyEvent keyEvent) => Host()?.SendKeyEvent(keyEvent);
+
+    /// <summary>A key went through the page and the page did not take it (no preventDefault): code and modifiers.</summary>
+    internal event Action<int, CefEventFlags>? KeyNotHandled;
+
+    // CEF calls OnKeyEvent only for keys the page left unhandled: that is how Chrome gives web apps their shortcuts first.
+    private sealed class TabKeyboardHandler(BrowserTab tab) : IKeyboardHandler
+    {
+        public bool OnPreKeyEvent(IWebBrowser chromiumWebBrowser, IBrowser browser, KeyType type, int windowsKeyCode,
+            int nativeKeyCode, CefEventFlags modifiers, bool isSystemKey, ref bool isKeyboardShortcut) => false;
+
+        public bool OnKeyEvent(IWebBrowser chromiumWebBrowser, IBrowser browser, KeyType type, int windowsKeyCode,
+            int nativeKeyCode, CefEventFlags modifiers, bool isSystemKey)
+        {
+            if (type == KeyType.RawKeyDown) tab.OnUi(() => tab.KeyNotHandled?.Invoke(windowsKeyCode, modifiers));
+            return false;
+        }
+    }
 
     private bool _focused; // what the view asked for, replayed once the browser is ready
 
@@ -252,6 +360,7 @@ public sealed partial class BrowserTab : INotifyPropertyChanged, IDisposable
     {
         if (_disposed) return;
         _disposed = true;
+        DismissPermissionRequests();
         _browser.Dispose();
         DisposeGpu();
     }
@@ -275,6 +384,11 @@ public sealed partial class BrowserTab : INotifyPropertyChanged, IDisposable
     private static partial bool ClientToScreen(nint hWnd, ref NativePoint point);
 
     private struct NativePoint { public int X, Y; }
+
+    private const int VkControl = 0x11;
+
+    [LibraryImport("user32.dll")]
+    private static partial short GetAsyncKeyState(int key);
 
     // With the external message pump CEF runs on the UI thread; OnUi still guards against that changing.
 
@@ -449,14 +563,38 @@ public sealed partial class BrowserTab : INotifyPropertyChanged, IDisposable
                 tab.CountBlocked();
                 return true;
             }
+            // window.open with a size is a popup window the page talks to (sign-in, payments): Chromium creates it in a
+            // tab of ours so window.opener keeps working. Opening it as a plain tab instead would leave the sign-in hung.
+            if (targetDisposition == WindowOpenDisposition.NewPopup)
+            {
+                var popup = new BrowserTab(tab._hostWindow, tab._ui, string.IsNullOrEmpty(targetUrl) ? "about:blank" : targetUrl, TabCreation.Popup);
+                windowInfo.SetAsWindowless(tab._hostWindow);
+                windowInfo.SharedTextureEnabled = UseGpu;
+                browserSettings.WindowlessFrameRate = FrameRate;
+                newBrowser = popup._browser;
+                tab.OnUi(() => tab.PopupOpened?.Invoke(tab, popup));
+                return false;
+            }
+
             // Ctrl+click or middle click (background tab) opens a regular tab; a plain click opens the mini window.
-            var peek = userGesture && targetDisposition is not WindowOpenDisposition.NewBackgroundTab;
+            // Shift+click (new window) and Ctrl+Shift+click (foreground tab) open a regular tab too, as in Chrome.
+            var peek = userGesture
+                       && targetDisposition is not (WindowOpenDisposition.NewBackgroundTab or WindowOpenDisposition.NewWindow)
+                       && (GetAsyncKeyState(VkControl) & 0x8000) == 0;
             tab.OnUi(() =>
             {
                 if (peek && tab.PeekRequested is { } handler) handler(tab, targetUrl);
                 else tab.NewTabRequested?.Invoke(tab, targetUrl);
             });
             return true; // cancel the popup: the app opens it
+        }
+
+        // window.close() from the page (a sign-in popup that finished). Closes run through here too when the app
+        // disposes the tab; those are not reported back.
+        protected override bool DoClose(IWebBrowser chromiumWebBrowser, IBrowser browser)
+        {
+            if (!tab._disposed) tab.OnUi(() => tab.CloseRequested?.Invoke(tab, EventArgs.Empty));
+            return false;
         }
     }
 }

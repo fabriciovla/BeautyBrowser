@@ -63,6 +63,10 @@ public sealed class BrowserShell
     public SettingsService Settings { get; }
     public FavoritesService Favorites { get; } = new();
     public DownloadsService Downloads { get; } = new();
+    public SitePermissionsService SitePermissions { get; } = new();
+
+    /// <summary>A page asks for the microphone, camera, location… Without a listener the request is denied.</summary>
+    public event EventHandler<(BrowserTab Tab, PermissionRequest Request)>? PermissionRequested;
 
     /// <summary>The visible tab changed (selection, close or space switch).</summary>
     public event EventHandler? CurrentTabChanged;
@@ -494,9 +498,12 @@ public sealed class BrowserShell
         foreach (var saved in data.Spaces)
         {
             var space = new Space(string.IsNullOrWhiteSpace(saved.Name) ? $"Space {Spaces.Count + 1}" : saved.Name, saved.Icon);
+            // Tabs load the first time they are shown, as in Chrome: until then they show the title and icon history
+            // remembers, without starting a page (or its audio) for each one.
             foreach (var url in saved.Tabs.Where(u => !string.IsNullOrWhiteSpace(u)))
             {
-                var tab = _engine.CreateTab(url);
+                var tab = _engine.CreateTab(url, TabCreation.WhenShown);
+                if (History.Lookup(url) is { } entry) tab.SetPlaceholder(entry.Title, entry.FaviconUrl);
                 Wire(tab);
                 space.Tabs.Add(tab);
             }
@@ -538,9 +545,34 @@ public sealed class BrowserShell
     }
 
 
+    /// <summary>
+    /// A page opened a popup window (sign-in, payment): (the page, the popup). The app shows it; without a listener it
+    /// becomes a regular tab.
+    /// </summary>
+    public event EventHandler<(BrowserTab From, BrowserTab Popup)>? PopupOpened;
+
+    /// <summary>A page closed itself (window.close()). Without a listener its tab is closed.</summary>
+    public event EventHandler<BrowserTab>? TabCloseRequested;
+
     private void Wire(BrowserTab tab)
     {
         tab.NewTabRequested += (_, url) => NewTab(url);
+        tab.PopupOpened += (_, popup) =>
+        {
+            Wire(popup);
+            if (PopupOpened is { } handler) handler(this, (tab, popup));
+            else AdoptTab(popup);
+        };
+        tab.PermissionRequested += (_, request) =>
+        {
+            if (PermissionRequested is { } handler) handler(this, (tab, request));
+            else request.Respond(false);
+        };
+        tab.CloseRequested += (_, _) =>
+        {
+            if (TabCloseRequested is { } handler) handler(this, tab);
+            else CloseTab(tab);
+        };
         tab.PeekRequested += (_, url) =>
         {
             if (PeekRequested is { } peek) peek(this, (tab, url));

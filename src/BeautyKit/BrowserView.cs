@@ -17,19 +17,38 @@ namespace BeautyKit;
 /// </summary>
 public sealed partial class BrowserView : ContentControl
 {
-    // Shortcuts the app handles (KeyboardAccelerators) instead of the page. AltGr arrives as Ctrl+Alt and is a
-    // character (@, \…), not a shortcut.
-    private static bool IsAppShortcut(VirtualKey key, bool ctrl, bool shift, bool alt) =>
-        (ctrl && !alt && key is VirtualKey.T or VirtualKey.W or VirtualKey.L or VirtualKey.R or VirtualKey.H) ||
-        (ctrl && !alt && key is VirtualKey.J or VirtualKey.S or VirtualKey.D or VirtualKey.F or VirtualKey.G
-            or VirtualKey.P or VirtualKey.U or VirtualKey.Number0 or VirtualKey.NumberPad0 or VirtualKey.Add
-            or VirtualKey.Subtract or (VirtualKey)187 or (VirtualKey)189) ||
-        (alt && !ctrl && key is VirtualKey.Left or VirtualKey.Right or VirtualKey.Home or VirtualKey.D) || // back, forward, home, address bar
-        (!ctrl && !alt && key is VirtualKey.F3 or VirtualKey.F6) ||
-        (ctrl && !alt && key is VirtualKey.Tab or VirtualKey.PageUp or VirtualKey.PageDown) ||   // switch tabs
-        (ctrl && !alt && !shift && key is >= VirtualKey.Number1 and <= VirtualKey.Number9) ||    // go to tab N
-        (ctrl && shift && !alt && key == VirtualKey.I) ||   // DevTools
-        (!ctrl && key is VirtualKey.F5 or VirtualKey.F12);
+    /// <summary>
+    /// Shortcuts the app always takes, before the page (Ctrl+T, Ctrl+W, Ctrl+Tab…): they never reach it. Exact key and
+    /// modifiers, so Ctrl+Shift+W still goes to the page when only Ctrl+W is reserved.
+    /// </summary>
+    public HashSet<(VirtualKey Key, VirtualKeyModifiers Modifiers)> ReservedShortcuts { get; } = [];
+
+    /// <summary>
+    /// Shortcuts the page gets first, as in Chrome (Ctrl+S, Ctrl+F, Ctrl+P…): web apps like Docs, Figma or VS Code use
+    /// them. When the page does not take one, <see cref="PageShortcutNotHandled"/> lets the app run it.
+    /// </summary>
+    public HashSet<(VirtualKey Key, VirtualKeyModifiers Modifiers)> PageShortcuts { get; } = [];
+
+    public event EventHandler<(VirtualKey Key, VirtualKeyModifiers Modifiers)>? PageShortcutNotHandled;
+
+    private static VirtualKeyModifiers CurrentModifiers()
+    {
+        var modifiers = VirtualKeyModifiers.None;
+        if (IsDown(VirtualKey.Control)) modifiers |= VirtualKeyModifiers.Control;
+        if (IsDown(VirtualKey.Shift)) modifiers |= VirtualKeyModifiers.Shift;
+        if (IsDown(VirtualKey.Menu)) modifiers |= VirtualKeyModifiers.Menu;
+        return modifiers;
+    }
+
+    private void OnPageKeyNotHandled(int windowsKeyCode, CefEventFlags flags)
+    {
+        var modifiers = VirtualKeyModifiers.None;
+        if (flags.HasFlag(CefEventFlags.ControlDown)) modifiers |= VirtualKeyModifiers.Control;
+        if (flags.HasFlag(CefEventFlags.ShiftDown)) modifiers |= VirtualKeyModifiers.Shift;
+        if (flags.HasFlag(CefEventFlags.AltDown)) modifiers |= VirtualKeyModifiers.Menu;
+        var shortcut = ((VirtualKey)windowsKeyCode, modifiers);
+        if (PageShortcuts.Contains(shortcut)) PageShortcutNotHandled?.Invoke(this, shortcut);
+    }
 
     private readonly Grid _layers;
     private readonly Border _clip;
@@ -114,6 +133,7 @@ public sealed partial class BrowserView : ContentControl
                 _tab.GpuFrameArrived -= PresentGpu;
                 _tab.CursorChanged -= OnCursorChanged;
                 _tab.ContextMenuRequested -= ShowContextMenu;
+                _tab.KeyNotHandled -= OnPageKeyNotHandled;
                 _tab.SendFocus(false);
                 _tab.SetHidden(true);
             }
@@ -126,6 +146,7 @@ public sealed partial class BrowserView : ContentControl
                 _tab.GpuFrameArrived += PresentGpu;
                 _tab.CursorChanged += OnCursorChanged;
                 _tab.ContextMenuRequested += ShowContextMenu;
+                _tab.KeyNotHandled += OnPageKeyNotHandled;
                 _tab.SetHidden(false);
                 UpdateSize();
                 if (FocusState != FocusState.Unfocused) _tab.SendFocus(true);
@@ -213,6 +234,11 @@ public sealed partial class BrowserView : ContentControl
     private bool _cursorIsArrow = true;
     private Windows.Foundation.Point? _windowDragStart;
 
+    // Whether the pressed spot is empty page (true), something of the page's own (false: an image, a button, something
+    // draggable…) or not known yet (null; the page is asked when the button goes down).
+    private bool? _windowDragEmptySpot;
+    private int _windowDragQuery;
+
     private void EndWindowDrag()
     {
         if (!_windowDragging) return;
@@ -237,7 +263,11 @@ public sealed partial class BrowserView : ContentControl
             return;
         }
 
-        if (_windowDragStart is { } start && point.Properties.IsLeftButtonPressed)
+        // The page started its own drag (an image, a card): the window stays where it is.
+        if (_windowDragStart is not null && (_tab.IsDraggingInPage || _windowDragEmptySpot == false)) _windowDragStart = null;
+
+        // Until the page answers whether the spot is empty, moves keep going to the page.
+        if (_windowDragStart is { } start && _windowDragEmptySpot == true && point.Properties.IsLeftButtonPressed)
         {
             var p = point.Position;
             if (Math.Abs(p.X - start.X) >= WindowDragThreshold || Math.Abs(p.Y - start.Y) >= WindowDragThreshold)
@@ -254,6 +284,12 @@ public sealed partial class BrowserView : ContentControl
         }
         _tab.SendMouseMove((int)point.Position.X, (int)point.Position.Y, Flags(point.Properties), leave: false);
         e.Handled = true;
+    }
+
+    private async Task AskEmptySpotAsync(BrowserTab tab, Windows.Foundation.Point position, int query)
+    {
+        var empty = await tab.IsEmptySpotAsync(position.X, position.Y);
+        if (query == _windowDragQuery) _windowDragEmptySpot = empty;
     }
 
     private void OnPointerExited(object sender, PointerRoutedEventArgs e)
@@ -286,6 +322,8 @@ public sealed partial class BrowserView : ContentControl
         var clickCount = _clicks.Press(button, point.Position);
         var emptyTop = button == MouseButtonType.Left && InWindowDragZone(point.Position);
         _windowDragStart = emptyTop ? point.Position : null;
+        _windowDragEmptySpot = null;
+        if (emptyTop) _ = AskEmptySpotAsync(_tab, point.Position, ++_windowDragQuery);
         if (emptyTop && clickCount == 2)
         {
             _windowDragStart = null;
@@ -319,7 +357,8 @@ public sealed partial class BrowserView : ContentControl
         if (_tab is null) return;
         var point = e.GetCurrentPoint(this);
         var delta = point.Properties.MouseWheelDelta;
-        var horizontal = point.Properties.IsHorizontalMouseWheel;
+        // Shift turns the wheel horizontal, as in Chrome; offscreen, Chromium leaves that to the app.
+        var horizontal = point.Properties.IsHorizontalMouseWheel || IsDown(VirtualKey.Shift);
         _tab.SendMouseWheel((int)point.Position.X, (int)point.Position.Y, Flags(point.Properties),
             horizontal ? delta : 0, horizontal ? 0 : delta);
         e.Handled = true;
@@ -355,7 +394,10 @@ public sealed partial class BrowserView : ContentControl
             return;
         }
 
-        if (IsAppShortcut(e.Key, IsDown(VirtualKey.Control), IsDown(VirtualKey.Shift), IsDown(VirtualKey.Menu))) return; // the app handles it
+        var shortcut = (e.Key, CurrentModifiers());
+        if (ReservedShortcuts.Contains(shortcut)) return; // the app handles it (KeyboardAccelerators)
+        // The page gets it first; marked handled so the app's accelerator waits for the page's answer.
+        var pageFirst = PageShortcuts.Contains(shortcut);
 
         var status = e.KeyStatus;
         // NativeKeyCode is the lParam of WM_KEYDOWN/WM_KEYUP.
@@ -379,7 +421,7 @@ public sealed partial class BrowserView : ContentControl
 
         // Only keys XAML uses to move focus (Tab, arrows) are marked handled. Marking every key stops WinUI from
         // raising CharacterReceived and text could not be typed.
-        if (e.Key is VirtualKey.Tab or VirtualKey.Left or VirtualKey.Right or VirtualKey.Up or VirtualKey.Down)
+        if (pageFirst || e.Key is VirtualKey.Tab or VirtualKey.Left or VirtualKey.Right or VirtualKey.Up or VirtualKey.Down)
             e.Handled = true;
     }
 
