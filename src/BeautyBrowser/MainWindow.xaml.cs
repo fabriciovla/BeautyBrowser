@@ -115,6 +115,7 @@ public sealed partial class MainWindow : Window
         AddZoomAccelerators();
         SetupPageShortcuts();
         SetupPermissions();
+        SetupPasswords();
         SetupZoomToast();
         SetupNotices();
         SetupUpdates();
