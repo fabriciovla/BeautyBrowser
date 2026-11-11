@@ -29,6 +29,11 @@ git fetch origin main --tags --quiet
 if ((git rev-parse HEAD) -ne (git rev-parse origin/main)) { throw "main is not the same as origin/main: pull or push first." }
 if (git tag --list $tag) { throw "$tag already exists: raise <Version> in version.props." }
 if (-not (Test-Path $codecs)) { throw "third_party\cef-codecs is missing: releases ship CEF with codecs (tools\build-cef-codecs.ps1)." }
+# What the release changes, from CHANGELOG.md: every release has to say what it does.
+$changelog = Get-Content (Join-Path $root "CHANGELOG.md") -Raw -Encoding utf8
+$section = [regex]::Match($changelog, "(?ms)^## \[$([regex]::Escape($version))\][^\n]*\n(.*?)(?=^## \[|\z)")
+if (-not $section.Success -or -not $section.Groups[1].Value.Trim()) { throw "CHANGELOG.md has no section for ${version}: write what this release changes." }
+$notes = Join-Path $artifacts "release-notes.md"
 gh auth status *> $null
 if ($LASTEXITCODE -ne 0) { throw "GitHub CLI is not signed in: run 'gh auth login'." }
 
@@ -52,7 +57,9 @@ Write-Host "SHA-256 $hash"
 git tag -a $tag -m "Beauty Browser $version"
 git push origin $tag
 if ($LASTEXITCODE -ne 0) { throw "Could not push $tag." }
-gh release create $tag $setup $checksum --title "Beauty Browser $version" --generate-notes
+New-Item -ItemType Directory -Force $artifacts | Out-Null
+Set-Content -Path $notes -Value $section.Groups[1].Value.Trim() -Encoding utf8
+gh release create $tag $setup $checksum --title "Beauty Browser $version" --notes-file $notes
 if ($LASTEXITCODE -ne 0) { throw "Could not create the release (the tag $tag is already pushed)." }
 
 $mb = [math]::Round((Get-Item $setup).Length / 1048576)
