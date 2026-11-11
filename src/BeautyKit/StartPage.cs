@@ -152,12 +152,12 @@ public static class StartPage
           }
           .card img { display: block; width: 100%; border-radius: 14px; }
           .card:hover { box-shadow: 0 0 0 1px rgba(0, 0, 0, .05), 0 26px 60px rgba(20, 20, 35, .22); }
-          .c0 { left: 2%; width: 34%; top: 92px; transform: rotate(-9deg); animation-delay: .2s; }
+          .c0 { left: 2%; width: 34%; top: 128px; transform: rotate(-9deg); animation-delay: .2s; }
           .c0:hover { transform: translateY(-16px) rotate(-9deg); }
-          .c1 { left: 31%; width: 38%; top: 34px; transform: rotate(-4deg); z-index: 2; padding: 16px 12px 12px; border-radius: 26px; animation-delay: .1s; }
+          .c1 { left: 31%; width: 38%; top: 72px; transform: rotate(-4deg); z-index: 2; padding: 16px 12px 12px; border-radius: 26px; animation-delay: .1s; }
           .c1::before { content: ""; position: absolute; top: 5px; left: 50%; width: 6px; height: 6px; margin-left: -3px; border-radius: 50%; background: #1d1d20; }
           .c1:hover { transform: translateY(-16px) rotate(-4deg); }
-          .c2 { right: 2%; width: 34%; top: 80px; transform: rotate(11deg); animation-delay: .3s; }
+          .c2 { right: 2%; width: 34%; top: 118px; transform: rotate(11deg); animation-delay: .3s; }
           .c2:hover { transform: translateY(-16px) rotate(11deg); }
           @keyframes rise { from { opacity: 0; translate: 0 90px; } to { opacity: 1; translate: 0 0; } }
           @media (max-height: 660px) { .showcase { display: none; } main { margin-top: 0; } }
