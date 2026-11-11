@@ -19,7 +19,17 @@ public sealed partial class MainWindow
         _shell.CurrentTabChanged += (_, _) => ShowNextNotice();
 
         _shell.PopupBlocked += (_, blocked) => AddNotice(PopupNotice(blocked.Tab, blocked.Origin, blocked.Url));
+        _shell.TabCrashChanged += (_, e) =>
+        {
+            if (e.Crashed) AddNotice(CrashNotice(e.Tab));
+            else
+            {
+                _notices.RemoveAll(n => n.Key.Equals((e.Tab, "crashed")));
+                ShowNextNotice();
+            }
+        };
         _shell.DownloadApprovalRequested += (_, item) => AddNotice(DangerousDownloadNotice(item.Approval));
+        _shell.ExternalAppRequested += (_, item) => AddNotice(ExternalAppNotice(item.Tab, item.Request));
     }
 
     private void AddNotice(Notice notice)
@@ -84,6 +94,13 @@ public sealed partial class MainWindow
             Secondary: () => { });
     }
 
+    private static Notice CrashNotice(BrowserTab tab) => new(
+        Key: (tab, "crashed"), Tab: tab, Glyph: "",
+        Text: L.T("This page ran into a problem.", "Esta página tuvo un problema."),
+        Detail: null,
+        PrimaryLabel: L.T("Reload", "Recargar"), Primary: () => tab.Reload(),
+        SecondaryLabel: L.T("Dismiss", "Cerrar"), Secondary: () => { });
+
     private Notice DangerousDownloadNotice(DownloadApproval approval)
     {
         var site = SiteName(BrowserTab.OriginOf(approval.Url));
@@ -95,6 +112,18 @@ public sealed partial class MainWindow
                 : L.T($"Only keep it if you trust {site}.", $"Conservalo solo si confiás en {site}."),
             PrimaryLabel: L.T("Keep", "Conservar"), Primary: () => approval.Decide(true),
             SecondaryLabel: L.T("Discard", "Descartar"), Secondary: () => approval.Decide(false));
+    }
+
+    // A link to an app (mailto:, zoommtg:…): Windows opens it only if the user says so, as in Chrome.
+    private static Notice ExternalAppNotice(BrowserTab tab, ExternalAppRequest request)
+    {
+        var site = SiteName(request.Origin);
+        return new Notice(
+            Key: (tab, "app"), Tab: tab, Glyph: "",
+            Text: L.T($"Open {request.App}?", $"¿Abrir {request.App}?"),
+            Detail: site.Length == 0 ? null : L.T($"{site} wants to open this app.", $"{site} quiere abrir esta app."),
+            PrimaryLabel: L.T("Open", "Abrir"), Primary: () => ExternalApps.Open(request.Url),
+            SecondaryLabel: L.T("Cancel", "Cancelar"), Secondary: () => { });
     }
 
     private static string SiteName(string origin) =>

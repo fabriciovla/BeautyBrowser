@@ -212,6 +212,7 @@ public sealed class BrowserEngine : IDisposable
     public void Dispose()
     {
         _devToolsBridge?.Dispose();
+        BrowserTab.DisposeLingering();
         _pump.Stop();
         Gpu.WriteLog(BrowserTab.FrameRate);
         Cef.Shutdown();
