@@ -128,6 +128,57 @@
             IsHitTestVisible="False"
             Opacity="0" />
 
+        <!-- A site asks for the microphone, camera, location…: a card at the top left of the page, like Chrome's. -->
+        <Border
+            x:Name="PermissionBar"
+            MaxWidth="420"
+            Margin="28,20,0,0"
+            Padding="14,12,12,12"
+            HorizontalAlignment="Left"
+            VerticalAlignment="Top"
+            Background="{StaticResource BeautyCardBrush}"
+            BorderBrush="{StaticResource BeautyPanelBorderBrush}"
+            BorderThickness="1"
+            CornerRadius="{StaticResource BeautyItemCornerRadius}"
+            Visibility="Collapsed">
+            <Border.Resources>
+                <ResourceDictionary Source="ms-appx:///Theme/BeautySurface.xaml" />
+            </Border.Resources>
+            <StackPanel Spacing="10">
+                <Grid ColumnSpacing="10">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <FontIcon
+                        x:Name="PermissionIcon"
+                        VerticalAlignment="Top"
+                        Margin="0,2,0,0"
+                        FontSize="14"
+                        Foreground="{StaticResource BeautyTextSecondaryBrush}"
+                        Glyph="&#xE720;" />
+                    <TextBlock
+                        x:Name="PermissionText"
+                        Grid.Column="1"
+                        FontSize="13"
+                        Foreground="{StaticResource BeautyTextBrush}"
+                        TextWrapping="Wrap" />
+                </Grid>
+                <StackPanel HorizontalAlignment="Right" Orientation="Horizontal" Spacing="6">
+                    <Button
+                        x:Name="PermissionBlock"
+                        Click="PermissionBlock_Click"
+                        Content="{local:T En='Block', Es='Bloquear'}"
+                        Style="{StaticResource BeautyChipButton}" />
+                    <Button
+                        x:Name="PermissionAllow"
+                        Click="PermissionAllow_Click"
+                        Content="{local:T En='Allow', Es='Permitir'}"
+                        Style="{StaticResource BeautyChipButton}" />
+                </StackPanel>
+            </StackPanel>
+        </Border>
+
         <!-- Find in page (Ctrl+F): a floating card at the top right of the page. -->
         <Border
             x:Name="FindBar"

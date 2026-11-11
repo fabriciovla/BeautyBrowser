@@ -67,6 +67,15 @@ public sealed class BrowserEngine : IDisposable
             settings.CefCommandLineArgs.Add("disable-gpu");
             settings.CefCommandLineArgs.Add("disable-gpu-compositing");
         }
+        else
+        {
+            // Pages are rasterized on the CPU (several threads) and composited on the GPU. Chrome rasterizes on the GPU
+            // with Skia Graphite, but offscreen CEF cannot hand over Graphite's frames, and the older GPU rasterizer
+            // (Ganesh) blocks the GPU's main thread on heavy content: WhatsApp's blurred media previews dropped
+            // scrolling to ~60 fps with constant stutter. On the CPU it stays at the monitor's rate (measured on a
+            // 200 Hz display: WhatsApp 56-68 -> 198 fps; Wikipedia, YouTube, Reddit and news sites equal or better).
+            settings.CefCommandLineArgs.Add("disable-gpu-rasterization");
+        }
 
         // With hardware acceleration frames travel as shared GPU textures at the monitor's refresh rate; without it
         // they go through the CPU at 60 fps.
@@ -120,7 +129,8 @@ public sealed class BrowserEngine : IDisposable
     }
 
     /// <summary>A new tab; without a URL it opens the start page chosen in settings.</summary>
-    public BrowserTab CreateTab(string? url = null) => new(_hostWindow, _ui, url ?? BrowserTab.DefaultHomePage);
+    public BrowserTab CreateTab(string? url = null, TabCreation mode = TabCreation.Now) =>
+        new(_hostWindow, _ui, url ?? BrowserTab.DefaultHomePage, mode == TabCreation.Popup ? TabCreation.Now : mode);
 
     /// <summary>
     /// Preferred page languages (Accept-Language), such as "en-US,en". Applies right away to whatever loads next.

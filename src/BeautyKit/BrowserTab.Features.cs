@@ -99,6 +99,40 @@ public sealed partial class BrowserTab
         return true;
     }
 
+    /// <summary>A drag that started in the page (an image, a link, a draggable card) is in progress.</summary>
+    internal bool IsDraggingInPage => _internalDrag;
+
+    // Elements that react to the mouse on their own: pressing on them is not pressing on empty page.
+    private const string InteractiveSelector =
+        "a,button,input,textarea,select,option,label,summary,img,picture,video,audio,canvas,svg,iframe,embed,object," +
+        "[draggable=true],[contenteditable=''],[contenteditable=true],[onclick],[onmousedown],[onpointerdown]," +
+        "[role=button],[role=link],[role=slider],[role=tab],[role=menuitem],[role=option],[role=checkbox]," +
+        "[role=switch],[role=textbox],[role=combobox],[role=gridcell],[role=treeitem],[role=listitem]";
+
+    /// <summary>
+    /// Whether (x, y) in the view (DIPs) is empty page: no image, button, link, draggable or other interactive element
+    /// there. Used before dragging the window from the top of the page. False when it cannot tell.
+    /// </summary>
+    internal async Task<bool> IsEmptySpotAsync(double x, double y)
+    {
+        try
+        {
+            if (!_browser.IsBrowserInitialized || _browser.GetMainFrame() is not { IsValid: true } frame) return false;
+            var zoom = Math.Pow(1.2, _zoomLevel); // CSS pixels are DIPs divided by the zoom
+            var cssX = (x / zoom).ToString(System.Globalization.CultureInfo.InvariantCulture);
+            var cssY = (y / zoom).ToString(System.Globalization.CultureInfo.InvariantCulture);
+            var script =
+                $"(function(){{var e=document.elementFromPoint({cssX},{cssY});if(!e)return true;" +
+                $"return !e.closest(\"{InteractiveSelector}\");}})()";
+            var response = await frame.EvaluateScriptAsync(script, timeout: TimeSpan.FromMilliseconds(500));
+            return response.Success && response.Result is true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
     /// <summary>While an internal drag is active, mouse moves are reported as drag-over.</summary>
     private bool TryContinueInternalDrag(int x, int y, CefEventFlags flags)
     {
