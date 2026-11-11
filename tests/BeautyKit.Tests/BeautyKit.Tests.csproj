@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- Only the pure logic is compiled in: BeautyKit itself needs CEF and WinUI. -->
+    <Compile Include="..\..\src\BeautyKit\AddressInput.cs" Link="AddressInput.cs" />
+    <Compile Include="..\..\src\BeautyKit\Blocking\PublicSuffix.cs" Link="PublicSuffix.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.*" />
+    <PackageReference Include="xunit" Version="2.*" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.*" />
+  </ItemGroup>
+</Project>

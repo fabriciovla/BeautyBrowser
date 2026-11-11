@@ -104,8 +104,14 @@ public sealed partial class BrowserView : ContentControl
         PointerReleased += OnPointerReleased;
         PointerWheelChanged += OnPointerWheelChanged;
         PointerExited += OnPointerExited;
-        PointerCaptureLost += (_, _) =>
+        PointerCanceled += (_, e) => { if (IsTouch(e)) SendTouch(e, TouchEventType.Cancelled); };
+        PointerCaptureLost += (_, e) =>
         {
+            if (IsTouch(e))
+            {
+                SendTouch(e, TouchEventType.Cancelled);
+                return;
+            }
             EndWindowDrag();
             _tab?.SendCaptureLost();
         };
@@ -134,6 +140,7 @@ public sealed partial class BrowserView : ContentControl
                 _tab.CursorChanged -= OnCursorChanged;
                 _tab.ContextMenuRequested -= ShowContextMenu;
                 _tab.KeyNotHandled -= OnPageKeyNotHandled;
+                _tab.VirtualKeyboardRequested -= OnVirtualKeyboardRequested;
                 _tab.SendFocus(false);
                 _tab.SetHidden(true);
             }
@@ -147,6 +154,7 @@ public sealed partial class BrowserView : ContentControl
                 _tab.CursorChanged += OnCursorChanged;
                 _tab.ContextMenuRequested += ShowContextMenu;
                 _tab.KeyNotHandled += OnPageKeyNotHandled;
+                _tab.VirtualKeyboardRequested += OnVirtualKeyboardRequested;
                 _tab.SetHidden(false);
                 UpdateSize();
                 if (FocusState != FocusState.Unfocused) _tab.SendFocus(true);
@@ -156,6 +164,12 @@ public sealed partial class BrowserView : ContentControl
         }
     }
 
+    /// <summary>
+    /// Whether tabs opened in the background lay out at this view's size. Off for small views such as Peek or
+    /// DevTools, so a background tab does not come up at their size.
+    /// </summary>
+    public bool SizesBackgroundTabs { get; set; } = true;
+
     private void UpdateSize()
     {
         if (_tab is null || XamlRoot is null) return;
@@ -164,7 +178,7 @@ public sealed partial class BrowserView : ContentControl
         var origin = TransformToVisual(null).TransformPoint(default);
         _tab.Resize(
             (int)Math.Round(ActualWidth), (int)Math.Round(ActualHeight), scale,
-            ((int)Math.Round(origin.X * scale), (int)Math.Round(origin.Y * scale)));
+            ((int)Math.Round(origin.X * scale), (int)Math.Round(origin.Y * scale)), SizesBackgroundTabs);
         RefreshVisual(); // the display scale may have changed (frames are in physical pixels)
     }
 
@@ -253,6 +267,11 @@ public sealed partial class BrowserView : ContentControl
     private void OnPointerMoved(object sender, PointerRoutedEventArgs e)
     {
         if (_tab is null) return;
+        if (IsTouch(e))
+        {
+            SendTouch(e, TouchEventType.Moved);
+            return;
+        }
         var point = e.GetCurrentPoint(this);
 
         if (_windowDragging)
@@ -294,7 +313,7 @@ public sealed partial class BrowserView : ContentControl
 
     private void OnPointerExited(object sender, PointerRoutedEventArgs e)
     {
-        if (_tab is null) return;
+        if (_tab is null || IsTouch(e)) return;
         var point = e.GetCurrentPoint(this);
         _tab.SendMouseMove((int)point.Position.X, (int)point.Position.Y, Flags(point.Properties), leave: true);
     }
@@ -305,6 +324,12 @@ public sealed partial class BrowserView : ContentControl
     private void OnPointerPressed(object sender, PointerRoutedEventArgs e)
     {
         if (_tab is null) return;
+        _lastInputWasTouch = IsTouch(e);
+        if (_lastInputWasTouch)
+        {
+            SendTouch(e, TouchEventType.Pressed);
+            return;
+        }
         var point = e.GetCurrentPoint(this);
 
         switch (point.Properties.PointerUpdateKind)
@@ -336,6 +361,11 @@ public sealed partial class BrowserView : ContentControl
     private void OnPointerReleased(object sender, PointerRoutedEventArgs e)
     {
         if (_tab is null) return;
+        if (IsTouch(e))
+        {
+            SendTouch(e, TouchEventType.Released);
+            return;
+        }
         var point = e.GetCurrentPoint(this);
         if (ButtonOf(point.Properties.PointerUpdateKind) is not { } button) return;
 
@@ -349,18 +379,6 @@ public sealed partial class BrowserView : ContentControl
         }
         _tab.SendMouseClick((int)point.Position.X, (int)point.Position.Y, Flags(point.Properties), button, up: true, _clicks.Count);
         ReleasePointerCapture(e.Pointer);
-        e.Handled = true;
-    }
-
-    private void OnPointerWheelChanged(object sender, PointerRoutedEventArgs e)
-    {
-        if (_tab is null) return;
-        var point = e.GetCurrentPoint(this);
-        var delta = point.Properties.MouseWheelDelta;
-        // Shift turns the wheel horizontal, as in Chrome; offscreen, Chromium leaves that to the app.
-        var horizontal = point.Properties.IsHorizontalMouseWheel || IsDown(VirtualKey.Shift);
-        _tab.SendMouseWheel((int)point.Position.X, (int)point.Position.Y, Flags(point.Properties),
-            horizontal ? delta : 0, horizontal ? 0 : delta);
         e.Handled = true;
     }
 

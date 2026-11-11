@@ -62,6 +62,11 @@ public sealed class BrowserEngine : IDisposable
 
         StartPage.Register(settings); // beauty://newtab
 
+        // Chromium's own popup blocker drops a popup before OnBeforePopup runs, so the browser could neither show the
+        // "popup blocked" notice nor let the user allow the site. With it off, TabLifeSpanHandler decides (see
+        // BrowserTab.Notices): user-initiated popups open, the rest are blocked and reported.
+        settings.CefCommandLineArgs.Add("disable-popup-blocking");
+
         if (!hardwareAcceleration)
         {
             settings.CefCommandLineArgs.Add("disable-gpu");
@@ -129,8 +134,27 @@ public sealed class BrowserEngine : IDisposable
     }
 
     /// <summary>A new tab; without a URL it opens the start page chosen in settings.</summary>
-    public BrowserTab CreateTab(string? url = null, TabCreation mode = TabCreation.Now) =>
-        new(_hostWindow, _ui, url ?? BrowserTab.DefaultHomePage, mode == TabCreation.Popup ? TabCreation.Now : mode);
+    public BrowserTab CreateTab(string? url = null, TabCreation mode = TabCreation.Now, bool isPrivate = false) =>
+        new(_hostWindow, _ui, url ?? BrowserTab.DefaultHomePage, mode == TabCreation.Popup ? TabCreation.Now : mode,
+            isPrivate ? PrivateContext() : null);
+
+    // The profile of private tabs: with no cache path Chromium keeps it in memory (incognito). One for all of them, as
+    // Chrome does, until the last private tab closes.
+    private static IRequestContext? _privateContext;
+    private static string? _pageLanguages;
+    private static (int Default, int Minimum)? _fontSizes;
+
+    private static IRequestContext PrivateContext()
+    {
+        if (_privateContext is not null) return _privateContext;
+        _privateContext = new RequestContext(new RequestContextSettings());
+        if (_pageLanguages is { } languages) _privateContext.SetPreference("intl.accept_languages", languages, out _);
+        if (_fontSizes is { } sizes) ApplyFontSizes(_privateContext, sizes.Default, sizes.Minimum);
+        return _privateContext;
+    }
+
+    /// <summary>The last private tab closed: forget its cookies, cache and storage.</summary>
+    public static void ForgetPrivateData() => _privateContext = null;
 
     /// <summary>
     /// Preferred page languages (Accept-Language), such as "en-US,en". Applies right away to whatever loads next.
@@ -139,6 +163,8 @@ public sealed class BrowserEngine : IDisposable
     public static bool SetPageLanguages(string languages)
     {
         if (!Cef.IsInitialized.GetValueOrDefault()) return false;
+        _pageLanguages = languages;
+        _privateContext?.SetPreference("intl.accept_languages", languages, out _);
         return Cef.GetGlobalRequestContext().SetPreference("intl.accept_languages", languages, out _);
     }
 
@@ -149,11 +175,14 @@ public sealed class BrowserEngine : IDisposable
     public static bool SetFontSizes(int defaultSize, int minimumSize)
     {
         if (!Cef.IsInitialized.GetValueOrDefault()) return false;
-        var context = Cef.GetGlobalRequestContext();
-        var ok = context.SetPreference("webkit.webprefs.default_font_size", defaultSize, out _);
-        ok &= context.SetPreference("webkit.webprefs.minimum_font_size", minimumSize, out _);
-        return ok;
+        _fontSizes = (defaultSize, minimumSize);
+        if (_privateContext is not null) ApplyFontSizes(_privateContext, defaultSize, minimumSize);
+        return ApplyFontSizes(Cef.GetGlobalRequestContext(), defaultSize, minimumSize);
     }
+
+    private static bool ApplyFontSizes(IRequestContext context, int defaultSize, int minimumSize) =>
+        context.SetPreference("webkit.webprefs.default_font_size", defaultSize, out _)
+        & context.SetPreference("webkit.webprefs.minimum_font_size", minimumSize, out _);
 
     private DevTools.DevToolsBridge? _devToolsBridge;
 

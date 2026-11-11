@@ -78,7 +78,8 @@ public sealed partial class CommandPalette : UserControl
         _userMovedSelection = false;
 
         Visibility = Visibility.Visible;
-        Query.Text = initialText;
+        // The address is shown readable ("España", not "Espa%C3%B1a") without changing where it goes.
+        Query.Text = mode == PaletteMode.Navigate ? AddressDisplay.ToDisplay(initialText) : initialText;
         Query.SelectAll();
         Refresh();
         Query.Focus(FocusState.Programmatic);
@@ -161,9 +162,28 @@ public sealed partial class CommandPalette : UserControl
             });
         }
 
-        // 5) History, without repeating open tabs or the best site.
+        // 5) Without text, the sites visited most often (one per site, as on the start page).
+        if (query.Length == 0)
+        {
+            foreach (var site in _shell.History.TopSites(MaxResults))
+            {
+                if (results.Count >= MaxResults) break;
+                results.Add(new PaletteResult
+                {
+                    Kind = PaletteResultKind.Url,
+                    Title = site.Title,
+                    Subtitle = ShortUrl(site.Url),
+                    Icon = IconFor(site.Icon),
+                    Url = site.Url,
+                });
+            }
+            Show(results.Take(MaxResults).ToList());
+            return;
+        }
+
+        // 6) History, without repeating open tabs or the best site.
         var openUrls = _shell.Spaces.SelectMany(s => s.Tabs).Select(t => t.Url).ToHashSet();
-        var history = query.Length == 0 ? _shell.History.Recent(12) : _shell.History.Search(query, 12);
+        var history = _shell.History.Search(query, 12);
         foreach (var entry in history.Where(h => !openUrls.Contains(h.Url) && h != bestSite))
         {
             if (results.Count >= MaxResults) break;
@@ -245,6 +265,21 @@ public sealed partial class CommandPalette : UserControl
     }
 
 
+    private static bool CtrlDown() =>
+        Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(VirtualKey.Control)
+            .HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down);
+
+    /// <summary>
+    /// Ctrl+Enter, as in Chrome: "google" → https://www.google.com. Only a bare name (no scheme, dot, port, path or
+    /// spaces) is completed; null means Enter works as usual.
+    /// </summary>
+    internal static string? CompleteDotCom(string text)
+    {
+        text = text.Trim();
+        if (text.Length == 0 || text.Any(c => !(char.IsLetterOrDigit(c) || c is '-' or '_'))) return null;
+        return "https://www." + text + ".com";
+    }
+
     private void Query_TextChanged(object sender, TextChangedEventArgs e)
     {
         _userMovedSelection = false;
@@ -267,17 +302,40 @@ public sealed partial class CommandPalette : UserControl
                 Results.SelectedIndex = (Results.SelectedIndex - 1 + count) % count;
                 Results.ScrollIntoView(Results.SelectedItem);
                 break;
+            case VirtualKey.Enter when CtrlDown() && CompleteDotCom(Query.Text) is { } completed:
+                _shell?.Open(completed, inNewTab: _mode == PaletteMode.NewTab);
+                Close();
+                break;
             case VirtualKey.Enter:
                 Execute(Results.SelectedItem as PaletteResult);
                 break;
             case VirtualKey.Escape:
                 Close();
                 break;
+            // Tab completes the box with the highlighted result ("you" → "youtube.com"), to keep typing after it.
+            case VirtualKey.Tab when Completion(Results.SelectedItem as PaletteResult) is { } completion
+                                     && !completion.Equals(Query.Text.Trim(), StringComparison.OrdinalIgnoreCase):
+                Query.Text = completion;
+                Query.SelectionStart = completion.Length;
+                break;
+            case VirtualKey.Tab:
+                break; // focus stays in the box
             default:
                 return;
         }
         e.Handled = true;
     }
+
+    // What Tab writes in the box for a result: the address without "https://www." for pages, the text for searches.
+    private static string? Completion(PaletteResult? result) => result switch
+    {
+        null => null,
+        { Kind: PaletteResultKind.Search } => result.Title,
+        { Kind: PaletteResultKind.OpenTab, Tab: { } tab } => ShortUrl(tab.Url, keepPath: true),
+        { Url: { Length: > 0 } url } when Uri.TryCreate(url, UriKind.Absolute, out _) => ShortUrl(url, keepPath: true),
+        { Url: { Length: > 0 } url } => url,
+        _ => null,
+    };
 
     private void Results_ItemClick(object sender, ItemClickEventArgs e) => Execute(e.ClickedItem as PaletteResult);
 

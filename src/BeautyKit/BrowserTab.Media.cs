@@ -88,6 +88,11 @@ public sealed partial class BrowserTab
     {
         // CefSharp raises this on another thread with the frame already released, so e.Frame must not be touched.
         if (e.Message is not IDictionary<string, object?> message) return;
+        if (message.TryGetValue("type", out var kind) && kind as string == "bb-pw")
+        {
+            OnUi(() => ReceiveLogin(message)); // the password manager (BrowserTab.Passwords)
+            return;
+        }
         if (!(message.TryGetValue("type", out var type) && type as string == "bb-media")) return;
         if (!(message.TryGetValue("token", out var token) && token is string { Length: > 0 and < 64 } frameId)) return;
         if (frameId.Any(c => !char.IsAsciiLetterOrDigit(c))) return; // it is embedded in a script: letters and digits only

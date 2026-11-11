@@ -1,4 +1,4 @@
-﻿using System.Collections.ObjectModel;
+using System.Collections.ObjectModel;
 using System.ComponentModel;
 using BeautyBrowser.Services;
 using BeautyKit;
@@ -22,6 +22,9 @@ public sealed class BrowserShell
         History = new HistoryService(ui, Database);
         Settings = new SettingsService(Database);
         Updates = new UpdateService(ui);
+
+        // Sites where popups were allowed for good are read by Chromium's thread from here on.
+        foreach (var origin in SitePermissions.OriginsAllowing(PagePermission.Popups)) BrowserTab.AllowPopupsFrom(origin);
 
         // The start page's most visited sites, always up to date.
         StartPage.Sites = History.TopSites(8);
@@ -65,9 +68,22 @@ public sealed class BrowserShell
     public FavoritesService Favorites { get; } = new();
     public DownloadsService Downloads { get; } = new();
     public SitePermissionsService SitePermissions { get; } = new();
+    public PasswordsService Passwords { get; } = new();
+
+    /// <summary>A login field got focus (the field) or lost it (null), in a tab.</summary>
+    public event EventHandler<(BrowserTab Tab, LoginField? Field)>? LoginFieldChanged;
+
+    /// <summary>A page sent a user name and password.</summary>
+    public event EventHandler<(BrowserTab Tab, SubmittedLogin Login)>? LoginSubmitted;
 
     /// <summary>A page asks for the microphone, camera, location… Without a listener the request is denied.</summary>
     public event EventHandler<(BrowserTab Tab, PermissionRequest Request)>? PermissionRequested;
+
+    /// <summary>A tab blocked a popup the page opened without a click.</summary>
+    public event EventHandler<(BrowserTab Tab, string Origin, string Url)>? PopupBlocked;
+
+    /// <summary>A dangerous file is about to download; without a listener it downloads.</summary>
+    public event EventHandler<(BrowserTab Tab, DownloadApproval Approval)>? DownloadApprovalRequested;
 
     /// <summary>New versions from GitHub Releases (see UpdateService).</summary>
     public UpdateService Updates { get; }
@@ -145,16 +161,43 @@ public sealed class BrowserShell
     }
 
 
-    public BrowserTab NewTab(string? url = null, bool activate = true)
+    public BrowserTab NewTab(string? url = null, bool activate = true) => NewTabIn(CurrentSpace, url, activate);
+
+    private BrowserTab NewTabIn(Space space, string? url, bool activate)
     {
-        var tab = _engine.CreateTab(url);
+        var tab = _engine.CreateTab(url, isPrivate: space.IsPrivate);
         Wire(tab);
 
         // New tabs go to the top of the list, as in Arc.
-        CurrentSpace.Tabs.Insert(0, tab);
-        if (activate || CurrentSpace.ActiveTab is null) SelectTab(tab);
+        space.Tabs.Insert(0, tab);
+        if (activate || space.ActiveTab is null) SelectTab(tab);
         return tab;
     }
+
+    /// <summary>
+    /// Ctrl+Shift+N: a new tab in the private space, created the first time. Chrome opens an incognito window; here
+    /// it is a space, the app's equivalent of a window.
+    /// </summary>
+    public void OpenPrivateTab()
+    {
+        if (Spaces.FirstOrDefault(s => s.IsPrivate) is { } existing)
+        {
+            SwitchSpace(existing);
+            if (!(CurrentTab is { } current && StartPage.Is(current.Url))) OpenStartPage();
+            return;
+        }
+        var space = new Space(L.T("Private", "Privado")) { IsPrivate = true, Icon = PrivateIcon };
+        Spaces.Add(space);
+        SwitchSpace(space); // empty: opens the start page in it
+    }
+
+    private const string PrivateIcon = ""; // Segoe "InPrivate"
+
+    // A link a private tab opens in a new tab stays private, even when another space is in view.
+    private BrowserTab NewTabFrom(BrowserTab source, string url) =>
+        source.IsPrivate != CurrentSpace.IsPrivate && Spaces.FirstOrDefault(s => s.IsPrivate == source.IsPrivate) is { } space
+            ? NewTabIn(space, url, activate: true)
+            : NewTab(url);
 
     /// <summary>The start page (beauty://newtab). Opens when no tab is left, instead of loading a search engine.</summary>
     public BrowserTab OpenStartPage() => NewTab(StartPage.Url);
@@ -196,12 +239,12 @@ public sealed class BrowserShell
 
 
     private const int MaxClosedTabs = 25;
-    private readonly List<(string Url, Space Space)> _closedTabs = [];
+    private readonly List<(string Url, Space Space, (List<string> Urls, int Index) History)> _closedTabs = [];
 
-    private void RememberClosed(string url, Space space)
+    private void RememberClosed(string url, Space space, (List<string> Urls, int Index) history)
     {
         if (string.IsNullOrEmpty(url)) return;
-        _closedTabs.Add((url, space));
+        _closedTabs.Add((url, space, history));
         if (_closedTabs.Count > MaxClosedTabs) _closedTabs.RemoveAt(0);
     }
 
@@ -209,7 +252,7 @@ public sealed class BrowserShell
     public void ReopenClosedTab()
     {
         if (_closedTabs.Count == 0) return;
-        var (url, space) = _closedTabs[^1];
+        var (url, space, history) = _closedTabs[^1];
         _closedTabs.RemoveAt(_closedTabs.Count - 1);
 
         if (Spaces.Contains(space) && space != CurrentSpace)
@@ -225,11 +268,18 @@ public sealed class BrowserShell
         }
         else
         {
-            NewTab(url);
+            NewTab(url).SetRestoredHistory(history.Urls, history.Index); // back/forward come back too, as in Chrome
         }
     }
 
-    public void CloseTab(BrowserTab tab)
+    /// <summary>
+    /// Closes a tab the way Chrome does: the page may first ask "Leave site?" (beforeunload). The tab is removed once
+    /// it lets go (see <see cref="TabCloseRequested"/>); if the user stays, it stays.
+    /// </summary>
+    public void CloseTab(BrowserTab tab) => tab.RequestClose();
+
+    /// <summary>Removes a tab right away, without asking the page.</summary>
+    public void RemoveTab(BrowserTab tab)
     {
         if (IsFavoriteTab(tab))
         {
@@ -242,11 +292,15 @@ public sealed class BrowserShell
 
         var index = space.Tabs.IndexOf(tab);
         var wasActive = space.ActiveTab == tab;
-        if (!StartPage.Is(tab.Url)) RememberClosed(tab.Url, space);
+        if (!StartPage.Is(tab.Url) && !space.IsPrivate) RememberClosed(tab.Url, space, tab.GetHistory());
         space.Tabs.RemoveAt(index);
         if (wasActive) space.ActiveTab = null;
 
-        if (space.Tabs.Count == 0)
+        if (space.Tabs.Count == 0 && space.IsPrivate)
+        {
+            RemoveSpace(space); // like closing the last incognito window
+        }
+        else if (space.Tabs.Count == 0)
         {
             if (space == CurrentSpace) OpenStartPage();
         }
@@ -336,6 +390,7 @@ public sealed class BrowserShell
         space.Tabs.Clear();
         space.ActiveTab = null;
         Spaces.Remove(space);
+        if (space.IsPrivate) BrowserEngine.ForgetPrivateData();
         RefreshNowPlaying();
     }
 
@@ -354,9 +409,9 @@ public sealed class BrowserShell
     public event EventHandler<(BrowserTab From, string Url)>? PeekRequested;
 
     /// <summary>The Peek tab. It belongs to no space until it is expanded.</summary>
-    public BrowserTab CreatePeekTab(string url)
+    public BrowserTab CreatePeekTab(string url, bool isPrivate = false)
     {
-        var tab = _engine.CreateTab(url);
+        var tab = _engine.CreateTab(url, isPrivate: isPrivate);
         Wire(tab);
         return tab;
     }
@@ -488,7 +543,15 @@ public sealed class BrowserShell
         public string Name { get; set; } = "";
         public string? Icon { get; set; }
         public List<string> Tabs { get; set; } = [];
+        /// <summary>Each tab's back/forward list, in the same order as Tabs (missing in older sessions).</summary>
+        public List<TabHistoryData>? History { get; set; }
         public int Active { get; set; }
+    }
+
+    public sealed class TabHistoryData
+    {
+        public List<string> Urls { get; set; } = [];
+        public int Index { get; set; }
     }
 
     /// <summary>Reopens last session's spaces and tabs. Returns false when nothing was saved.</summary>
@@ -504,9 +567,12 @@ public sealed class BrowserShell
             var space = new Space(string.IsNullOrWhiteSpace(saved.Name) ? $"Space {Spaces.Count + 1}" : saved.Name, saved.Icon);
             // Tabs load the first time they are shown, as in Chrome: until then they show the title and icon history
             // remembers, without starting a page (or its audio) for each one.
-            foreach (var url in saved.Tabs.Where(u => !string.IsNullOrWhiteSpace(u)))
+            for (var i = 0; i < saved.Tabs.Count; i++)
             {
+                var url = saved.Tabs[i];
+                if (string.IsNullOrWhiteSpace(url)) continue;
                 var tab = _engine.CreateTab(url, TabCreation.WhenShown);
+                if (saved.History?.ElementAtOrDefault(i) is { } history) tab.SetRestoredHistory(history.Urls, history.Index);
                 if (History.Lookup(url) is { } entry) tab.SetPlaceholder(entry.Title, entry.FaviconUrl);
                 Wire(tab);
                 space.Tabs.Add(tab);
@@ -535,14 +601,16 @@ public sealed class BrowserShell
     private void SaveSession()
     {
         _sessionTimer.Stop();
+        var saved = Spaces.Where(s => !s.IsPrivate).ToList(); // the private space is never written down
         JsonStore.Save(SessionFile, new SessionData
         {
-            CurrentSpace = Math.Max(0, Spaces.IndexOf(CurrentSpace)),
-            Spaces = Spaces.Select(space => new SpaceData
+            CurrentSpace = Math.Max(0, saved.IndexOf(CurrentSpace)),
+            Spaces = saved.Select(space => new SpaceData
             {
                 Name = space.Name,
                 Icon = space.Icon,
                 Tabs = space.Tabs.Select(t => t.Url).ToList(),
+                History = space.Tabs.Select(t => t.GetHistory()).Select(h => new TabHistoryData { Urls = h.Urls, Index = h.Index }).ToList(),
                 Active = space.ActiveTab is null ? 0 : Math.Max(0, space.Tabs.IndexOf(space.ActiveTab)),
             }).ToList(),
         });
@@ -555,12 +623,15 @@ public sealed class BrowserShell
     /// </summary>
     public event EventHandler<(BrowserTab From, BrowserTab Popup)>? PopupOpened;
 
-    /// <summary>A page closed itself (window.close()). Without a listener its tab is closed.</summary>
+    /// <summary>
+    /// A tab may close: its page closed itself (window.close()) or let a <see cref="CloseTab"/> through. Without a
+    /// listener the tab is removed.
+    /// </summary>
     public event EventHandler<BrowserTab>? TabCloseRequested;
 
     private void Wire(BrowserTab tab)
     {
-        tab.NewTabRequested += (_, url) => NewTab(url);
+        tab.NewTabRequested += (_, url) => NewTabFrom(tab, url);
         tab.PopupOpened += (_, popup) =>
         {
             Wire(popup);
@@ -575,30 +646,39 @@ public sealed class BrowserShell
         tab.CloseRequested += (_, _) =>
         {
             if (TabCloseRequested is { } handler) handler(this, tab);
-            else CloseTab(tab);
+            else RemoveTab(tab);
         };
         tab.PeekRequested += (_, url) =>
         {
             if (PeekRequested is { } peek) peek(this, (tab, url));
-            else NewTab(url);
+            else NewTabFrom(tab, url);
         };
         tab.FullscreenChanged += (_, fullscreen) => { if (tab == CurrentTab) FullscreenChanged?.Invoke(this, fullscreen); };
         tab.DownloadStarted += (_, download) => DownloadStarted?.Invoke(this, Downloads.Start(download));
         tab.DownloadUpdated += (_, download) => Downloads.Update(download);
+        tab.PopupBlocked += (_, blocked) => PopupBlocked?.Invoke(this, (tab, blocked.Origin, blocked.Url));
+        tab.DownloadApprovalRequested += (_, approval) =>
+        {
+            if (DownloadApprovalRequested is { } handler) handler(this, (tab, approval));
+            else approval.Decide(true);
+        };
         tab.InspectRequested += (_, point) => OpenDevTools(tab, point.X, point.Y);
+        tab.LoginFieldChanged += (_, field) => LoginFieldChanged?.Invoke(this, (tab, field));
+        tab.LoginSubmitted += (_, login) => LoginSubmitted?.Invoke(this, (tab, login));
         tab.PropertyChanged += (_, e) =>
         {
             switch (e.PropertyName)
             {
                 case nameof(BrowserTab.Url):
+                    if (tab.IsPrivate) break; // private browsing leaves no history
                     History.Visit(tab.Url);
                     ScheduleSessionSave();
                     break;
                 case nameof(BrowserTab.Title):
-                    History.Describe(tab.Url, tab.Title, tab.FaviconUrl);
+                    if (!tab.IsPrivate) History.Describe(tab.Url, tab.Title, tab.FaviconUrl);
                     break;
                 case nameof(BrowserTab.FaviconUrl):
-                    History.Describe(tab.Url, tab.Title, tab.FaviconUrl);
+                    if (!tab.IsPrivate) History.Describe(tab.Url, tab.Title, tab.FaviconUrl);
                     if (_favoriteTabs.FirstOrDefault(p => p.Value == tab).Key is { } site) Favorites.UpdateIcon(site, tab.FaviconUrl);
                     break;
                 case nameof(BrowserTab.Media):
