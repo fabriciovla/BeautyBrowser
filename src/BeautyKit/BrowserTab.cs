@@ -226,21 +226,7 @@ public sealed partial class BrowserTab : INotifyPropertyChanged, IDisposable
     public static string DefaultHomePage { get; set; } = "https://www.google.com";
 
     public static string InputToUrl(string input)
-    {
-        input = input.Trim();
-
-        if (input.StartsWith("localhost", StringComparison.OrdinalIgnoreCase))
-            return "http://" + input;
-
-        if (Uri.TryCreate(input, UriKind.Absolute, out var uri) &&
-            uri.Scheme is "http" or "https" or "file" or "about" or "chrome" or "view-source" or StartPage.Scheme)
-            return uri.ToString();
-
-        if (!input.Contains(' ') && input.Contains('.'))
-            return "https://" + input;
-
-        return string.Format(SearchUrlTemplate, Uri.EscapeDataString(input));
-    }
+        => AddressInput.ToUrl(input, SearchUrlTemplate, Blocking.ContentBlocker.Psl, StartPage.Scheme);
 
 
     internal WriteableBitmap? Frame { get; private set; }

@@ -3,4 +3,7 @@
     <Project Path="src/BeautyBrowser/BeautyBrowser.csproj" />
     <Project Path="src/BeautyKit/BeautyKit.csproj" />
   </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/BeautyKit.Tests/BeautyKit.Tests.csproj" />
+  </Folder>
 </Solution>
