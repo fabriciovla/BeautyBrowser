@@ -1,4 +1,4 @@
-using System.ComponentModel;
+﻿using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Runtime.InteropServices.WindowsRuntime;
@@ -19,7 +19,7 @@ namespace BeautyKit;
 /// </summary>
 public sealed partial class BrowserTab : INotifyPropertyChanged, IDisposable
 {
-    private readonly ChromiumWebBrowser _browser;
+    private readonly TabBrowser _browser;
     private readonly DispatcherQueue _ui;
     private readonly nint _hostWindow;
     private bool _disposed;
@@ -78,7 +78,7 @@ public sealed partial class BrowserTab : INotifyPropertyChanged, IDisposable
         browserSettings.BackgroundColor = 0xFFFFFFFF; // opaque (see BrowserEngine)
         _zoomLevel = ZoomLevelFor(DefaultZoomPercent);
 
-        _browser = new ChromiumWebBrowser(url, browserSettings, privateContext, automaticallyCreateBrowser: false)
+        _browser = new TabBrowser(url, browserSettings, privateContext, OnPageMessage)
         {
             DisplayHandler = new TabDisplayHandler(this),
             LifeSpanHandler = new TabLifeSpanHandler(this),
@@ -89,7 +89,6 @@ public sealed partial class BrowserTab : INotifyPropertyChanged, IDisposable
             KeyboardHandler = new TabKeyboardHandler(this),
             PermissionHandler = new TabPermissionHandler(this),        };
         _browser.RenderHandler = new TabRenderHandler(this);
-        _browser.JavascriptMessageReceived += OnJavascriptMessage; // playing media (BrowserTab.Media)
 
         _browser.TitleChanged += (_, e) => OnUi(() => Title = ReadableTitle(e.Title, Url));
         _browser.AddressChanged += (_, e) => OnUi(() => Url = e.Address);
