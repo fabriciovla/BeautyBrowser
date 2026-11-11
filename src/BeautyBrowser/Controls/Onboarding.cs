@@ -1003,7 +1003,7 @@ public sealed partial class Onboarding : UserControl
     private static bool SameHost(string a, string b)
     {
         static string Host(string url) =>
-            Uri.TryCreate(url, UriKind.Absolute, out var uri) ? uri.Host.Replace("www.", "").ToLowerInvariant() : url;
+            Uri.TryCreate(url, UriKind.Absolute, out var uri) ? HostName.WithoutWww(uri.Host).ToLowerInvariant() : url;
         return Host(a) == Host(b);
     }
 }

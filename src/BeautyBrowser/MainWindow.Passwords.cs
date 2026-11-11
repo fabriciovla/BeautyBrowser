@@ -140,7 +140,7 @@ public sealed partial class MainWindow
         if (tab != _shell.CurrentTab && tab != _peekTab) return;
         if (_shell.Passwords.IsNever(login.Origin) || !_shell.Passwords.IsNew(login.Origin, login.User, login.Password)) return;
         _loginToSave = login;
-        var site = Uri.TryCreate(login.Origin, UriKind.Absolute, out var uri) ? uri.Host.Replace("www.", "") : login.Origin;
+        var site = Uri.TryCreate(login.Origin, UriKind.Absolute, out var uri) ? HostName.WithoutWww(uri.Host) : login.Origin;
         var updating = _shell.Passwords.For(login.Origin).Any(l => l.User == login.User);
         SaveLoginText.Text = updating
             ? L.T($"Update the saved password for {login.User} on {site}?", $"¿Actualizar la contraseña guardada de {login.User} en {site}?")

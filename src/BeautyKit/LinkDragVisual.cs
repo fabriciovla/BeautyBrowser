@@ -53,7 +53,7 @@ public sealed class LinkDragVisual
             if (await Task.WhenAny(load, Task.Delay(400)) == load) icon = await load;
         }
 
-        var host_ = link.Host.StartsWith("www.", StringComparison.OrdinalIgnoreCase) ? link.Host[4..] : link.Host;
+        var host_ = HostName.WithoutWww(link.Host);
         var address = new TextBlock
         {
             Text = host_ + link.PathAndQuery.TrimEnd('/'),
