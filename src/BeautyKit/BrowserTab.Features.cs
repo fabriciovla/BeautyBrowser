@@ -240,12 +240,25 @@ public sealed partial class BrowserTab
         private readonly System.Collections.Concurrent.ConcurrentDictionary<int, string> _paths = [];
         private readonly System.Collections.Concurrent.ConcurrentDictionary<int, bool> _approved = [];
 
+        // Downloads not finished yet, including those waiting for the user's answer: the tab keeps its browser alive
+        // until they are done (see BrowserTab.Dispose).
+        private readonly System.Collections.Concurrent.ConcurrentDictionary<int, bool> _active = [];
+
+        public bool HasActive => !_active.IsEmpty;
+
+        private void Finished(int id)
+        {
+            if (_active.TryRemove(id, out _) && _active.IsEmpty) tab.OnDownloadsFinished();
+        }
+
         public bool CanDownload(IWebBrowser chromiumWebBrowser, IBrowser browser, string url, string requestMethod) => true;
 
         // Downloads go straight to the Downloads folder without a dialog; existing names get a number.
         public bool OnBeforeDownload(IWebBrowser chromiumWebBrowser, IBrowser browser, DownloadItem downloadItem,
             IBeforeDownloadCallback callback)
         {
+            _active[downloadItem.Id] = true;
+
             // A file that can run code waits for the user: keep it and this method runs again, or discard it.
             if (DangerousFile.IsDangerous(downloadItem.SuggestedFileName) && !_approved.TryRemove(downloadItem.Id, out _) &&
                 tab.AskAboutDownload(downloadItem.SuggestedFileName, downloadItem.Url ?? "", keep =>
@@ -258,6 +271,7 @@ public sealed partial class BrowserTab
                     else
                     {
                         callback.Dispose(); // not continuing cancels the download
+                        Finished(downloadItem.Id);
                     }
                 }))
                 return true;
@@ -287,17 +301,20 @@ public sealed partial class BrowserTab
                 path = _paths[downloadItem.Id] = downloadItem.FullPath;
             }
             var info = ToInfo(downloadItem, path);
-            if (info.IsComplete || info.IsCancelled)
+            var finished = info.IsComplete || info.IsCancelled;
+            if (finished)
             {
                 _paths.TryRemove(downloadItem.Id, out _);
                 Release(path);
             }
             tab.OnUi(() => tab.DownloadUpdated?.Invoke(tab, info));
+            if (finished) Finished(downloadItem.Id);
         }
 
         private static BrowserDownload ToInfo(DownloadItem item, string path) => new(
             item.Id, item.Url ?? "", Path.GetFileName(path), path,
-            item.TotalBytes, item.ReceivedBytes, item.IsComplete, item.IsCancelled);
+            // An interrupted download (network or disk error) is over too: Chromium does not resume it by itself.
+            item.TotalBytes, item.ReceivedBytes, item.IsComplete, item.IsCancelled || item.IsInterrupted);
 
         // Paths handed out to downloads still in progress, across all tabs: the file may not exist on disk yet.
         private static readonly HashSet<string> Reserved = new(StringComparer.OrdinalIgnoreCase);
