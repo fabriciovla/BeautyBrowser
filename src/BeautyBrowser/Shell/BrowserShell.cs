@@ -238,7 +238,14 @@ public sealed class BrowserShell
         }
     }
 
-    public void CloseTab(BrowserTab tab)
+    /// <summary>
+    /// Closes a tab the way Chrome does: the page may first ask "Leave site?" (beforeunload). The tab is removed once
+    /// it lets go (see <see cref="TabCloseRequested"/>); if the user stays, it stays.
+    /// </summary>
+    public void CloseTab(BrowserTab tab) => tab.RequestClose();
+
+    /// <summary>Removes a tab right away, without asking the page.</summary>
+    public void RemoveTab(BrowserTab tab)
     {
         if (IsFavoriteTab(tab))
         {
@@ -564,7 +571,10 @@ public sealed class BrowserShell
     /// </summary>
     public event EventHandler<(BrowserTab From, BrowserTab Popup)>? PopupOpened;
 
-    /// <summary>A page closed itself (window.close()). Without a listener its tab is closed.</summary>
+    /// <summary>
+    /// A tab may close: its page closed itself (window.close()) or let a <see cref="CloseTab"/> through. Without a
+    /// listener the tab is removed.
+    /// </summary>
     public event EventHandler<BrowserTab>? TabCloseRequested;
 
     private void Wire(BrowserTab tab)
@@ -584,7 +594,7 @@ public sealed class BrowserShell
         tab.CloseRequested += (_, _) =>
         {
             if (TabCloseRequested is { } handler) handler(this, tab);
-            else CloseTab(tab);
+            else RemoveTab(tab);
         };
         tab.PeekRequested += (_, url) =>
         {
