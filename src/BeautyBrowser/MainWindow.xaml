@@ -54,6 +54,7 @@
             <KeyboardAccelerator Key="Home" Invoked="Home_Invoked" Modifiers="Menu" />
             <KeyboardAccelerator Key="D" Invoked="FocusAddress_Invoked" Modifiers="Menu" />
             <KeyboardAccelerator Key="F6" Invoked="FocusAddress_Invoked" />
+            <KeyboardAccelerator Key="Delete" Invoked="ClearData_Invoked" Modifiers="Control,Shift" />
             <KeyboardAccelerator Key="K" Invoked="Search_Invoked" Modifiers="Control" />
             <KeyboardAccelerator Key="E" Invoked="Search_Invoked" Modifiers="Control" />
             <KeyboardAccelerator Key="F11" Invoked="Fullscreen_Invoked" />
@@ -178,6 +179,62 @@
                         x:Name="PermissionAllow"
                         Click="PermissionAllow_Click"
                         Content="{local:T En='Allow', Es='Permitir'}"
+                        Style="{StaticResource BeautyChipButton}" />
+                </StackPanel>
+            </StackPanel>
+        </Border>
+
+        <!-- A notice with two choices (a blocked popup, a dangerous download): a card at the bottom left of the page. -->
+        <Border
+            x:Name="NoticeBar"
+            MaxWidth="420"
+            Margin="28,0,0,20"
+            Padding="14,12,12,12"
+            HorizontalAlignment="Left"
+            VerticalAlignment="Bottom"
+            Background="{StaticResource BeautyCardBrush}"
+            BorderBrush="{StaticResource BeautyPanelBorderBrush}"
+            BorderThickness="1"
+            CornerRadius="{StaticResource BeautyItemCornerRadius}"
+            Visibility="Collapsed">
+            <Border.Resources>
+                <ResourceDictionary Source="ms-appx:///Theme/BeautySurface.xaml" />
+            </Border.Resources>
+            <StackPanel Spacing="10">
+                <Grid ColumnSpacing="10">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <FontIcon
+                        x:Name="NoticeIcon"
+                        Margin="0,2,0,0"
+                        VerticalAlignment="Top"
+                        FontSize="14"
+                        Foreground="{StaticResource BeautyTextSecondaryBrush}"
+                        Glyph="&#xE7BA;" />
+                    <StackPanel Grid.Column="1" Spacing="2">
+                        <TextBlock
+                            x:Name="NoticeText"
+                            FontSize="13"
+                            Foreground="{StaticResource BeautyTextBrush}"
+                            TextWrapping="Wrap" />
+                        <TextBlock
+                            x:Name="NoticeDetail"
+                            FontSize="12"
+                            Foreground="{StaticResource BeautyTextSecondaryBrush}"
+                            TextWrapping="Wrap"
+                            Visibility="Collapsed" />
+                    </StackPanel>
+                </Grid>
+                <StackPanel HorizontalAlignment="Right" Orientation="Horizontal" Spacing="6">
+                    <Button
+                        x:Name="NoticeSecondary"
+                        Click="NoticeSecondary_Click"
+                        Style="{StaticResource BeautyChipButton}" />
+                    <Button
+                        x:Name="NoticePrimary"
+                        Click="NoticePrimary_Click"
                         Style="{StaticResource BeautyChipButton}" />
                 </StackPanel>
             </StackPanel>
