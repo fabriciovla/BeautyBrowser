@@ -40,6 +40,7 @@
             <KeyboardAccelerator Key="J" Invoked="Downloads_Invoked" Modifiers="Control" />
             <KeyboardAccelerator Key="S" Invoked="ToggleDock_Invoked" Modifiers="Control" />
             <KeyboardAccelerator Key="T" Invoked="ReopenTab_Invoked" Modifiers="Control,Shift" />
+            <KeyboardAccelerator Key="N" Invoked="PrivateTab_Invoked" Modifiers="Control,Shift" />
             <KeyboardAccelerator Key="D" Invoked="Favorite_Invoked" Modifiers="Control" />
             <KeyboardAccelerator Key="F" Invoked="Find_Invoked" Modifiers="Control" />
             <KeyboardAccelerator Key="G" Invoked="FindNext_Invoked" Modifiers="Control" />

@@ -11,6 +11,12 @@ public sealed class Space(string name, string? icon = null)
     /// <summary>A Segoe Fluent Icons glyph, never an emoji.</summary>
     public string Icon { get; set; } = SpaceIcons.IsValid(icon) ? icon! : SpaceIcons.Default;
 
+    /// <summary>
+    /// The private space (Ctrl+Shift+N): its tabs use an in-memory profile, it is never saved, and it goes away with
+    /// its last tab, taking cookies and storage with it.
+    /// </summary>
+    public bool IsPrivate { get; init; }
+
     public ObservableCollection<BrowserTab> Tabs { get; } = [];
     public BrowserTab? ActiveTab { get; set; }
 }

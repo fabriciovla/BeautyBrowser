@@ -154,16 +154,43 @@ public sealed class BrowserShell
     }
 
 
-    public BrowserTab NewTab(string? url = null, bool activate = true)
+    public BrowserTab NewTab(string? url = null, bool activate = true) => NewTabIn(CurrentSpace, url, activate);
+
+    private BrowserTab NewTabIn(Space space, string? url, bool activate)
     {
-        var tab = _engine.CreateTab(url);
+        var tab = _engine.CreateTab(url, isPrivate: space.IsPrivate);
         Wire(tab);
 
         // New tabs go to the top of the list, as in Arc.
-        CurrentSpace.Tabs.Insert(0, tab);
-        if (activate || CurrentSpace.ActiveTab is null) SelectTab(tab);
+        space.Tabs.Insert(0, tab);
+        if (activate || space.ActiveTab is null) SelectTab(tab);
         return tab;
     }
+
+    /// <summary>
+    /// Ctrl+Shift+N: a new tab in the private space, created the first time. Chrome opens an incognito window; here
+    /// it is a space, the app's equivalent of a window.
+    /// </summary>
+    public void OpenPrivateTab()
+    {
+        if (Spaces.FirstOrDefault(s => s.IsPrivate) is { } existing)
+        {
+            SwitchSpace(existing);
+            if (!(CurrentTab is { } current && StartPage.Is(current.Url))) OpenStartPage();
+            return;
+        }
+        var space = new Space(L.T("Private", "Privado")) { IsPrivate = true, Icon = PrivateIcon };
+        Spaces.Add(space);
+        SwitchSpace(space); // empty: opens the start page in it
+    }
+
+    private const string PrivateIcon = ""; // Segoe "InPrivate"
+
+    // A link a private tab opens in a new tab stays private, even when another space is in view.
+    private BrowserTab NewTabFrom(BrowserTab source, string url) =>
+        source.IsPrivate != CurrentSpace.IsPrivate && Spaces.FirstOrDefault(s => s.IsPrivate == source.IsPrivate) is { } space
+            ? NewTabIn(space, url, activate: true)
+            : NewTab(url);
 
     /// <summary>The start page (beauty://newtab). Opens when no tab is left, instead of loading a search engine.</summary>
     public BrowserTab OpenStartPage() => NewTab(StartPage.Url);
@@ -258,11 +285,15 @@ public sealed class BrowserShell
 
         var index = space.Tabs.IndexOf(tab);
         var wasActive = space.ActiveTab == tab;
-        if (!StartPage.Is(tab.Url)) RememberClosed(tab.Url, space, tab.GetHistory());
+        if (!StartPage.Is(tab.Url) && !space.IsPrivate) RememberClosed(tab.Url, space, tab.GetHistory());
         space.Tabs.RemoveAt(index);
         if (wasActive) space.ActiveTab = null;
 
-        if (space.Tabs.Count == 0)
+        if (space.Tabs.Count == 0 && space.IsPrivate)
+        {
+            RemoveSpace(space); // like closing the last incognito window
+        }
+        else if (space.Tabs.Count == 0)
         {
             if (space == CurrentSpace) OpenStartPage();
         }
@@ -352,6 +383,7 @@ public sealed class BrowserShell
         space.Tabs.Clear();
         space.ActiveTab = null;
         Spaces.Remove(space);
+        if (space.IsPrivate) BrowserEngine.ForgetPrivateData();
         RefreshNowPlaying();
     }
 
@@ -370,9 +402,9 @@ public sealed class BrowserShell
     public event EventHandler<(BrowserTab From, string Url)>? PeekRequested;
 
     /// <summary>The Peek tab. It belongs to no space until it is expanded.</summary>
-    public BrowserTab CreatePeekTab(string url)
+    public BrowserTab CreatePeekTab(string url, bool isPrivate = false)
     {
-        var tab = _engine.CreateTab(url);
+        var tab = _engine.CreateTab(url, isPrivate: isPrivate);
         Wire(tab);
         return tab;
     }
@@ -562,10 +594,11 @@ public sealed class BrowserShell
     private void SaveSession()
     {
         _sessionTimer.Stop();
+        var saved = Spaces.Where(s => !s.IsPrivate).ToList(); // the private space is never written down
         JsonStore.Save(SessionFile, new SessionData
         {
-            CurrentSpace = Math.Max(0, Spaces.IndexOf(CurrentSpace)),
-            Spaces = Spaces.Select(space => new SpaceData
+            CurrentSpace = Math.Max(0, saved.IndexOf(CurrentSpace)),
+            Spaces = saved.Select(space => new SpaceData
             {
                 Name = space.Name,
                 Icon = space.Icon,
@@ -591,7 +624,7 @@ public sealed class BrowserShell
 
     private void Wire(BrowserTab tab)
     {
-        tab.NewTabRequested += (_, url) => NewTab(url);
+        tab.NewTabRequested += (_, url) => NewTabFrom(tab, url);
         tab.PopupOpened += (_, popup) =>
         {
             Wire(popup);
@@ -611,7 +644,7 @@ public sealed class BrowserShell
         tab.PeekRequested += (_, url) =>
         {
             if (PeekRequested is { } peek) peek(this, (tab, url));
-            else NewTab(url);
+            else NewTabFrom(tab, url);
         };
         tab.FullscreenChanged += (_, fullscreen) => { if (tab == CurrentTab) FullscreenChanged?.Invoke(this, fullscreen); };
         tab.DownloadStarted += (_, download) => DownloadStarted?.Invoke(this, Downloads.Start(download));
@@ -628,14 +661,15 @@ public sealed class BrowserShell
             switch (e.PropertyName)
             {
                 case nameof(BrowserTab.Url):
+                    if (tab.IsPrivate) break; // private browsing leaves no history
                     History.Visit(tab.Url);
                     ScheduleSessionSave();
                     break;
                 case nameof(BrowserTab.Title):
-                    History.Describe(tab.Url, tab.Title, tab.FaviconUrl);
+                    if (!tab.IsPrivate) History.Describe(tab.Url, tab.Title, tab.FaviconUrl);
                     break;
                 case nameof(BrowserTab.FaviconUrl):
-                    History.Describe(tab.Url, tab.Title, tab.FaviconUrl);
+                    if (!tab.IsPrivate) History.Describe(tab.Url, tab.Title, tab.FaviconUrl);
                     if (_favoriteTabs.FirstOrDefault(p => p.Value == tab).Key is { } site) Favorites.UpdateIcon(site, tab.FaviconUrl);
                     break;
                 case nameof(BrowserTab.Media):
