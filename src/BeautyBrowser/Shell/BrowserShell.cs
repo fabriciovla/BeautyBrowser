@@ -75,6 +75,9 @@ public sealed class BrowserShell
     /// <summary>A dangerous file is about to download; without a listener it downloads.</summary>
     public event EventHandler<(BrowserTab Tab, DownloadApproval Approval)>? DownloadApprovalRequested;
 
+    /// <summary>A page followed a link to an app outside the browser (mailto:, zoommtg:…).</summary>
+    public event EventHandler<(BrowserTab Tab, ExternalAppRequest Request)>? ExternalAppRequested;
+
     /// <summary>New versions from GitHub Releases (see UpdateService).</summary>
     public UpdateService Updates { get; }
 
@@ -652,6 +655,7 @@ public sealed class BrowserShell
         tab.DownloadUpdated += (_, download) => Downloads.Update(download);
         tab.CrashChanged += (_, crashed) => TabCrashChanged?.Invoke(this, (tab, crashed));
         tab.PopupBlocked += (_, blocked) => PopupBlocked?.Invoke(this, (tab, blocked.Origin, blocked.Url));
+        tab.ExternalAppRequested += (_, request) => ExternalAppRequested?.Invoke(this, (tab, request));
         tab.DownloadApprovalRequested += (_, approval) =>
         {
             if (DownloadApprovalRequested is { } handler) handler(this, (tab, approval));
