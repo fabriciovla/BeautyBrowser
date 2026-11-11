@@ -142,6 +142,7 @@ public sealed partial class Sidebar : UserControl
         SpaceIcon.Glyph = _shell.CurrentSpace.Icon;
         _indicatorSnapNext = true; // another space: the card appears in place without traveling
         TabList.ItemsSource = _shell.CurrentSpace.Tabs;
+        WatchTabMotion(_shell.CurrentSpace.Tabs);
         RefreshDots();
         RefreshCurrentTab();
     }
@@ -161,9 +162,14 @@ public sealed partial class Sidebar : UserControl
         if (_watchedTab is not null) _watchedTab.PropertyChanged += WatchedTab_PropertyChanged;
         RefreshNavigation();
         RefreshActiveFavorite();
+        RefreshZoom();
     }
 
-    private void WatchedTab_PropertyChanged(object? sender, PropertyChangedEventArgs e) => RefreshNavigation();
+    private void WatchedTab_PropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(BrowserTab.ZoomPercent)) RefreshZoom();
+        else RefreshNavigation();
+    }
 
     private void RefreshNavigation()
     {
@@ -275,7 +281,13 @@ public sealed partial class Sidebar : UserControl
     private void ZoomIn_Click(object sender, RoutedEventArgs e) { _shell?.CurrentTab?.ZoomIn(); RefreshZoom(); }
     private void ZoomOut_Click(object sender, RoutedEventArgs e) { _shell?.CurrentTab?.ZoomOut(); RefreshZoom(); }
     private void ZoomReset_Click(object sender, RoutedEventArgs e) { _shell?.CurrentTab?.ResetZoom(); RefreshZoom(); }
-    private void RefreshZoom() => ZoomText.Text = $"{_shell?.CurrentTab?.ZoomPercent ?? 100} %";
+    private void RefreshZoom()
+    {
+        var percent = _shell?.CurrentTab?.ZoomPercent ?? BrowserTab.DefaultZoomPercent;
+        ZoomText.Text = $"{percent} %";
+        ZoomBadgeText.Text = $"{percent} %";
+        ZoomBadge.Visibility = percent == BrowserTab.DefaultZoomPercent ? Visibility.Collapsed : Visibility.Visible;
+    }
 
 
     private const double FavoriteHeight = 44;
