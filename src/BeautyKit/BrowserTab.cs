@@ -556,7 +556,16 @@ public sealed partial class BrowserTab : INotifyPropertyChanged, IDisposable
         {
             newBrowser = null;
             // Popups the page opens without a user gesture are blocked when the setting is on.
-            if (BlockPopups && !userGesture) return true;
+            if (BlockPopups && !userGesture)
+            {
+                // Unless the user chose to always allow them for this site; otherwise the app can offer that.
+                var origin = OriginOf(browser?.MainFrame?.Url);
+                if (!ArePopupsAllowedFrom(origin))
+                {
+                    tab.ReportBlockedPopup(origin, targetUrl);
+                    return true;
+                }
+            }
             // Ads that open "on your click" (popunders on streaming sites) are closed by the blocker.
             if (Blocking.ContentBlocker.IsAdPopup(targetUrl, frame?.Url ?? browser?.MainFrame?.Url))
             {

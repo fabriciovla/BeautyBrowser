@@ -215,7 +215,9 @@ public sealed partial class BrowserTab
     private sealed class TabDownloadHandler(BrowserTab tab) : IDownloadHandler
     {
         // Paths assigned per download id: CEF sometimes reports FullPath only after some progress.
-        private readonly Dictionary<int, string> _paths = [];
+        // Dangerous files answered "keep" are let through when their callback comes around again.
+        private readonly System.Collections.Concurrent.ConcurrentDictionary<int, string> _paths = [];
+        private readonly System.Collections.Concurrent.ConcurrentDictionary<int, bool> _approved = [];
 
         public bool CanDownload(IWebBrowser chromiumWebBrowser, IBrowser browser, string url, string requestMethod) => true;
 
@@ -223,6 +225,22 @@ public sealed partial class BrowserTab
         public bool OnBeforeDownload(IWebBrowser chromiumWebBrowser, IBrowser browser, DownloadItem downloadItem,
             IBeforeDownloadCallback callback)
         {
+            // A file that can run code waits for the user: keep it and this method runs again, or discard it.
+            if (DangerousFile.IsDangerous(downloadItem.SuggestedFileName) && !_approved.TryRemove(downloadItem.Id, out _) &&
+                tab.AskAboutDownload(downloadItem.SuggestedFileName, downloadItem.Url ?? "", keep =>
+                {
+                    if (keep)
+                    {
+                        _approved[downloadItem.Id] = true;
+                        OnBeforeDownload(chromiumWebBrowser, browser, downloadItem, callback);
+                    }
+                    else
+                    {
+                        callback.Dispose(); // not continuing cancels the download
+                    }
+                }))
+                return true;
+
             Directory.CreateDirectory(DownloadsDirectory);
             var name = string.IsNullOrWhiteSpace(downloadItem.SuggestedFileName) ? "descarga" : downloadItem.SuggestedFileName;
             var path = UniquePath(Path.Combine(DownloadsDirectory, name));
@@ -243,7 +261,7 @@ public sealed partial class BrowserTab
             // If another path was picked in Save As, Chromium reports the real one.
             if (!string.IsNullOrEmpty(downloadItem.FullPath)) path = _paths[downloadItem.Id] = downloadItem.FullPath;
             var info = ToInfo(downloadItem, path);
-            if (info.IsComplete || info.IsCancelled) _paths.Remove(downloadItem.Id);
+            if (info.IsComplete || info.IsCancelled) _paths.TryRemove(downloadItem.Id, out _);
             tab.OnUi(() => tab.DownloadUpdated?.Invoke(tab, info));
         }
 
