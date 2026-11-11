@@ -38,6 +38,9 @@ public static class StartPage
             ResourceHandler.FromString(Html(), Encoding.UTF8, mimeType: "text/html");
     }
 
+    /// <summary>Name of the search engine the user chose in settings ("Google", "DuckDuckGo"…).</summary>
+    public static string SearchEngineName => EngineName(BrowserTab.SearchUrlTemplate);
+
     private static string EngineName(string template) =>
         template.Contains("duckduckgo", StringComparison.OrdinalIgnoreCase) ? "DuckDuckGo"
         : template.Contains("bing.", StringComparison.OrdinalIgnoreCase) ? "Bing"

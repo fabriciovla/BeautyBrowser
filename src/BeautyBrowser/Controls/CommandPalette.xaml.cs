@@ -246,6 +246,21 @@ public sealed partial class CommandPalette : UserControl
     }
 
 
+    private static bool CtrlDown() =>
+        Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(VirtualKey.Control)
+            .HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down);
+
+    /// <summary>
+    /// Ctrl+Enter, as in Chrome: "google" → https://www.google.com. Only a bare name (no scheme, dot, port, path or
+    /// spaces) is completed; null means Enter works as usual.
+    /// </summary>
+    internal static string? CompleteDotCom(string text)
+    {
+        text = text.Trim();
+        if (text.Length == 0 || text.Any(c => !(char.IsLetterOrDigit(c) || c is '-' or '_'))) return null;
+        return "https://www." + text + ".com";
+    }
+
     private void Query_TextChanged(object sender, TextChangedEventArgs e)
     {
         _userMovedSelection = false;
@@ -267,6 +282,10 @@ public sealed partial class CommandPalette : UserControl
                 _userMovedSelection = true;
                 Results.SelectedIndex = (Results.SelectedIndex - 1 + count) % count;
                 Results.ScrollIntoView(Results.SelectedItem);
+                break;
+            case VirtualKey.Enter when CtrlDown() && CompleteDotCom(Query.Text) is { } completed:
+                _shell?.Open(completed, inNewTab: _mode == PaletteMode.NewTab);
+                Close();
                 break;
             case VirtualKey.Enter:
                 Execute(Results.SelectedItem as PaletteResult);
