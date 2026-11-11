@@ -591,9 +591,14 @@ public sealed partial class BrowserTab : INotifyPropertyChanged, IDisposable
 
         // window.close() from the page (a sign-in popup that finished). Closes run through here too when the app
         // disposes the tab; those are not reported back.
+        //
+        // The app removes and disposes the tab in response, which must not happen inside this callback: Chromium is in
+        // the middle of closing the browser and crashed (access violation) when it was destroyed under it, as when
+        // Google's sign-in popup closed itself. So the report always waits for the next turn of the UI loop (this runs
+        // on the UI thread, where OnUi would call it right away).
         protected override bool DoClose(IWebBrowser chromiumWebBrowser, IBrowser browser)
         {
-            if (!tab._disposed) tab.OnUi(() => tab.CloseRequested?.Invoke(tab, EventArgs.Empty));
+            if (!tab._disposed) tab._ui.TryEnqueue(() => { if (!tab._disposed) tab.CloseRequested?.Invoke(tab, EventArgs.Empty); });
             return false;
         }
     }
