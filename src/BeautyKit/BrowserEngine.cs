@@ -160,6 +160,7 @@ public sealed class BrowserEngine : IDisposable
     {
         if (_privateContext is not null) return _privateContext;
         _privateContext = new RequestContext(new RequestContextSettings());
+        StartPage.Register(_privateContext);
         if (_pageLanguages is { } languages) _privateContext.SetPreference("intl.accept_languages", languages, out _);
         if (_fontSizes is { } sizes) ApplyFontSizes(_privateContext, sizes.Default, sizes.Minimum);
         return _privateContext;
