@@ -297,4 +297,97 @@ internal static class PageScripts
           });
         })();
         """;
+
+    /// <summary>
+    /// The password manager's eyes in the page (top document only): reports which login field has focus and where, so
+    /// the app can offer saved accounts, and the user name and password when a login is sent, so it can offer to save
+    /// them. window.__bbPwFill fills the focused form when the user picks an account.
+    /// </summary>
+    public const string Passwords = """
+        (() => {
+          'use strict';
+          if (window.top !== window || window.__bbPwInstalled) return;
+          Object.defineProperty(window, '__bbPwInstalled', { value: true });
+          const post = (m) => { try { const c = window.CefSharp || window.cefSharp; if (c && c.PostMessage) c.PostMessage(Object.assign({ type: 'bb-pw' }, m)); } catch (e) {} };
+          const isInput = (el) => el instanceof HTMLInputElement;
+          const visible = (el) => el.isConnected && !el.disabled && el.getClientRects().length > 0;
+          const isPassword = (el) => isInput(el) && el.type === 'password';
+          const isText = (el) => isInput(el) && /^(text|email|tel)$/.test(el.type);
+          const isUser = (el) => isText(el) && (el.type === 'email' || /username|email/i.test(el.autocomplete || '')
+            || /user|login|mail|account|ident|usuario|correo/i.test((el.name || '') + ' ' + (el.id || '')));
+          const scope = (el) => el.form || (el.closest && el.closest('form')) || document;
+          const passwords = (root) => [...root.querySelectorAll('input[type=password]')].filter(visible);
+          // The user name of a password field: the last text field before it in its form (or a hidden one marked username).
+          const userFor = (pw) => {
+            let found = null;
+            for (const i of scope(pw).querySelectorAll('input')) {
+              if (i === pw) break;
+              if (isText(i) && (visible(i) || /username/i.test(i.autocomplete || ''))) found = i;
+            }
+            return found;
+          };
+          // Sign-ins in two steps (the user name first, the password on the next page) keep the name for the session.
+          let lastUser = '';
+          try { lastUser = sessionStorage.getItem('__bbPwUser') || ''; } catch (e) {}
+          const rememberUser = (v) => { if (!v) return; lastUser = v; try { sessionStorage.setItem('__bbPwUser', v); } catch (e) {} };
+
+          let field = null;
+          let typed = false;
+          const report = (el) => {
+            const r = el.getBoundingClientRect();
+            const s = window.devicePixelRatio || 1;
+            post({ kind: 'focus', x: r.left * s, y: r.bottom * s, width: r.width * s, password: isPassword(el) });
+          };
+          document.addEventListener('focusin', (e) => {
+            const el = e.target;
+            if (!(isPassword(el) || isUser(el))) return;
+            field = el;
+            typed = false;
+            report(el);
+          }, true);
+          document.addEventListener('focusout', (e) => { if (e.target === field) post({ kind: 'blur' }); }, true);
+          document.addEventListener('input', (e) => {
+            if (isUser(e.target)) rememberUser(e.target.value);
+            if (e.target === field && !typed && e.isTrusted) { typed = true; post({ kind: 'blur' }); }
+          }, true);
+          addEventListener('scroll', () => { if (field) post({ kind: 'blur' }); }, { capture: true, passive: true });
+
+          let sent = '';
+          const capture = (pw) => {
+            if (!pw || !pw.value) return;
+            const u = userFor(pw);
+            const user = (u && u.value) || lastUser;
+            if (u && u.value) rememberUser(u.value);
+            const key = user + '\n' + pw.value;
+            if (key === sent) return;
+            sent = key;
+            post({ kind: 'submit', user, password: pw.value });
+          };
+          document.addEventListener('submit', (e) => capture(passwords(e.target)[0]), true);
+          document.addEventListener('keydown', (e) => { if (e.key === 'Enter' && isPassword(e.target)) capture(e.target); }, true);
+          document.addEventListener('click', (e) => {
+            const b = e.target.closest && e.target.closest('button, input[type=submit], [role=button]');
+            if (!b || !e.isTrusted) return;
+            capture(passwords(scope(b))[0] || passwords(document)[0]);
+          }, true);
+
+          Object.defineProperty(window, '__bbPwFill', { value: (user, password) => {
+            const target = field && field.isConnected ? field : (passwords(document)[0] || null);
+            if (!target) return;
+            const pw = isPassword(target) ? target : passwords(scope(target))[0];
+            const u = isUser(target) ? target : (pw ? userFor(pw) : null);
+            const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
+            const set = (el, v) => {
+              if (!el) return;
+              setter.call(el, v);
+              el.dispatchEvent(new Event('input', { bubbles: true }));
+              el.dispatchEvent(new Event('change', { bubbles: true }));
+            };
+            set(u, user);
+            set(pw, password);
+            rememberUser(user);
+            post({ kind: 'blur' });
+          } });
+        })();
+        """;
 }

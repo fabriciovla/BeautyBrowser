@@ -257,6 +257,11 @@
                 </StackPanel>
             </Border>
 
+            <TextBlock Style="{StaticResource BeautySectionLabel}" Text="{app:T En='Saved passwords', Es='Contraseñas guardadas'}" />
+            <Border Padding="2" Background="{StaticResource BeautySubtleFillBrush}" CornerRadius="10">
+                <StackPanel x:Name="PasswordRows" />
+            </Border>
+
             <TextBlock Style="{StaticResource BeautySectionLabel}" Text="{app:T En='Preferred page language', Es='Idioma preferido de las páginas'}" />
             <Border Padding="2" Background="{StaticResource BeautySubtleFillBrush}" CornerRadius="10">
                 <StackPanel x:Name="LanguageRows" />

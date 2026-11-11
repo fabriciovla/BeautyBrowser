@@ -36,6 +36,7 @@ internal sealed class PageInjector : IRenderProcessHandler
                 !url.StartsWith("https://", StringComparison.OrdinalIgnoreCase)) return;
 
             context.Execute(PageScripts.Media, "beautybrowser://media.js", 1, out var mediaError);
+            if (frame.IsMain) context.Execute(PageScripts.Passwords, "beautybrowser://passwords.js", 1, out _);
 
             var code = CodeFor(url, frame.IsMain);
             V8Exception? blockerError = null;

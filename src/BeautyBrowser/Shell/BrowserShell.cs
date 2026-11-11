@@ -65,6 +65,13 @@ public sealed class BrowserShell
     public FavoritesService Favorites { get; } = new();
     public DownloadsService Downloads { get; } = new();
     public SitePermissionsService SitePermissions { get; } = new();
+    public PasswordsService Passwords { get; } = new();
+
+    /// <summary>A login field got focus (the field) or lost it (null), in a tab.</summary>
+    public event EventHandler<(BrowserTab Tab, LoginField? Field)>? LoginFieldChanged;
+
+    /// <summary>A page sent a user name and password.</summary>
+    public event EventHandler<(BrowserTab Tab, SubmittedLogin Login)>? LoginSubmitted;
 
     /// <summary>A page asks for the microphone, camera, location… Without a listener the request is denied.</summary>
     public event EventHandler<(BrowserTab Tab, PermissionRequest Request)>? PermissionRequested;
@@ -586,6 +593,8 @@ public sealed class BrowserShell
         tab.DownloadStarted += (_, download) => DownloadStarted?.Invoke(this, Downloads.Start(download));
         tab.DownloadUpdated += (_, download) => Downloads.Update(download);
         tab.InspectRequested += (_, point) => OpenDevTools(tab, point.X, point.Y);
+        tab.LoginFieldChanged += (_, field) => LoginFieldChanged?.Invoke(this, (tab, field));
+        tab.LoginSubmitted += (_, login) => LoginSubmitted?.Invoke(this, (tab, login));
         tab.PropertyChanged += (_, e) =>
         {
             switch (e.PropertyName)

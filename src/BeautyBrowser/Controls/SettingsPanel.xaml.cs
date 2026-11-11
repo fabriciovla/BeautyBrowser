@@ -36,6 +36,8 @@ public sealed partial class SettingsPanel : UserControl
         ShowUpdateState();
         _hardwareAtStart = shell.Settings.HardwareAcceleration; // what Chromium started with
         Build();
+        shell.Passwords.Changed += (_, _) => BuildPasswordRows();
+        BuildPasswordRows();
         shell.Settings.SettingsChanged += (_, _) =>
         {
             foreach (var refresh in _toggleRefreshers) refresh();
@@ -432,6 +434,55 @@ public sealed partial class SettingsPanel : UserControl
     private void ClearHistory_Click(object sender, RoutedEventArgs e) =>
         ConfirmThen(ref _historyConfirmUntil, ClearHistoryHint, L.T("The pages you visited on this PC", "Las páginas que visitaste en esta PC"), () =>
             _shell?.Settings.ClearBrowsingData(clearHistory: true, clearCookies: false, clearCache: false, _shell.History));
+
+    /// <summary>Saved accounts, one row each with a button to delete it. Passwords are never shown here.</summary>
+    private void BuildPasswordRows()
+    {
+        PasswordRows.Children.Clear();
+        var logins = _shell!.Passwords.All;
+        if (logins.Count == 0)
+        {
+            PasswordRows.Children.Add(new TextBlock
+            {
+                Margin = new Thickness(12, 10, 12, 10),
+                FontSize = 12,
+                Foreground = Brush("BeautyTextSecondaryBrush"),
+                Text = L.T("When you sign in to a site, Beauty Browser offers to save the password here.",
+                    "Cuando inicies sesión en un sitio, Beauty Browser te ofrece guardar la contraseña acá."),
+                TextWrapping = TextWrapping.Wrap,
+            });
+            return;
+        }
+        foreach (var login in logins)
+        {
+            var row = new Grid { ColumnSpacing = 12, Padding = new Thickness(12, 6, 6, 6) };
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            row.ColumnDefinitions.Add(new ColumnDefinition());
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            row.Children.Add(new FontIcon { FontSize = 15, Glyph = "", VerticalAlignment = VerticalAlignment.Center });
+            var text = new StackPanel { Spacing = 1, VerticalAlignment = VerticalAlignment.Center };
+            text.Children.Add(new TextBlock { FontSize = 13, Text = login.Site, TextTrimming = TextTrimming.CharacterEllipsis });
+            text.Children.Add(new TextBlock
+            {
+                FontSize = 11,
+                Foreground = Brush("BeautyTextSecondaryBrush"),
+                Text = login.User.Length > 0 ? login.User : L.T("(no user name)", "(sin usuario)"),
+                TextTrimming = TextTrimming.CharacterEllipsis,
+            });
+            Grid.SetColumn(text, 1);
+            row.Children.Add(text);
+            var delete = new Button
+            {
+                Content = new FontIcon { FontSize = 13, Glyph = "" },
+                Style = (Style)Application.Current.Resources["BeautyIconButton"],
+            };
+            ToolTipService.SetToolTip(delete, L.T("Delete", "Borrar"));
+            delete.Click += (_, _) => _shell.Passwords.Remove(login);
+            Grid.SetColumn(delete, 2);
+            row.Children.Add(delete);
+            PasswordRows.Children.Add(row);
+        }
+    }
 
     private void ClearCookies_Click(object sender, RoutedEventArgs e) =>
         ConfirmThen(ref _cookiesConfirmUntil, ClearCookiesHint, L.T("You will have to sign in to sites again", "Vas a tener que volver a iniciar sesión en los sitios"), () =>

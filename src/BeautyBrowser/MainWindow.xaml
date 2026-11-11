@@ -179,6 +179,76 @@
             </StackPanel>
         </Border>
 
+        <!-- Saved accounts for the login field with focus, right under it (see MainWindow.Passwords). -->
+        <Canvas x:Name="LoginLayer" Canvas.ZIndex="5">
+            <Border
+                x:Name="LoginList"
+                MinWidth="240"
+                Padding="4"
+                Background="{StaticResource BeautyCardBrush}"
+                BorderBrush="{StaticResource BeautyPanelBorderBrush}"
+                BorderThickness="1"
+                CornerRadius="{StaticResource BeautyItemCornerRadius}"
+                Visibility="Collapsed">
+                <Border.Resources>
+                    <ResourceDictionary Source="ms-appx:///Theme/BeautySurface.xaml" />
+                </Border.Resources>
+                <StackPanel x:Name="LoginRows" />
+            </Border>
+        </Canvas>
+
+        <!-- A login was sent: offer to save it, at the top right of the page, like Chrome's key bubble. -->
+        <Border
+            x:Name="SaveLoginBar"
+            MaxWidth="380"
+            Margin="0,20,28,0"
+            Padding="14,12,12,12"
+            HorizontalAlignment="Right"
+            VerticalAlignment="Top"
+            Background="{StaticResource BeautyCardBrush}"
+            BorderBrush="{StaticResource BeautyPanelBorderBrush}"
+            BorderThickness="1"
+            CornerRadius="{StaticResource BeautyItemCornerRadius}"
+            Visibility="Collapsed">
+            <Border.Resources>
+                <ResourceDictionary Source="ms-appx:///Theme/BeautySurface.xaml" />
+            </Border.Resources>
+            <StackPanel Spacing="10">
+                <Grid ColumnSpacing="10">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <FontIcon
+                        Margin="0,2,0,0"
+                        VerticalAlignment="Top"
+                        FontSize="14"
+                        Foreground="{StaticResource BeautyTextSecondaryBrush}"
+                        Glyph="&#xE8D7;" />
+                    <TextBlock
+                        x:Name="SaveLoginText"
+                        Grid.Column="1"
+                        FontSize="13"
+                        Foreground="{StaticResource BeautyTextBrush}"
+                        TextWrapping="Wrap" />
+                </Grid>
+                <StackPanel HorizontalAlignment="Right" Orientation="Horizontal" Spacing="6">
+                    <Button
+                        Click="SaveLoginNever_Click"
+                        Content="{local:T En='Never for this site', Es='Nunca en este sitio'}"
+                        Style="{StaticResource BeautyChipButton}" />
+                    <Button
+                        Click="SaveLoginDismiss_Click"
+                        Content="{local:T En='Not now', Es='Ahora no'}"
+                        Style="{StaticResource BeautyChipButton}" />
+                    <Button
+                        Click="SaveLogin_Click"
+                        Content="{local:T En='Save', Es='Guardar'}"
+                        Style="{StaticResource BeautyChipButton}" />
+                </StackPanel>
+            </StackPanel>
+        </Border>
+
         <!-- A new version was downloaded: a card at the bottom right of the page. It installs when the browser closes. -->
         <Border
             x:Name="UpdateBar"
