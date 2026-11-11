@@ -1,3 +1,5 @@
 <Project>
-  <!-- The installer is a separate WPF app: this empty file stops the root Directory.Build.props (WinUI) from applying. -->
+  <!-- The installer is a separate WPF app: this file stops the root Directory.Build.props (WinUI) from applying. It
+       only takes the shared version. -->
+  <Import Project="$(MSBuildThisFileDirectory)..\version.props" />
 </Project>

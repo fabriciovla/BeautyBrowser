@@ -17,7 +17,9 @@ public static class Installer
     public const string AppName = "BeautyBrowser";        // folders, files and registry keys (do not change)
     public const string DisplayName = "Beauty Browser";  // the display name
     public const string AppExe = "BeautyBrowser.exe";
-    public const string Version = "0.1.1";
+    /// <summary>"0.1.2", from version.props.</summary>
+    public static string Version { get; } =
+        typeof(Installer).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? "0.0.0";
     private const string UninstallKey = @"Software\Microsoft\Windows\CurrentVersion\Uninstall\BeautyBrowser";
 
     // Registered as a browser, the way Chrome does for a per-user install.
@@ -272,6 +274,41 @@ public static class Installer
 
     [System.Runtime.InteropServices.DllImport("shell32.dll")]
     private static extern void SHChangeNotify(int eventId, uint flags, nint item1, nint item2);
+
+    /// <summary>
+    /// The update the browser downloads and runs when it closes: the same steps as the window, without one. The desktop
+    /// shortcut stays as the user left it. Errors go to %LOCALAPPDATA%\BeautyBrowser\update.log.
+    /// </summary>
+    public static async Task<bool> UpdateSilentlyAsync(bool relaunch)
+    {
+        try
+        {
+            await CloseRunningAsync();
+            await ExtractAsync(InstallDir, new Progress<double>());
+            CreateStartMenuShortcut();
+            Register();
+            RegisterBrowser();
+            if (relaunch) Launch();
+            return true;
+        }
+        catch (Exception ex)
+        {
+            try
+            {
+                Directory.CreateDirectory(DataDir);
+                File.AppendAllText(Path.Combine(DataDir, "update.log"), $"{DateTime.Now:s} {Version}: {ex}\r\n");
+            }
+            catch
+            {
+                // nothing else to do
+            }
+            if (relaunch && File.Exists(Exe))
+            {
+                try { Launch(); } catch { /* the user opens it again */ }
+            }
+            return false;
+        }
+    }
 
     public static void Launch() =>
         Process.Start(new ProcessStartInfo(Exe) { UseShellExecute = true, WorkingDirectory = InstallDir });

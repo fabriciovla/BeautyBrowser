@@ -96,6 +96,7 @@ public sealed partial class MainWindow : Window
         SetupOverlays();
 
         _shell = new BrowserShell(_engine, DispatcherQueue, database);
+        _updates = _shell.Updates;
         Title = "Beauty Browser";
 
         Sidebar.Attach(_shell);
@@ -113,6 +114,7 @@ public sealed partial class MainWindow : Window
         AddZoomAccelerators();
         SetupPageShortcuts();
         SetupPermissions();
+        SetupUpdates();
         // Links other apps send while BeautyBrowser is open: a new tab, with the window brought to the front.
         ExternalLinks.Listen(url => DispatcherQueue.TryEnqueue(() =>
         {
@@ -316,6 +318,10 @@ public sealed partial class MainWindow : Window
         DevToolsView.Tab = null;
         _shell.Shutdown();
         _engine.Dispose();
+
+        // A downloaded update installs now that Chromium is done with the files; on a restart the installer opens the
+        // browser again when it finishes.
+        if (_updates.ApplyOnExit(relaunch: App.RestartRequested)) return;
 
         // A restart was requested: only now, with Chromium done with the profile, the app starts again.
         if (App.RestartRequested && Environment.ProcessPath is { } exe)

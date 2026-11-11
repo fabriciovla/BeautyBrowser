@@ -297,10 +297,35 @@
                 </StackPanel>
             </Border>
 
+            <!-- Updates: checks GitHub Releases now; when a version is ready, restarts to install it. -->
+            <Button
+                x:Name="UpdateRow"
+                MinHeight="50"
+                Margin="0,14,0,0"
+                Padding="12,7,10,7"
+                Click="Update_Click"
+                Style="{StaticResource BeautyListRowButton}">
+                <Grid ColumnSpacing="12">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <FontIcon x:Name="UpdateIcon" FontSize="15" Glyph="&#xE895;" />
+                    <StackPanel Grid.Column="1" Spacing="1">
+                        <TextBlock x:Name="UpdateTitle" FontSize="13" />
+                        <TextBlock
+                            x:Name="UpdateHint"
+                            FontSize="11"
+                            Foreground="{StaticResource BeautyTextSecondaryBrush}"
+                            TextWrapping="Wrap" />
+                    </StackPanel>
+                </Grid>
+            </Button>
+
             <Button
                 x:Name="ResetRow"
                 MinHeight="50"
-                Margin="0,14,0,0"
+                Margin="0,6,0,0"
                 Padding="12,7,10,7"
                 Click="Reset_Click"
                 Style="{StaticResource BeautyListRowButton}">
