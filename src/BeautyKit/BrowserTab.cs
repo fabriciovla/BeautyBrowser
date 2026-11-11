@@ -76,9 +76,7 @@ public sealed partial class BrowserTab : INotifyPropertyChanged, IDisposable
             RequestHandler = new TabRequestHandler(this),
             FindHandler = new TabFindHandler(this),
             KeyboardHandler = new TabKeyboardHandler(this),
-            PermissionHandler = new TabPermissionHandler(this),
-            JsDialogHandler = new TabJsDialogHandler(this),
-        };
+            PermissionHandler = new TabPermissionHandler(this),        };
         _browser.RenderHandler = new TabRenderHandler(this);
         _browser.JavascriptMessageReceived += OnJavascriptMessage; // playing media (BrowserTab.Media)
 
