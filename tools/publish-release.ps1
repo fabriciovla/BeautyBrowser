@@ -18,6 +18,9 @@ $tag = "v$version"
 $artifacts = Join-Path $root "artifacts"
 $setup = Join-Path $artifacts "BeautyBrowserSetup.exe"
 $checksum = "$setup.sha256"
+$signature = "$setup.sig"
+# The release signing key (ECDSA P-256), outside the repository. Installed copies only install what it signed.
+$signingKey = Join-Path $env:USERPROFILE ".beautybrowser\release-signing-key.pem"
 $codecs = Join-Path $root "third_party\cef-codecs\libcef.dll"
 
 Write-Host "Beauty Browser $version" -ForegroundColor Cyan
@@ -28,6 +31,8 @@ if (git status --porcelain) { throw "There are uncommitted changes." }
 git fetch origin main --tags --quiet
 if ((git rev-parse HEAD) -ne (git rev-parse origin/main)) { throw "main is not the same as origin/main: pull or push first." }
 if (git tag --list $tag) { throw "$tag already exists: raise <Version> in version.props." }
+if (-not (Test-Path $signingKey)) { throw "The release signing key is missing ($signingKey): restore it from the backup." }
+if (-not (Get-Command pwsh -ErrorAction SilentlyContinue)) { throw "PowerShell 7 (pwsh) is needed to sign the release." }
 if (-not (Test-Path $codecs)) { throw "third_party\cef-codecs is missing: releases ship CEF with codecs (tools\build-cef-codecs.ps1)." }
 # What the release changes, from CHANGELOG.md: every release has to say what it does.
 $changelog = Get-Content (Join-Path $root "CHANGELOG.md") -Raw -Encoding utf8
@@ -53,13 +58,23 @@ $hash = (Get-FileHash $setup -Algorithm SHA256).Hash.ToLowerInvariant()
 Set-Content -Path $checksum -Value "$hash  BeautyBrowserSetup.exe" -NoNewline -Encoding ascii
 Write-Host "SHA-256 $hash"
 
+# 3b. Signature of that hash with the release key (UpdateService.ReleaseKey checks it).
+pwsh -NoProfile -Command {
+    param($keyPath, $hex, $out)
+    $ec = [System.Security.Cryptography.ECDsa]::Create()
+    $ec.ImportFromPem((Get-Content $keyPath -Raw))
+    $sig = [Convert]::ToBase64String($ec.SignHash([Convert]::FromHexString($hex)))
+    Set-Content -Path $out -Value $sig -NoNewline -Encoding ascii
+} -args $signingKey, $hash, $signature
+if ($LASTEXITCODE -ne 0 -or -not (Test-Path $signature)) { throw "Could not sign the release." }
+
 # 4. Tag and release.
 git tag -a $tag -m "Beauty Browser $version"
 git push origin $tag
 if ($LASTEXITCODE -ne 0) { throw "Could not push $tag." }
 New-Item -ItemType Directory -Force $artifacts | Out-Null
 Set-Content -Path $notes -Value $section.Groups[1].Value.Trim() -Encoding utf8
-gh release create $tag $setup $checksum --title "Beauty Browser $version" --notes-file $notes
+gh release create $tag $setup $checksum $signature --title "Beauty Browser $version" --notes-file $notes
 if ($LASTEXITCODE -ne 0) { throw "Could not create the release (the tag $tag is already pushed)." }
 
 $mb = [math]::Round((Get-Item $setup).Length / 1048576)
