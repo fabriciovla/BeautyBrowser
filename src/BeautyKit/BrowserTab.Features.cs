@@ -280,9 +280,18 @@ public sealed partial class BrowserTab
         {
             if (!_paths.TryGetValue(downloadItem.Id, out var path)) return;
             // If another path was picked in Save As, Chromium reports the real one.
-            if (!string.IsNullOrEmpty(downloadItem.FullPath)) path = _paths[downloadItem.Id] = downloadItem.FullPath;
+            if (!string.IsNullOrEmpty(downloadItem.FullPath) && !string.Equals(path, downloadItem.FullPath, StringComparison.OrdinalIgnoreCase))
+            {
+                Release(path);
+                lock (Reserved) Reserved.Add(downloadItem.FullPath);
+                path = _paths[downloadItem.Id] = downloadItem.FullPath;
+            }
             var info = ToInfo(downloadItem, path);
-            if (info.IsComplete || info.IsCancelled) _paths.TryRemove(downloadItem.Id, out _);
+            if (info.IsComplete || info.IsCancelled)
+            {
+                _paths.TryRemove(downloadItem.Id, out _);
+                Release(path);
+            }
             tab.OnUi(() => tab.DownloadUpdated?.Invoke(tab, info));
         }
 
@@ -290,16 +299,27 @@ public sealed partial class BrowserTab
             item.Id, item.Url ?? "", Path.GetFileName(path), path,
             item.TotalBytes, item.ReceivedBytes, item.IsComplete, item.IsCancelled);
 
+        // Paths handed out to downloads still in progress, across all tabs: the file may not exist on disk yet.
+        private static readonly HashSet<string> Reserved = new(StringComparer.OrdinalIgnoreCase);
+
+        private static void Release(string path)
+        {
+            lock (Reserved) Reserved.Remove(path);
+        }
+
+        /// <summary>A free path (neither on disk nor reserved by another running download), reserved for the caller.</summary>
         private static string UniquePath(string path)
         {
-            if (!File.Exists(path)) return path;
             var dir = Path.GetDirectoryName(path)!;
             var name = Path.GetFileNameWithoutExtension(path);
             var ext = Path.GetExtension(path);
-            for (var i = 1; ; i++)
+            lock (Reserved)
             {
-                var candidate = Path.Combine(dir, $"{name} ({i}){ext}");
-                if (!File.Exists(candidate)) return candidate;
+                var candidate = path;
+                for (var i = 1; File.Exists(candidate) || Reserved.Contains(candidate); i++)
+                    candidate = Path.Combine(dir, $"{name} ({i}){ext}");
+                Reserved.Add(candidate);
+                return candidate;
             }
         }
     }
