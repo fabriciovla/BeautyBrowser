@@ -308,7 +308,7 @@ internal static class PageScripts
           'use strict';
           if (window.top !== window || window.__bbPwInstalled) return;
           Object.defineProperty(window, '__bbPwInstalled', { value: true });
-          const post = (m) => { try { const c = window.CefSharp || window.cefSharp; if (c && c.PostMessage) c.PostMessage(Object.assign({ type: 'bb-pw' }, m)); } catch (e) {} };
+          const post = (m) => { try { const c = window.CefSharp || window.cefSharp; if (c && c.PostMessage) c.PostMessage(Object.assign({ type: 'bb-pw', token: '__BB_PAGE_TOKEN__' }, m)); } catch (e) {} };
           const isInput = (el) => el instanceof HTMLInputElement;
           const visible = (el) => el.isConnected && !el.disabled && el.getClientRects().length > 0;
           const isPassword = (el) => isInput(el) && el.type === 'password';

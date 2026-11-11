@@ -90,6 +90,8 @@ public sealed partial class BrowserTab
         if (e.Message is not IDictionary<string, object?> message) return;
         if (message.TryGetValue("type", out var kind) && kind as string == "bb-pw")
         {
+            // Any iframe can call CefSharp.PostMessage; only the main frame's script knows the token.
+            if (!(message.TryGetValue("token", out var secret) && secret is string given && given == BrowserEngine.PageToken)) return;
             OnUi(() => ReceiveLogin(message)); // the password manager (BrowserTab.Passwords)
             return;
         }

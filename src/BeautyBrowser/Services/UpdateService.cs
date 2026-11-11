@@ -83,6 +83,12 @@ public sealed class UpdateService
         StateChanged?.Invoke(this, EventArgs.Empty);
     }
 
+    // While an update is Ready, background checks must not take that state away: it still installs on close.
+    private void SetUnlessReady(UpdateState state)
+    {
+        if (_installer is null) SetState(state);
+    }
+
     /// <summary>"Check for updates" in settings: checks right away instead of waiting for the next round.</summary>
     public Task CheckNowAsync() => IsInstalledCopy ? CheckAsync() : Task.CompletedTask;
 
@@ -103,9 +109,9 @@ public sealed class UpdateService
 
     private async Task CheckAsync()
     {
-        if (_checking || _installer is not null) return;
+        if (_checking) return; // a ready update does not stop the checks: a newer release replaces it
         _checking = true;
-        SetState(UpdateState.Checking);
+        SetUnlessReady(UpdateState.Checking);
         try
         {
             using var http = new HttpClient { Timeout = TimeSpan.FromMinutes(20) };
@@ -115,9 +121,10 @@ public sealed class UpdateService
             using var release = JsonDocument.Parse(await http.GetStringAsync(LatestReleaseApi));
             var root = release.RootElement;
             var tag = root.GetProperty("tag_name").GetString() ?? "";
-            if (!IsNewer(tag, CurrentVersion))
+            // With an update already downloaded, only a release newer than that one is worth another download.
+            if (!IsNewer(tag, ReadyVersion ?? CurrentVersion))
             {
-                SetState(UpdateState.UpToDate);
+                SetUnlessReady(UpdateState.UpToDate);
                 return;
             }
             var version = tag.TrimStart('v', 'V');
@@ -142,7 +149,7 @@ public sealed class UpdateService
             }
             if (setupUrl is null)
             {
-                SetState(UpdateState.UpToDate); // a release without an installer yet
+                SetUnlessReady(UpdateState.UpToDate); // a release without an installer yet
                 return;
             }
 
@@ -152,7 +159,7 @@ public sealed class UpdateService
                 digest = (await http.GetStringAsync(checksumUrl)).Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries).FirstOrDefault();
             if (digest is not { Length: 64 })
             {
-                SetState(UpdateState.Failed);
+                SetUnlessReady(UpdateState.Failed);
                 return;
             }
             digest = digest.ToLowerInvariant();
@@ -161,7 +168,7 @@ public sealed class UpdateService
             var target = Path.Combine(UpdatesFolder, $"BeautyBrowserSetup-{version}.exe");
             if (!File.Exists(target) || await HashOfAsync(target) != digest)
             {
-                SetState(UpdateState.Downloading);
+                SetUnlessReady(UpdateState.Downloading);
                 var partial = target + ".download";
                 using (var response = await http.GetAsync(setupUrl, HttpCompletionOption.ResponseHeadersRead))
                 {
@@ -173,7 +180,7 @@ public sealed class UpdateService
                 if (await HashOfAsync(partial) != digest)
                 {
                     File.Delete(partial);
-                    SetState(UpdateState.Failed);
+                    SetUnlessReady(UpdateState.Failed);
                     return; // corrupted or tampered with: tried again at the next check
                 }
                 File.Move(partial, target, overwrite: true);
@@ -189,7 +196,7 @@ public sealed class UpdateService
         catch
         {
             // Offline, GitHub unavailable, rate limited…: tried again at the next check.
-            SetState(UpdateState.Failed);
+            SetUnlessReady(UpdateState.Failed);
         }
         finally
         {
