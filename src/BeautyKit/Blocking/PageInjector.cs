@@ -11,7 +11,7 @@ namespace BeautyKit.Blocking;
 /// procedural filters that hide ads, and the media detector for the sidebar card. The browser compiles the rules
 /// (<see cref="ContentBlocker"/>) into page-rules.json.
 /// </summary>
-internal sealed class PageInjector : IRenderProcessHandler
+internal sealed class PageInjector(string? pageToken) : IRenderProcessHandler
 {
     private const int MaxCache = 64;
 
@@ -36,7 +36,9 @@ internal sealed class PageInjector : IRenderProcessHandler
                 !url.StartsWith("https://", StringComparison.OrdinalIgnoreCase)) return;
 
             context.Execute(PageScripts.Media, "beautybrowser://media.js", 1, out var mediaError);
-            if (frame.IsMain) context.Execute(PageScripts.Passwords, "beautybrowser://passwords.js", 1, out _);
+            // Only the main frame gets the secret that authenticates the password manager's messages.
+            if (frame.IsMain && !string.IsNullOrEmpty(pageToken))
+                context.Execute(PageScripts.Passwords.Replace("__BB_PAGE_TOKEN__", pageToken), "beautybrowser://passwords.js", 1, out _);
 
             var code = CodeFor(url, frame.IsMain);
             V8Exception? blockerError = null;
