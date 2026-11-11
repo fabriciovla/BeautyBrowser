@@ -390,7 +390,11 @@ public sealed class BrowserShell
         space.Tabs.Clear();
         space.ActiveTab = null;
         Spaces.Remove(space);
-        if (space.IsPrivate) BrowserEngine.ForgetPrivateData();
+        if (space.IsPrivate)
+        {
+            Downloads.RemovePrivate();
+            BrowserEngine.ForgetPrivateData();
+        }
         RefreshNowPlaying();
     }
 
@@ -654,7 +658,7 @@ public sealed class BrowserShell
             else NewTabFrom(tab, url);
         };
         tab.FullscreenChanged += (_, fullscreen) => { if (tab == CurrentTab) FullscreenChanged?.Invoke(this, fullscreen); };
-        tab.DownloadStarted += (_, download) => DownloadStarted?.Invoke(this, Downloads.Start(download));
+        tab.DownloadStarted += (_, download) => DownloadStarted?.Invoke(this, Downloads.Start(download, tab.IsPrivate));
         tab.DownloadUpdated += (_, download) => Downloads.Update(download);
         tab.PopupBlocked += (_, blocked) => PopupBlocked?.Invoke(this, (tab, blocked.Origin, blocked.Url));
         tab.DownloadApprovalRequested += (_, approval) =>
