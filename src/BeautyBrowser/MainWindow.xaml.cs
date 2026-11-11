@@ -1314,7 +1314,7 @@ public sealed partial class MainWindow : Window
         _shell.TabCloseRequested += (_, tab) =>
         {
             if (tab == _peekTab) ClosePeek();
-            else _shell.CloseTab(tab);
+            else _shell.RemoveTab(tab);
         };
         PageArea.SizeChanged += (_, _) => { if (PeekOpen) LayoutPeek(); };
         PeekCard.Shadow = new ThemeShadow();

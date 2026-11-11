@@ -76,8 +76,7 @@ public sealed partial class BrowserTab : INotifyPropertyChanged, IDisposable
             RequestHandler = new TabRequestHandler(this),
             FindHandler = new TabFindHandler(this),
             KeyboardHandler = new TabKeyboardHandler(this),
-            PermissionHandler = new TabPermissionHandler(this),
-        };
+            PermissionHandler = new TabPermissionHandler(this),        };
         _browser.RenderHandler = new TabRenderHandler(this);
         _browser.JavascriptMessageReceived += OnJavascriptMessage; // playing media (BrowserTab.Media)
 
@@ -86,8 +85,7 @@ public sealed partial class BrowserTab : INotifyPropertyChanged, IDisposable
         _browser.LoadingStateChanged += (_, e) => OnUi(() =>
         {
             IsLoading = e.IsLoading;
-            CanGoBack = e.CanGoBack;
-            CanGoForward = e.CanGoForward;
+            OnHistoryChanged(e.CanGoBack, e.CanGoForward); // plus the restored pages (BrowserTab.History)
         });
         // Pages that declare no icon fall back to the site's /favicon.ico, as Chrome does.
         _browser.FrameLoadEnd += (_, e) =>
@@ -176,7 +174,10 @@ public sealed partial class BrowserTab : INotifyPropertyChanged, IDisposable
     /// </summary>
     public event EventHandler<BrowserTab>? PopupOpened;
 
-    /// <summary>The page closed itself (window.close(), usually a popup when it is done). The app removes the tab.</summary>
+    /// <summary>
+    /// The tab may close: the page closed itself (window.close(), usually a popup when it is done) or it let a
+    /// <see cref="RequestClose"/> through. The app removes the tab.
+    /// </summary>
     public event EventHandler? CloseRequested;
 
     /// <summary>The page wants a new window (target=_blank, window.open…).</summary>
@@ -206,19 +207,24 @@ public sealed partial class BrowserTab : INotifyPropertyChanged, IDisposable
     public void Navigate(string input)
     {
         var url = InputToUrl(input);
-        if (!_browser.IsBrowserInitialized)
+        if (!_created)
         {
-            // Not created yet (restored tab) or still starting: it loads once it exists.
-            _pendingUrl = url;
+            // A restored tab not created yet: it is created straight at the new address, so its old page never loads.
+            _browser.LoadUrl(url); // before creation this only sets the address CreateBrowser uses
             Url = url;
             EnsureCreated();
+            return;
+        }
+        if (!_browser.IsBrowserInitialized)
+        {
+            // Still starting: it loads once it exists.
+            _pendingUrl = url;
+            Url = url;
             return;
         }
         _browser.LoadUrl(url);
     }
 
-    public void GoBack() { if (_browser.IsBrowserInitialized) _browser.Back(); }
-    public void GoForward() { if (_browser.IsBrowserInitialized) _browser.Forward(); }
     /// <param name="ignoreCache">Ctrl+Shift+R, Ctrl+F5: fetch everything again instead of using the cache.</param>
     public void Reload(bool ignoreCache = false) { if (_browser.IsBrowserInitialized) _browser.Reload(ignoreCache); }
 
@@ -242,7 +248,8 @@ public sealed partial class BrowserTab : INotifyPropertyChanged, IDisposable
 
     internal event Action<CursorType>? CursorChanged;
 
-    internal void Resize(int widthDip, int heightDip, double scale, (int X, int Y) offsetPx)
+    /// <param name="sizesBackgroundTabs">Whether background tabs should take this size (see BrowserView).</param>
+    internal void Resize(int widthDip, int heightDip, double scale, (int X, int Y) offsetPx, bool sizesBackgroundTabs = true)
     {
         _viewOffsetPx = offsetPx;
         widthDip = Math.Max(widthDip, 1);
@@ -253,11 +260,11 @@ public sealed partial class BrowserTab : INotifyPropertyChanged, IDisposable
         _viewWidth = widthDip;
         _viewHeight = heightDip;
         _scale = scale;
-        _lastViewSize = (widthDip, heightDip, scale, offsetPx);
+        if (sizesBackgroundTabs) _lastViewSize = (widthDip, heightDip, scale, offsetPx);
 
         if (!_browser.IsBrowserInitialized) return;
         var host = _browser.GetBrowserHost();
-        if (scaleChanged) host.NotifyScreenInfoChanged();
+        if (scaleChanged || sizeChanged) host.NotifyScreenInfoChanged(); // the "screen" is the view (GetScreenInfo)
         if (sizeChanged || scaleChanged) host.WasResized();
     }
 
@@ -380,7 +387,13 @@ public sealed partial class BrowserTab : INotifyPropertyChanged, IDisposable
 
     private sealed class TabRenderHandler(BrowserTab tab) : IRenderHandler
     {
-        public ScreenInfo? GetScreenInfo() => new ScreenInfo { DeviceScaleFactor = (float)tab._scale };
+        // The view is the "screen", as in CEF's own sample: dropdowns (<select>) and other popups are drawn inside the
+        // view, so Chromium must fit them there (near the bottom they open upwards instead of being cut off).
+        public ScreenInfo? GetScreenInfo()
+        {
+            var view = new Rect(0, 0, tab._viewWidth, tab._viewHeight);
+            return new ScreenInfo { DeviceScaleFactor = (float)tab._scale, Rect = view, AvailableRect = view };
+        }
 
         public Rect GetViewRect() => new(0, 0, tab._viewWidth, tab._viewHeight);
 
@@ -620,8 +633,8 @@ public sealed partial class BrowserTab : INotifyPropertyChanged, IDisposable
             return true; // cancel the popup: the app opens it
         }
 
-        // window.close() from the page (a sign-in popup that finished). Closes run through here too when the app
-        // disposes the tab; those are not reported back.
+        // window.close() from the page (a sign-in popup that finished) or a RequestClose the page let through. Closes
+        // run through here too when the app disposes the tab; those are not reported back.
         //
         // The app removes and disposes the tab in response, which must not happen inside this callback: Chromium is in
         // the middle of closing the browser and crashed (access violation) when it was destroyed under it, as when

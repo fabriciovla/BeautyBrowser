@@ -14,6 +14,7 @@
     <Grid x:Name="Root" KeyboardAcceleratorPlacementMode="Hidden">
         <Grid.KeyboardAccelerators>
             <KeyboardAccelerator Key="T" Invoked="NewTab_Invoked" Modifiers="Control" />
+            <KeyboardAccelerator Key="N" Invoked="NewTab_Invoked" Modifiers="Control" />
             <KeyboardAccelerator Key="W" Invoked="CloseTab_Invoked" Modifiers="Control" />
             <KeyboardAccelerator Key="L" Invoked="FocusAddress_Invoked" Modifiers="Control" />
             <KeyboardAccelerator Key="H" Invoked="History_Invoked" Modifiers="Control" />
@@ -130,7 +131,7 @@
                         Foreground="{StaticResource BeautyTextSecondaryBrush}"
                         Text="{local:T En='Inspect', Es='Inspeccionar'}" />
                 </StackPanel>
-                <kit:BrowserView x:Name="DevToolsView" Grid.Row="1" />
+                <kit:BrowserView x:Name="DevToolsView" Grid.Row="1" SizesBackgroundTabs="False" />
             </Grid>
         </Grid>
         </Grid>
@@ -411,7 +412,7 @@
                     BorderBrush="#29000000"
                     BorderThickness="1"
                     CornerRadius="12">
-                    <kit:BrowserView x:Name="PeekView" CornerRadius="11" />
+                    <kit:BrowserView x:Name="PeekView" CornerRadius="11" SizesBackgroundTabs="False" />
                 </Border>
             </Grid>
             <StackPanel
