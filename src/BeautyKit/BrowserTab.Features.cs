@@ -64,7 +64,27 @@ public sealed partial class BrowserTab
 
     internal void OpenInNewTab(string url) => NewTabRequested?.Invoke(this, url);
     internal void ViewSource() => OpenInNewTab("view-source:" + Url);
-    internal void Download(string url) => Host()?.StartDownload(url);
+    /// <summary>Downloads <paramref name="url"/>. With <paramref name="askWhere"/> the Save As dialog shows even if the setting is off.</summary>
+    internal void Download(string url, bool askWhere = false)
+    {
+        if (Host() is not { } host) return;
+        if (askWhere) Interlocked.Increment(ref _askNext);
+        host.StartDownload(url);
+    }
+
+    // Downloads started from a "Save … as" entry that still have to show the Save As dialog.
+    private int _askNext;
+
+    private bool TakeAskNext()
+    {
+        int n;
+        do
+        {
+            n = Volatile.Read(ref _askNext);
+            if (n == 0) return false;
+        } while (Interlocked.CompareExchange(ref _askNext, n - 1, n) != n);
+        return true;
+    }
     public void Print() => Host()?.Print();
     internal void ReplaceMisspelling(string word) => Host()?.ReplaceMisspelling(word);
 
@@ -242,12 +262,12 @@ public sealed partial class BrowserTab
                 return true;
 
             Directory.CreateDirectory(DownloadsDirectory);
-            var name = string.IsNullOrWhiteSpace(downloadItem.SuggestedFileName) ? "descarga" : downloadItem.SuggestedFileName;
+            var name = string.IsNullOrWhiteSpace(downloadItem.SuggestedFileName) ? L.T("download", "descarga") : downloadItem.SuggestedFileName;
             var path = UniquePath(Path.Combine(DownloadsDirectory, name));
             _paths[downloadItem.Id] = path;
 
             // With "ask where to save", Chromium shows the Save As dialog starting at this path.
-            callback.Continue(path, showDialog: AskWhereToSave);
+            callback.Continue(path, showDialog: tab.TakeAskNext() || AskWhereToSave);
 
             var info = ToInfo(downloadItem, path);
             tab.OnUi(() => tab.DownloadStarted?.Invoke(tab, info));

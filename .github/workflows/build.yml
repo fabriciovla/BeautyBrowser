@@ -22,5 +22,8 @@ jobs:
       - name: Build browser
         run: dotnet build BeautyBrowser.slnx -c Release
 
+      - name: Test
+        run: dotnet test tests/BeautyKit.Tests -c Release
+
       - name: Build installer
         run: dotnet build installer/BeautyInstaller/BeautyInstaller.csproj -c Release

@@ -53,6 +53,9 @@
             <KeyboardAccelerator Key="Home" Invoked="Home_Invoked" Modifiers="Menu" />
             <KeyboardAccelerator Key="D" Invoked="FocusAddress_Invoked" Modifiers="Menu" />
             <KeyboardAccelerator Key="F6" Invoked="FocusAddress_Invoked" />
+            <KeyboardAccelerator Key="K" Invoked="Search_Invoked" Modifiers="Control" />
+            <KeyboardAccelerator Key="E" Invoked="Search_Invoked" Modifiers="Control" />
+            <KeyboardAccelerator Key="F11" Invoked="Fullscreen_Invoked" />
         </Grid.KeyboardAccelerators>
 
         <!-- The theme color over the window glass (transparent for Classic, see AppTheme) and its grain. -->
