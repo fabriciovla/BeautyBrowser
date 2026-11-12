@@ -1,4 +1,4 @@
-using BeautyKit;
+﻿using BeautyKit;
 using Microsoft.UI.Xaml;
 
 namespace BeautyBrowser;
@@ -9,12 +9,14 @@ public sealed partial class MainWindow
 {
     private readonly Queue<(BrowserTab Tab, PermissionRequest Request)> _permissionQueue = [];
     private PermissionRequest? _shownPermission;
+    private bool _shownIsPrivate;
 
     private void SetupPermissions()
     {
         _shell.PermissionRequested += (_, item) =>
         {
-            if (_shell.SitePermissions.Decided(item.Request.Origin, item.Request.Permissions) is { } allowed)
+            // Private tabs neither use nor leave decisions: the saved list would record the sites visited.
+            if (!item.Tab.IsPrivate && _shell.SitePermissions.Decided(item.Request.Origin, item.Request.Permissions) is { } allowed)
             {
                 item.Request.Respond(allowed);
                 return;
@@ -32,6 +34,7 @@ public sealed partial class MainWindow
         {
             if (item.Request.IsAnswered) continue; // dismissed meanwhile (navigated away, tab closed)
             _shownPermission = item.Request;
+            _shownIsPrivate = item.Tab.IsPrivate;
             PermissionText.Text = PermissionMessage(item.Request);
             PermissionIcon.Glyph = PermissionGlyph(item.Request.Permissions);
             PermissionBar.Visibility = Visibility.Visible;
@@ -44,7 +47,7 @@ public sealed partial class MainWindow
     {
         if (_shownPermission is { } request)
         {
-            _shell.SitePermissions.Remember(request.Origin, request.Permissions, allow);
+            if (!_shownIsPrivate) _shell.SitePermissions.Remember(request.Origin, request.Permissions, allow);
             request.Respond(allow);
         }
         ShowNextPermission();
@@ -55,7 +58,7 @@ public sealed partial class MainWindow
 
     private static string PermissionMessage(PermissionRequest request)
     {
-        var site = Uri.TryCreate(request.Origin, UriKind.Absolute, out var uri) ? uri.Host.Replace("www.", "") : request.Origin;
+        var site = Uri.TryCreate(request.Origin, UriKind.Absolute, out var uri) ? HostName.WithoutWww(uri.Host) : request.Origin;
         var what = request.Permissions
             .ToString()
             .Split(", ")

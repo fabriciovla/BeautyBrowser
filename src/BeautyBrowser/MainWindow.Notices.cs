@@ -1,4 +1,4 @@
-using BeautyKit;
+﻿using BeautyKit;
 using Microsoft.UI.Xaml;
 
 namespace BeautyBrowser;
@@ -29,7 +29,12 @@ public sealed partial class MainWindow
             }
         };
         _shell.DownloadApprovalRequested += (_, item) => AddNotice(DangerousDownloadNotice(item.Approval));
-        _shell.ExternalAppRequested += (_, item) => AddNotice(ExternalAppNotice(item.Tab, item.Request));
+        _shell.ExternalAppRequested += (_, item) =>
+        {
+            // While one is pending the new request is ignored: a page could swap the app right before the click.
+            if (_notices.Any(n => n.Key.Equals((item.Tab, "app")))) return;
+            AddNotice(ExternalAppNotice(item.Tab, item.Request));
+        };
     }
 
     private void AddNotice(Notice notice)
@@ -85,10 +90,11 @@ public sealed partial class MainWindow
             Primary: () =>
             {
                 if (origin.Length == 0) return;
-                _shell.SitePermissions.Remember(origin, PagePermission.Popups, allowed: true);
+                if (!tab.IsPrivate) _shell.SitePermissions.Remember(origin, PagePermission.Popups, allowed: true); // private: this session only
                 BrowserTab.AllowPopupsFrom(origin);
                 // The popup that was blocked opens now, since the user wants it.
-                if (url.Length > 0 && !url.StartsWith("about:", StringComparison.OrdinalIgnoreCase)) _shell.NewTab(url);
+                // Only web addresses: a data: page would show content the site wrote, with no address of its own.
+                if (Uri.TryCreate(url, UriKind.Absolute, out var target) && target.Scheme is "http" or "https") _shell.NewTab(url);
             },
             SecondaryLabel: L.T("Dismiss", "Cerrar"),
             Secondary: () => { });
@@ -127,5 +133,5 @@ public sealed partial class MainWindow
     }
 
     private static string SiteName(string origin) =>
-        Uri.TryCreate(origin, UriKind.Absolute, out var uri) ? uri.Host.Replace("www.", "") : "";
+        Uri.TryCreate(origin, UriKind.Absolute, out var uri) ? HostName.WithoutWww(uri.Host) : "";
 }
