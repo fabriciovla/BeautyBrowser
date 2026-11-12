@@ -28,6 +28,15 @@
     <SolidColorBrush x:Key="BeautyPanelBorderBrush" Color="#1A000000" />
     <SolidColorBrush x:Key="BeautyCardBrush" Color="#FFFFFF" />
     <SolidColorBrush x:Key="BeautyMediaCardBrush" Color="#C2FFFFFF" />
+    <!-- Hover and pressed fills, and light surfaces; dark mode recolors them (see AppTheme). -->
+    <SolidColorBrush x:Key="BeautyFillLowBrush" Color="#0D000000" />
+    <SolidColorBrush x:Key="BeautyFillHoverBrush" Color="#14000000" />
+    <SolidColorBrush x:Key="BeautyFillPressedBrush" Color="#20000000" />
+    <SolidColorBrush x:Key="BeautyThumbBrush" Color="#F3F3F6" />
+    <SolidColorBrush x:Key="BeautySurfaceBrush" Color="#F7FFFFFF" />
+    <SolidColorBrush x:Key="BeautySurfaceAltBrush" Color="#ECEEF3" />
+    <SolidColorBrush x:Key="BeautyPopupHoverBrush" Color="#F4F4F6" />
+    <SolidColorBrush x:Key="BeautyPopupPressedBrush" Color="#EAEAEE" />
 
     <!-- Sidebar glass: light acrylic that shows the page blurred behind it. -->
     <AcrylicBrush

@@ -84,6 +84,14 @@ public static class AppTheme
         ("BeautyInsetBrush", 0x33000000),
         ("BeautyInsetBorderBrush", 0x14FFFFFF),
         ("BeautyLibraryListBrush", 0x14FFFFFF),
+        ("BeautyFillLowBrush", 0x10FFFFFF),
+        ("BeautyFillHoverBrush", 0x1CFFFFFF),
+        ("BeautyFillPressedBrush", 0x28FFFFFF),
+        ("BeautyThumbBrush", 0xFF2C2C33),
+        ("BeautySurfaceBrush", 0xF22C2C33),
+        ("BeautySurfaceAltBrush", 0xFF33333A),
+        ("BeautyPopupHoverBrush", 0xFF38383F),
+        ("BeautyPopupPressedBrush", 0xFF45454D),
     ];
 
     private static readonly Dictionary<string, Color> LightColors = [];

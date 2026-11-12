@@ -96,8 +96,8 @@
                                             <Setter Property="Padding" Value="4" />
                                             <Setter Property="MinWidth" Value="0" />
                                             <Setter Property="CornerRadius" Value="10" />
-                                            <Setter Property="Background" Value="#F7FFFFFF" />
-                                            <Setter Property="BorderBrush" Value="#14000000" />
+                                            <Setter Property="Background" Value="{StaticResource BeautySurfaceBrush}" />
+                                            <Setter Property="BorderBrush" Value="{StaticResource BeautyFillHoverBrush}" />
                                         </Style>
                                     </Flyout.FlyoutPresenterStyle>
                                     <StackPanel x:Name="TextureRows" Width="150" />
@@ -117,7 +117,7 @@
                     <!-- Live sample: the same glass with the selected texture. -->
                     <Border
                         Height="56"
-                        Background="#ECEEF3"
+                        Background="{StaticResource BeautySurfaceAltBrush}"
                         BorderBrush="{StaticResource BeautyInsetBorderBrush}"
                         BorderThickness="1"
                         CornerRadius="8">
