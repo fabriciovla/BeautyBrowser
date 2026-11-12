@@ -36,7 +36,7 @@ public sealed partial class TabPreview : UserControl
 
         var scale = XamlRoot?.RasterizationScale ?? 1;
         var thumbnail = tab.CaptureThumbnail((int)Math.Round(CardWidth * scale), (int)Math.Round(ThumbnailHeight * scale));
-        Thumbnail.Source = thumbnail;
+        Thumbnail.ImageSource = thumbnail;
         EmptyIcon.Source = thumbnail is null ? tab.Favicon : null;
 
         var pinned = _shell?.Favorites.Contains(tab.Url) == true;

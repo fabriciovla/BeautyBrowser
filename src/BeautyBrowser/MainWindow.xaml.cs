@@ -157,6 +157,10 @@ public sealed partial class MainWindow : Window
         AppWindow.Changed += (_, change) => { if (change.DidSizeChange) ApplyFullscreenLayout(); };
         // Maximized: the page reaches the screen edges, without the glass frame.
         AppWindow.Changed += (_, change) => { if (change.DidPresenterChange || change.DidSizeChange) UpdateMaximized(); };
+        // The window cannot shrink below a phone-sized one. Each presenter is a new object, so this is applied again
+        // when the window leaves full screen.
+        ApplyMinimumSize();
+        AppWindow.Changed += (_, change) => { if (change.DidPresenterChange) ApplyMinimumSize(); };
 
         // Drag the window from the top of the page (a strip as tall as YouTube's bar) without opening the caption
         // buttons, only from empty spots so links, buttons and text keep working.
@@ -900,6 +904,19 @@ public sealed partial class MainWindow : Window
     }
 
 
+    private const int MinWindowWidth = 400, MinWindowHeight = 500; // DIP
+
+    private void ApplyMinimumSize()
+    {
+        if (AppWindow.Presenter is not OverlappedPresenter presenter) return;
+        var scale = GetDpiForWindow(_hwnd) / 96.0;
+        presenter.PreferredMinimumWidth = (int)Math.Ceiling(MinWindowWidth * scale);
+        presenter.PreferredMinimumHeight = (int)Math.Ceiling(MinWindowHeight * scale);
+    }
+
+    [LibraryImport("user32.dll")]
+    private static partial uint GetDpiForWindow(nint hWnd);
+
     private void SetFullscreen(bool fullscreen)
     {
         if (_fullscreen == fullscreen) return;
@@ -982,9 +999,9 @@ public sealed partial class MainWindow : Window
         Preview.Measure(new Size(TabPreview.CardWidth, double.PositiveInfinity));
         var height = Preview.DesiredSize.Height;
 
-        // Next to the sidebar, level with the tab (a bit higher, as in Dia), without leaving the window.
+        // Next to the sidebar, centered on the tab, without leaving the window.
         var rowTop = row.TransformToVisual(Root).TransformPoint(new Point(0, 0)).Y;
-        var top = rowTop + row.ActualHeight / 2 - height * 0.62;
+        var top = rowTop + row.ActualHeight / 2 - height * 0.5;
         top = Math.Clamp(top, Frame, Math.Max(Frame, Root.ActualHeight - height - Frame));
         var left = Sidebar.ActualWidth + PreviewGap;
 
