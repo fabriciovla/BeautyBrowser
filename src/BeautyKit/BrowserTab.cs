@@ -76,6 +76,16 @@ public sealed partial class BrowserTab : INotifyPropertyChanged, IDisposable
         var browserSettings = CefSharp.Core.ObjectFactory.CreateBrowserSettings(autoDispose: true);
         browserSettings.WindowlessFrameRate = FrameRate;
         browserSettings.BackgroundColor = 0xFFFFFFFF; // opaque (see BrowserEngine)
+        // Chrome's default fonts on Windows (the sizes are the user's, see BrowserEngine.SetFontSizes).
+        browserSettings.StandardFontFamily = "Times New Roman";
+        browserSettings.SerifFontFamily = "Times New Roman";
+        browserSettings.SansSerifFontFamily = "Arial";
+        browserSettings.FixedFontFamily = "Consolas";
+        browserSettings.CursiveFontFamily = "Comic Sans MS";
+        browserSettings.FantasyFontFamily = "Impact";
+        browserSettings.DefaultFixedFontSize = 13;
+        browserSettings.MinimumLogicalFontSize = 6;
+        browserSettings.DefaultEncoding = "windows-1252";
         _zoomLevel = ZoomLevelFor(DefaultZoomPercent);
 
         _browser = new TabBrowser(url, browserSettings, privateContext, OnPageMessage)
