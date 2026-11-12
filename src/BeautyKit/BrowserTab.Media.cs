@@ -1,4 +1,4 @@
-using System.ComponentModel;
+﻿using System.ComponentModel;
 using CefSharp;
 
 namespace BeautyKit;
@@ -84,15 +84,17 @@ public sealed partial class BrowserTab
         _mediaFrame = null;
     }
 
-    private void OnJavascriptMessage(object? sender, JavascriptMessageReceivedEventArgs e)
+    // Messages from the scripts injected into pages (PageInjector): the password manager and the media detector.
+    private void OnPageMessage(PageMessage e)
     {
-        // CefSharp raises this on another thread with the frame already released, so e.Frame must not be touched.
         if (e.Message is not IDictionary<string, object?> message) return;
         if (message.TryGetValue("type", out var kind) && kind as string == "bb-pw")
         {
-            // Any iframe can call CefSharp.PostMessage; only the main frame's script knows the token.
+            // Only the page itself, never one of its iframes (an ad could otherwise offer to overwrite the site's
+            // saved password). The token is a second check: only the main frame's script has it.
+            if (!e.FromMainFrame || OriginOf(e.FrameUrl) is not { Length: > 0 } origin) return;
             if (!(message.TryGetValue("token", out var secret) && secret is string given && given == BrowserEngine.PageToken)) return;
-            OnUi(() => ReceiveLogin(message)); // the password manager (BrowserTab.Passwords)
+            OnUi(() => ReceiveLogin(message, origin)); // the password manager (BrowserTab.Passwords)
             return;
         }
         if (!(message.TryGetValue("type", out var type) && type as string == "bb-media")) return;
@@ -149,7 +151,7 @@ public sealed partial class BrowserTab
     }
 
     private static string HostOf(string url) =>
-        Uri.TryCreate(url, UriKind.Absolute, out var uri) ? uri.Host.Replace("www.", "") : "";
+        Uri.TryCreate(url, UriKind.Absolute, out var uri) ? HostName.WithoutWww(uri.Host) : "";
 
 
     internal void CountBlocked()

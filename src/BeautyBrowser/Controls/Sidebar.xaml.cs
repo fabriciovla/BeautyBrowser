@@ -177,6 +177,9 @@ public sealed partial class Sidebar : UserControl
         BackButton.IsEnabled = tab?.CanGoBack ?? false;
         ForwardButton.IsEnabled = tab?.CanGoForward ?? false;
         UrlText.Text = ShortUrl(tab?.Url);
+        UrlInsecureIcon.Visibility = Uri.TryCreate(tab?.Url, UriKind.Absolute, out var uri) && uri.Scheme == "http"
+            ? Visibility.Visible
+            : Visibility.Collapsed;
     }
 
     private void RefreshDots()
@@ -209,7 +212,7 @@ public sealed partial class Sidebar : UserControl
     private static string ShortUrl(string? url) =>
         StartPage.Is(url) ? L.T("New tab", "Nueva pestaña")
         : Uri.TryCreate(url, UriKind.Absolute, out var uri) && uri.Scheme is "http" or "https"
-            ? uri.Host.Replace("www.", "")
+            ? HostName.WithoutWww(uri.Host)
             : url ?? "";
 
     private void TrackFlyout(FlyoutBase flyout)

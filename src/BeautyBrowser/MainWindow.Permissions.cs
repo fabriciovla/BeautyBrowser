@@ -58,7 +58,7 @@ public sealed partial class MainWindow
 
     private static string PermissionMessage(PermissionRequest request)
     {
-        var site = Uri.TryCreate(request.Origin, UriKind.Absolute, out var uri) ? uri.Host.Replace("www.", "") : request.Origin;
+        var site = Uri.TryCreate(request.Origin, UriKind.Absolute, out var uri) ? HostName.WithoutWww(uri.Host) : request.Origin;
         var what = request.Permissions
             .ToString()
             .Split(", ")
