@@ -133,6 +133,7 @@ public sealed partial class BrowserView : ContentControl
         {
             if (_tab == value) return;
 
+            s_cursorHidden = false; // the new tab has its own cursor state
             if (_tab is not null)
             {
                 _tab.VisualChanged -= RefreshVisual;
@@ -313,6 +314,7 @@ public sealed partial class BrowserView : ContentControl
 
     private void OnPointerExited(object sender, PointerRoutedEventArgs e)
     {
+        s_cursorHidden = false; // the sidebar and toolbar share this window: they must show the cursor
         if (_tab is null || IsTouch(e)) return;
         var point = e.GetCurrentPoint(this);
         _tab.SendMouseMove((int)point.Position.X, (int)point.Position.Y, Flags(point.Properties), leave: true);
