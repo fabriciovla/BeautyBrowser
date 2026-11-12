@@ -1,3 +1,4 @@
+using BeautyKit;
 using System.Collections.ObjectModel;
 using System.Text.Json.Serialization;
 using Microsoft.UI.Xaml.Media;
@@ -15,7 +16,7 @@ public sealed class FavoriteSite
     public ImageSource? Icon => BeautyKit.Favicons.FromUrl(FaviconUrl);
 
     [JsonIgnore]
-    public string Host => Uri.TryCreate(Url, UriKind.Absolute, out var uri) ? uri.Host.Replace("www.", "") : Url;
+    public string Host => Uri.TryCreate(Url, UriKind.Absolute, out var uri) ? HostName.WithoutWww(uri.Host) : Url;
 }
 
 /// <summary>Sites pinned to the sidebar grid, stored in favorites.json.</summary>
@@ -70,6 +71,6 @@ public sealed class FavoritesService
 
     private static string Normalize(string url) =>
         Uri.TryCreate(url, UriKind.Absolute, out var uri)
-            ? (uri.Host.Replace("www.", "") + uri.AbsolutePath.TrimEnd('/')).ToLowerInvariant()
+            ? (HostName.WithoutWww(uri.Host) + uri.AbsolutePath.TrimEnd('/')).ToLowerInvariant()
             : url.ToLowerInvariant();
 }

@@ -92,7 +92,22 @@
                     <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="Transparent" />
                     <SolidColorBrush x:Key="ButtonBackgroundPressed" Color="Transparent" />
                 </Button.Resources>
-                <TextBlock x:Name="UrlText" TextTrimming="CharacterEllipsis" />
+                <Grid ColumnSpacing="6">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <!-- Pages over plain http:// (not encrypted). -->
+                    <FontIcon
+                        x:Name="UrlInsecureIcon"
+                        VerticalAlignment="Center"
+                        FontSize="13"
+                        Foreground="#E0A030"
+                        Glyph="&#xE7BA;"
+                        ToolTipService.ToolTip="{local:T En='Not secure: this page is not encrypted (http://)', Es='No seguro: esta página no está cifrada (http://)'}"
+                        Visibility="Collapsed" />
+                    <TextBlock x:Name="UrlText" Grid.Column="1" TextTrimming="CharacterEllipsis" />
+                </Grid>
             </Button>
             <StackPanel Grid.Column="1" Margin="0,0,4,0" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
                 <!-- The page's zoom while it is not the default one, as in Chrome; a click restores it. -->

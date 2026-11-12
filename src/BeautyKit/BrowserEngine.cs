@@ -58,6 +58,10 @@ public sealed class BrowserEngine : IDisposable
             // Chromium's helper processes are this same executable (see RunSubprocessIfRequested), so they use the
             // .NET runtime bundled with the app.
             BrowserSubprocessPath = Environment.ProcessPath!,
+            // Chromium switches come only from CefCommandLineArgs below, never from this process's command line. A link
+            // from another app arrives in it (as the default browser), and one carrying a quote could otherwise add
+            // switches such as --renderer-cmd-prefix, which runs any program.
+            CommandLineArgsDisabled = true,
         };
 
         StartPage.Register(settings); // beauty://newtab
@@ -117,8 +121,12 @@ public sealed class BrowserEngine : IDisposable
     /// </summary>
     public static int RunSubprocessIfRequested(string[] args)
     {
-        var type = args.FirstOrDefault(a => a.StartsWith("--type=", StringComparison.Ordinal))?[7..];
+        // Chromium always puts --type first when it starts a helper. Anywhere else it came from somewhere else, such as
+        // a link passed on the command line.
+        var type = args.Length > 0 && args[0].StartsWith("--type=", StringComparison.Ordinal) ? args[0][7..] : null;
         if (type is null) return -1;
+
+        SuppressCrashDialogs();
 
         // Render processes carry our injector (blocker scriptlets, cosmetic filters and the media detector), which has
         // to act before the site's scripts. This is SelfHost.Main with a render process handler.
@@ -158,6 +166,7 @@ public sealed class BrowserEngine : IDisposable
     {
         if (_privateContext is not null) return _privateContext;
         _privateContext = new RequestContext(new RequestContextSettings());
+        StartPage.Register(_privateContext);
         if (_pageLanguages is { } languages) _privateContext.SetPreference("intl.accept_languages", languages, out _);
         if (_fontSizes is { } sizes) ApplyFontSizes(_privateContext, sizes.Default, sizes.Minimum);
         return _privateContext;
@@ -220,6 +229,30 @@ public sealed class BrowserEngine : IDisposable
 
     /// <summary>Chromium settings. CefSharp.OffScreen's own settings class is not used because it mutes audio.</summary>
     private sealed class EngineSettings : CefSettingsBase;
+
+    /// <summary>
+    /// A helper process that dies on a CHECK or breakpoint (0x80000003) would make Windows show "A breakpoint has been
+    /// reached" and keep the process alive behind the dialog. Like Chrome, helpers exit silently; the tab reports the crash.
+    /// </summary>
+    private static void SuppressCrashDialogs()
+    {
+        const uint SEM_FAILCRITICALERRORS = 0x0001, SEM_NOGPFAULTERRORBOX = 0x0002;
+        const uint WER_FAULT_REPORTING_NO_UI = 0x0020;
+        try
+        {
+            SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX);
+            WerSetFlags(WER_FAULT_REPORTING_NO_UI);
+        }
+        catch (Exception ex) when (ex is EntryPointNotFoundException or DllNotFoundException)
+        {
+        }
+    }
+
+    [System.Runtime.InteropServices.DllImport("kernel32.dll")]
+    private static extern uint SetErrorMode(uint mode);
+
+    [System.Runtime.InteropServices.DllImport("kernel32.dll")]
+    private static extern int WerSetFlags(uint flags);
 
     private static int DisplayRefreshRate()
     {

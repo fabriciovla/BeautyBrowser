@@ -34,7 +34,7 @@ public sealed class HistoryEntry
     public string Subtitle => $"{DisplayTime} · {Url}";
 
     /// <summary>"https://www.twitch.tv/x" → "twitch.tv".</summary>
-    public string Host => Uri.TryCreate(Url, UriKind.Absolute, out var uri) ? uri.Host.Replace("www.", "") : Url;
+    public string Host => Uri.TryCreate(Url, UriKind.Absolute, out var uri) ? HostName.WithoutWww(uri.Host) : Url;
 
     /// <summary>"https://www.spaceship.com/domain-search/x" → "spaceship.com/domain-search/x".</summary>
     public string DisplayUrl
@@ -42,7 +42,7 @@ public sealed class HistoryEntry
         get
         {
             if (!Uri.TryCreate(Url, UriKind.Absolute, out var uri)) return Url;
-            var host = uri.Host.Replace("www.", "");
+            var host = HostName.WithoutWww(uri.Host);
             if (!uri.IsDefaultPort) host += ":" + uri.Port;
             var rest = uri.PathAndQuery == "/" ? "" : uri.PathAndQuery;
             return host + rest;
@@ -293,7 +293,7 @@ public sealed class HistoryService
 
     private static double Score(HistoryEntry entry, string query)
     {
-        var host = Uri.TryCreate(entry.Url, UriKind.Absolute, out var uri) ? uri.Host.Replace("www.", "") : "";
+        var host = Uri.TryCreate(entry.Url, UriKind.Absolute, out var uri) ? HostName.WithoutWww(uri.Host) : "";
         var hostBonus = host.StartsWith(query, StringComparison.OrdinalIgnoreCase) ? 50 : 0;
         var recency = 20 / (1 + (DateTime.Now - entry.LastVisit).TotalDays);
         return hostBonus + Math.Log(1 + entry.VisitCount) * 10 + recency;

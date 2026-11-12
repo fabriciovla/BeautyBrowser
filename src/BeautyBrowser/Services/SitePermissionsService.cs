@@ -1,4 +1,4 @@
-using BeautyKit;
+﻿using BeautyKit;
 
 namespace BeautyBrowser.Services;
 
@@ -21,6 +21,7 @@ public sealed class SitePermissionsService
     /// <summary>True or false when every permission asked for was already decided the same way; otherwise null.</summary>
     public bool? Decided(string origin, PagePermission permissions)
     {
+        if ((permissions & AlwaysAsk) != 0) return null;
         if (!_decisions.TryGetValue(Key(origin), out var site)) return null;
         bool? answer = null;
         foreach (var name in Names(permissions))
@@ -38,11 +39,17 @@ public sealed class SitePermissionsService
 
     public void Remember(string origin, PagePermission permissions, bool allowed)
     {
+        permissions &= ~AlwaysAsk;
+        if (permissions == PagePermission.None) return;
         var key = Key(origin);
         if (!_decisions.TryGetValue(key, out var site)) _decisions[key] = site = [];
         foreach (var name in Names(permissions)) site[name] = allowed;
         JsonStore.Save(FileName, _decisions);
     }
+
+    // Asked every time, as in Chrome: sharing the screen, and features without a name of their own ("use a feature of
+    // your device"), where one yes would otherwise allow every future unnamed request from the site.
+    private const PagePermission AlwaysAsk = PagePermission.ScreenShare | PagePermission.Other;
 
     private static IEnumerable<string> Names(PagePermission permissions) =>
         Enum.GetValues<PagePermission>()

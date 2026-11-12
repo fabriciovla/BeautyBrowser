@@ -351,7 +351,7 @@ public sealed partial class CommandPalette : UserControl
     private static bool HostStartsWith(string url, string query) =>
         !query.Contains(' ') &&
         Uri.TryCreate(url, UriKind.Absolute, out var uri) &&
-        uri.Host.Replace("www.", "").StartsWith(query, StringComparison.OrdinalIgnoreCase);
+        HostName.WithoutWww(uri.Host).StartsWith(query, StringComparison.OrdinalIgnoreCase);
 
     private static ImageSource? IconFor(string? faviconUrl) => Favicons.FromUrl(faviconUrl);
 
@@ -362,7 +362,7 @@ public sealed partial class CommandPalette : UserControl
     private static string ShortUrl(string url, bool keepPath = false)
     {
         if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) || uri.Scheme is not ("http" or "https")) return url;
-        var host = uri.Host.Replace("www.", "");
+        var host = HostName.WithoutWww(uri.Host);
         if (!uri.IsDefaultPort) host += ":" + uri.Port;
         return keepPath && uri.AbsolutePath != "/" ? host + uri.AbsolutePath : host;
     }
