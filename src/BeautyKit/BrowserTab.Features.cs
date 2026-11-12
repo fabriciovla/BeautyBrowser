@@ -62,8 +62,12 @@ public sealed partial class BrowserTab
     }
 
 
-    internal void OpenInNewTab(string url) => NewTabRequested?.Invoke(this, url);
-    internal void ViewSource() => OpenInNewTab("view-source:" + Url);
+    internal void OpenInNewTab(string url)
+    {
+        if (IsPopupUrlAllowed(url)) NewTabRequested?.Invoke(this, url);
+    }
+
+    internal void ViewSource() => NewTabRequested?.Invoke(this, "view-source:" + Url);
     /// <summary>Downloads <paramref name="url"/>. With <paramref name="askWhere"/> the Save As dialog shows even if the setting is off.</summary>
     internal void Download(string url, bool askWhere = false)
     {

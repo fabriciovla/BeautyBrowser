@@ -31,7 +31,7 @@ public sealed partial class TabPreview : UserControl
         Tab = tab;
         TitleText.Text = tab.Title;
         SiteText.Text = Uri.TryCreate(tab.Url, UriKind.Absolute, out var uri) && uri.Scheme is "http" or "https"
-            ? uri.Host.Replace("www.", "")
+            ? HostName.WithoutWww(uri.Host)
             : tab.Url;
 
         var scale = XamlRoot?.RasterizationScale ?? 1;

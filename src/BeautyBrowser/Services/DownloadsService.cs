@@ -40,7 +40,7 @@ public sealed class DownloadEntry : INotifyPropertyChanged
     {
         get
         {
-            var host = Uri.TryCreate(Url, UriKind.Absolute, out var uri) ? uri.Host.Replace("www.", "") : "";
+            var host = Uri.TryCreate(Url, UriKind.Absolute, out var uri) ? HostName.WithoutWww(uri.Host) : "";
             var size = IsCancelled ? L.T("Canceled", "Cancelada")
                 : IsComplete ? FormatSize(Math.Max(TotalBytes, ReceivedBytes))
                 : TotalBytes > 0 ? L.T($"{FormatSize(ReceivedBytes)} of {FormatSize(TotalBytes)}", $"{FormatSize(ReceivedBytes)} de {FormatSize(TotalBytes)}")
