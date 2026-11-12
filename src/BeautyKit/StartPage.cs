@@ -43,6 +43,9 @@ public static class StartPage
             ResourceHandler.FromString(Html(isPrivate), Encoding.UTF8, mimeType: "text/html");
     }
 
+    /// <summary>The app is in dark mode: new tabs open with the dark page.</summary>
+    public static bool Dark { get; set; }
+
     /// <summary>Name of the search engine the user chose in settings ("Google", "DuckDuckGo"…).</summary>
     public static string SearchEngineName => EngineName(BrowserTab.SearchUrlTemplate);
 
@@ -89,7 +92,7 @@ public static class StartPage
         var apps = Apps.Where(_ => !isPrivate).Select(a => new { name = a.Name, image = Asset(a.Preview), url = L.T(a.UrlEnglish, a.UrlSpanish) }).ToArray();
         return Page
             .Replace("__LANG__", L.T("en", "es"))
-            .Replace("__CLASS__", isPrivate ? "private" : "")
+            .Replace("__CLASS__", isPrivate ? "private" : Dark ? "dark" : "")
             .Replace("__PRIVATE_TITLE__", L.T("You're browsing privately", "Estás navegando en privado"))
             .Replace("__PRIVATE_NOTE__", L.T(
                 "History, cookies, site data and what you type in forms are not kept. They are erased when you close the last private tab. Downloads stay on your PC.",
@@ -179,16 +182,18 @@ public static class StartPage
           @keyframes in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
           @keyframes float { 50% { transform: translateY(-3px); } }
 
-          /* Private space: dark, like other browsers' incognito windows. */
+          /* Dark mode, and the private space (always dark, like other browsers' incognito windows). */
           .note { display: none; }
-          .private { color-scheme: dark; --text: #ececf1; --soft: #8e8e99; }
-          .private body { background: radial-gradient(1400px 900px at 50% 0%, #2a2a31 0%, #202026 55%, #1a1a1f 100%); }
-          .private body::before { opacity: .05; }
-          .private form { background: #2c2c33; border-color: rgba(255, 255, 255, .08); box-shadow: 0 10px 32px rgba(0, 0, 0, .35); }
-          .private form:focus-within { border-color: rgba(255, 255, 255, .16); box-shadow: 0 14px 40px rgba(0, 0, 0, .45); }
-          .private .foot b, .private kbd { color: #b4b4be; }
-          .private kbd, .private button { background: #38383f; border-color: rgba(255, 255, 255, .06); color: #8e8e99; }
-          .private button.on { background: #ececf1; color: #1d1d20; }
+          :is(.private, .dark) { color-scheme: dark; --text: #ececf1; --soft: #8e8e99; }
+          :is(.private, .dark) body { background: radial-gradient(1400px 900px at 50% 0%, #2a2a31 0%, #202026 55%, #1a1a1f 100%); }
+          :is(.private, .dark) body::before { opacity: .05; }
+          :is(.private, .dark) form { background: #2c2c33; border-color: rgba(255, 255, 255, .08); box-shadow: 0 10px 32px rgba(0, 0, 0, .35); }
+          :is(.private, .dark) form:focus-within { border-color: rgba(255, 255, 255, .16); box-shadow: 0 14px 40px rgba(0, 0, 0, .45); }
+          :is(.private, .dark) :is(.foot b, kbd) { color: #b4b4be; }
+          :is(.private, .dark) :is(kbd, button) { background: #38383f; border-color: rgba(255, 255, 255, .06); color: #8e8e99; }
+          :is(.private, .dark) button.on { background: #ececf1; color: #1d1d20; }
+          .dark .card { background: #2c2c33; box-shadow: 0 0 0 1px rgba(255, 255, 255, .06), 0 10px 28px rgba(0, 0, 0, .4); }
+          .dark .c1::before { background: #ececf1; }
           .private .note { display: block; max-width: 470px; margin: 12px 0 0; font-size: 14.5px; line-height: 1.55; color: var(--soft); text-align: center; }
         </style>
         </head>

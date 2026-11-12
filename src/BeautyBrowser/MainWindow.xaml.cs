@@ -201,8 +201,14 @@ public sealed partial class MainWindow : Window
         _previewHideTimer.Tick += (_, _) => { if (!_previewHovered) HidePreview(); };
 
         // Glass texture and sidebar options from settings, applied live when they change.
+        ThemeTint.Background = AppTheme.WindowTintBrush;
+        AppTheme.GlassDarkChanged += dark => Root.RequestedTheme = dark ? ElementTheme.Dark : ElementTheme.Light; // Mica follows it
         ReadShellSettings();
         _shell.CurrentSpaceChanged += (_, _) => ApplyPrivateLook();
+        WindowsColors.ColorValuesChanged += (_, _) => DispatcherQueue.TryEnqueue(() =>
+        {
+            if (_shell.Settings.ColorMode == "system") ApplyPrivateLook();
+        });
         _shell.Settings.SettingsChanged += (_, _) =>
         {
             ReadShellSettings();
@@ -245,13 +251,28 @@ public sealed partial class MainWindow : Window
         ApplyPrivateLook();
     }
 
-    /// <summary>The private space is dark, like other browsers' incognito windows; the others use the chosen theme.</summary>
+    /// <summary>
+    /// Light or dark (Settings → Appearance, or Windows' choice), and always dark in the private space, like other
+    /// browsers' incognito windows. The change fades (see AppTheme).
+    /// </summary>
     private void ApplyPrivateLook()
     {
-        var isPrivate = _shell.CurrentSpace?.IsPrivate == true;
-        AppTheme.SetPrivate(isPrivate);
-        ThemeTint.Background = new SolidColorBrush(AppTheme.WindowTint);
-        Root.RequestedTheme = isPrivate ? ElementTheme.Dark : ElementTheme.Default; // also darkens the Mica glass
+        var dark = _shell.Settings.ColorMode switch
+        {
+            "dark" => true,
+            "system" => WindowsUsesDarkMode(),
+            _ => false,
+        };
+        StartPage.Dark = dark;
+        AppTheme.SetMode(dark, _shell.CurrentSpace?.IsPrivate == true);
+    }
+
+    private static readonly Windows.UI.ViewManagement.UISettings WindowsColors = new();
+
+    private static bool WindowsUsesDarkMode()
+    {
+        var background = WindowsColors.GetColorValue(Windows.UI.ViewManagement.UIColorType.Background);
+        return background.R + background.G + background.B < 384;
     }
 
     /// <summary>Windows glass, without a title bar or system buttons.</summary>

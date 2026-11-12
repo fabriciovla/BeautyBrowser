@@ -45,24 +45,28 @@ public static class AppTheme
         var resources = Application.Current.Resources;
         var accent = option.Color ?? ClassicAccent;
         if (resources["BeautyAccentBrush"] is SolidColorBrush accentBrush) accentBrush.Color = accent;
-        ApplyPanel();
-        Changed?.Invoke();
+        Retarget(animate: _modeApplied);
     }
 
     private static bool _applied;
 
-    /// <summary>The tint over the window glass (transparent for Classic; dark gray in the private space).</summary>
-    public static Color WindowTint => IsPrivate ? Color.FromArgb(0xE0, 0x1E, 0x1E, 0x23)
-        : Current.Color is { } color ? Color.FromArgb(0x4D, color.R, color.G, color.B)
-        : Color.FromArgb(0, 0, 0, 0);
+    /// <summary>Dark mode (Settings → Appearance), or the light look.</summary>
+    public static bool IsDark { get; private set; }
 
-    /// <summary>The private space is showing: the app turns dark, like other browsers' incognito windows.</summary>
+    /// <summary>The private space is showing: always dark, a neutral gray, like other browsers' incognito windows.</summary>
     public static bool IsPrivate { get; private set; }
 
-    private static readonly Color PrivatePanel = Rgb(0x26, 0x26, 0x2C);
+    /// <summary>The tint over the window glass. The window uses this brush; it changes color in place.</summary>
+    public static SolidColorBrush WindowTintBrush { get; } = new(Color.FromArgb(0, 0, 0, 0));
 
-    // The shared brushes in the private space; their light colors are kept to restore them.
-    private static readonly (string Key, uint Dark)[] PrivateColors =
+    /// <summary>Raised halfway through a change between light and dark, when the glass under the tint can flip.</summary>
+    public static event Action<bool>? GlassDarkChanged;
+
+    private static readonly Color DarkPanel = Rgb(0x26, 0x26, 0x2C);
+    private static readonly Color DarkGlass = Rgb(0x1C, 0x1C, 0x21);
+
+    // The shared brushes in dark mode; their light colors are kept to go back.
+    private static readonly (string Key, uint Dark)[] DarkColors =
     [
         ("BeautyTextBrush", 0xFFECECF1),
         ("BeautyTextSecondaryBrush", 0xFF9A9AA5),
@@ -84,31 +88,88 @@ public static class AppTheme
 
     private static readonly Dictionary<string, Color> LightColors = [];
 
-    public static void SetPrivate(bool isPrivate)
+    /// <summary>Switches between light, dark and the private space's look, with a short crossfade.</summary>
+    public static void SetMode(bool dark, bool isPrivate)
     {
-        if (IsPrivate == isPrivate) return;
+        if (IsDark == dark && IsPrivate == isPrivate && _modeApplied) return;
+        var animate = _modeApplied;
+        _modeApplied = true;
+        IsDark = dark;
         IsPrivate = isPrivate;
+        Retarget(animate);
+    }
 
+    private static bool _modeApplied;
+    private static bool _glassDark;
+
+    private static bool LooksDark => IsDark || IsPrivate;
+
+    // Moves every themed color (shared brushes, sidebar glass, window tint) to the current mode and color.
+    private static void Retarget(bool animate)
+    {
         var resources = Application.Current.Resources;
-        foreach (var (key, dark) in PrivateColors)
+        var changes = new List<(Action<Color> Set, Color From, Color To)>();
+        foreach (var (key, dark) in DarkColors)
         {
             if (resources[key] is not SolidColorBrush brush) continue;
             if (!LightColors.ContainsKey(key)) LightColors[key] = brush.Color;
-            brush.Color = isPrivate
-                ? Color.FromArgb((byte)(dark >> 24), (byte)(dark >> 16), (byte)(dark >> 8), (byte)dark)
-                : LightColors[key];
+            var to = LooksDark ? Argb(dark) : LightColors[key];
+            changes.Add((c => brush.Color = c, brush.Color, to));
         }
-        ApplyPanel();
-        Changed?.Invoke();
+        if (resources["BeautyPanelBrush"] is AcrylicBrush panel)
+        {
+            changes.Add((c => { panel.TintColor = c; panel.FallbackColor = c; }, panel.TintColor, PanelTint()));
+        }
+        changes.Add((c => WindowTintBrush.Color = c, WindowTintBrush.Color, WindowTint));
+
+        var toDark = LooksDark;
+        Motion.Cancel("app-theme");
+        if (!animate)
+        {
+            foreach (var (set, _, to) in changes) set(to);
+            SetGlassDark(toDark);
+            Changed?.Invoke();
+            return;
+        }
+
+        // The tint covers the glass while it flips, so the switch reads as one smooth fade.
+        Motion.Animate("app-theme", TimeSpan.FromMilliseconds(420), t =>
+        {
+            foreach (var (set, from, to) in changes) set(Lerp(from, to, t));
+            if (t >= 0.5) SetGlassDark(toDark);
+        }, ease: EaseInOut, completed: () => Changed?.Invoke());
     }
 
-    private static void ApplyPanel()
+    private static void SetGlassDark(bool dark)
     {
-        if (Application.Current.Resources["BeautyPanelBrush"] is not AcrylicBrush panel) return;
-        var tint = IsPrivate ? PrivatePanel : Current.Color is { } color ? Mix(ClassicPanel, color, 0.2) : ClassicPanel;
-        panel.TintColor = tint;
-        panel.FallbackColor = tint;
+        if (_glassDark == dark) return;
+        _glassDark = dark;
+        GlassDarkChanged?.Invoke(dark);
     }
+
+    private static Color PanelTint() =>
+        IsPrivate ? DarkPanel
+        : IsDark ? Current.Color is { } c ? Mix(DarkPanel, c, 0.12) : DarkPanel
+        : Current.Color is { } color ? Mix(ClassicPanel, color, 0.2) : ClassicPanel;
+
+    /// <summary>The tint over the window glass (transparent for light Classic).</summary>
+    public static Color WindowTint =>
+        IsPrivate ? Color.FromArgb(0xE0, 0x1E, 0x1E, 0x23)
+        : IsDark ? WithAlpha(Current.Color is { } c ? Mix(DarkGlass, c, 0.14) : DarkGlass, 0xD8)
+        : Current.Color is { } color ? Color.FromArgb(0x4D, color.R, color.G, color.B)
+        : Color.FromArgb(0, 0, 0, 0);
+
+    private static double EaseInOut(double t) => t < 0.5 ? 4 * t * t * t : 1 - Math.Pow(-2 * t + 2, 3) / 2;
+
+    private static Color Lerp(Color a, Color b, double t) => Color.FromArgb(
+        (byte)Math.Round(a.A + (b.A - a.A) * t),
+        (byte)Math.Round(a.R + (b.R - a.R) * t),
+        (byte)Math.Round(a.G + (b.G - a.G) * t),
+        (byte)Math.Round(a.B + (b.B - a.B) * t));
+
+    private static Color WithAlpha(Color c, byte a) => Color.FromArgb(a, c.R, c.G, c.B);
+
+    private static Color Argb(uint v) => Color.FromArgb((byte)(v >> 24), (byte)(v >> 16), (byte)(v >> 8), (byte)v);
 
     public static Color Mix(Color a, Color b, double t) => Color.FromArgb(255,
         (byte)Math.Round(a.R + (b.R - a.R) * t),

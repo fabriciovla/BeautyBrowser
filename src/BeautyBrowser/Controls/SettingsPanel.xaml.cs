@@ -69,6 +69,10 @@ public sealed partial class SettingsPanel : UserControl
 
         void FillTheme() => ThemeSwatches.Fill(ThemeRow, s.ThemeKey, key => s.ThemeKey = key);
         FillTheme();
+        Chips(ModeChips,
+            [(L.T("Light", "Claro"), () => s.ColorMode == "light", () => s.ColorMode = "light"),
+             (L.T("Dark", "Oscuro"), () => s.ColorMode == "dark", () => s.ColorMode = "dark"),
+             (L.T("System", "Sistema"), () => s.ColorMode == "system", () => s.ColorMode = "system")]);
         Chips(ZoomChips, SettingsService.ZoomOptions
             .Select(zoom => ($"{zoom} %", (Func<bool>)(() => zoom == s.DefaultZoom),
                 (Action)(() => { s.DefaultZoom = zoom; _shell.ApplyDefaultZoom(); })))

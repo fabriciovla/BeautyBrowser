@@ -44,6 +44,7 @@ public sealed class PaletteResult
 public sealed partial class CommandPalette : UserControl
 {
     private const int MaxResults = 8;
+    private const int MaxTopPages = 5;
     private const int MaxSuggestions = 4;
 
     private static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(3) };
@@ -166,22 +167,22 @@ public sealed partial class CommandPalette : UserControl
             });
         }
 
-        // 5) Without text, the sites visited most often (one per site, as on the start page).
+        // 5) Without text, the 5 exact pages visited most often (twitch.tv/somestreamer), skipping open tabs.
         if (query.Length == 0)
         {
-            foreach (var site in isPrivate ? [] : _shell.History.TopSites(MaxResults))
+            var open = _shell.Spaces.SelectMany(s => s.Tabs).Select(t => t.Url).ToHashSet();
+            foreach (var page in isPrivate ? [] : _shell.History.TopPages(MaxTopPages + open.Count).Where(p => !open.Contains(p.Url)).Take(MaxTopPages))
             {
-                if (results.Count >= MaxResults) break;
                 results.Add(new PaletteResult
                 {
                     Kind = PaletteResultKind.Url,
-                    Title = site.Title,
-                    Subtitle = ShortUrl(site.Url),
-                    Icon = IconFor(site.Icon),
-                    Url = site.Url,
+                    Title = string.IsNullOrWhiteSpace(page.Title) ? ShortUrl(page.Url, keepPath: true) : page.Title,
+                    Subtitle = ShortUrl(page.Url, keepPath: true),
+                    Icon = IconFor(page.FaviconUrl),
+                    Url = page.Url,
                 });
             }
-            Show(results.Take(MaxResults).ToList());
+            Show(results.ToList());
             return;
         }
 
