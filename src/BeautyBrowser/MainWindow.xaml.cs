@@ -202,7 +202,11 @@ public sealed partial class MainWindow : Window
 
         // Glass texture and sidebar options from settings, applied live when they change.
         ThemeTint.Background = AppTheme.WindowTintBrush;
-        AppTheme.GlassDarkChanged += dark => Root.RequestedTheme = dark ? ElementTheme.Dark : ElementTheme.Light; // Mica follows it
+        AppTheme.GlassDarkChanged += dark =>
+        {
+            Root.RequestedTheme = dark ? ElementTheme.Dark : ElementTheme.Light; // Mica follows it
+            ApplyCaptionColors(dark);
+        };
         ReadShellSettings();
         _shell.CurrentSpaceChanged += (_, _) => ApplyPrivateLook();
         WindowsColors.ColorValuesChanged += (_, _) => DispatcherQueue.TryEnqueue(() =>
@@ -600,6 +604,19 @@ public sealed partial class MainWindow : Window
         // On the top frame; when maximized (no frame), over the top edge of the page.
         LoadBar.Margin = new Thickness(_pageLeft + _pageShift + (PageArea.ActualWidth - width) / 2, _maximized ? 0 : 2.5, 0, 0);
         LoadBar.Width = width;
+    }
+
+    /// <summary>Windows draws the caption buttons black by default: on dark glass they turn light.</summary>
+    private void ApplyCaptionColors(bool dark)
+    {
+        var titleBar = AppWindow.TitleBar;
+        var glyph = dark ? Windows.UI.Color.FromArgb(255, 0xEC, 0xEC, 0xF1) : Windows.UI.Color.FromArgb(255, 0x1F, 0x1F, 0x24);
+        titleBar.ButtonForegroundColor = glyph;
+        titleBar.ButtonHoverForegroundColor = glyph;
+        titleBar.ButtonPressedForegroundColor = glyph;
+        titleBar.ButtonInactiveForegroundColor = dark ? Windows.UI.Color.FromArgb(255, 0x8E, 0x8E, 0x99) : Windows.UI.Color.FromArgb(255, 0x8A, 0x8A, 0x94);
+        titleBar.ButtonHoverBackgroundColor = dark ? Windows.UI.Color.FromArgb(0x26, 255, 255, 255) : Windows.UI.Color.FromArgb(0x14, 0, 0, 0);
+        titleBar.ButtonPressedBackgroundColor = dark ? Windows.UI.Color.FromArgb(0x3D, 255, 255, 255) : Windows.UI.Color.FromArgb(0x24, 0, 0, 0);
     }
 
     /// <summary>
