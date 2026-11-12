@@ -30,6 +30,10 @@ public sealed class DownloadEntry : INotifyPropertyChanged
     public bool IsComplete { get => _isComplete; set => Set(ref _isComplete, value); }
     public bool IsCancelled { get => _isCancelled; set => Set(ref _isCancelled, value); }
 
+    /// <summary>The icon Windows uses for this file type; null (and <see cref="IconGlyph"/> shown) if the shell has none.</summary>
+    [JsonIgnore] public Microsoft.UI.Xaml.Media.ImageSource? Icon => FileIcons.For(FileName);
+    [JsonIgnore] public string IconGlyph => FileIcons.GlyphFor(FileName);
+
     [JsonIgnore] public bool IsInProgress => !IsComplete && !IsCancelled;
     [JsonIgnore] public double Progress => TotalBytes > 0 ? 100.0 * ReceivedBytes / TotalBytes : 0;
     [JsonIgnore] public bool IsIndeterminate => IsInProgress && TotalBytes <= 0;
