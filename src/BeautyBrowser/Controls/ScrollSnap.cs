@@ -39,8 +39,68 @@ internal static class ScrollSnap
         var lines = WheelScrollLines();
         var pixels = lines == uint.MaxValue ? scroll.ViewportHeight * 0.9 * delta / 120 : delta / 120.0 * lines * LinePixels;
         var click = delta % 120 == 0;
-        scroll.ScrollBy(0, -pixels, new ScrollingScrollOptions(click ? ScrollingAnimationMode.Enabled : ScrollingAnimationMode.Disabled));
+        WheelBy(scroll, -pixels, click);
         e.Handled = true;
+    }
+
+    private sealed class Glide
+    {
+        public double Target, Current;
+        public long LastTick;
+        public bool Running;
+    }
+
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<ScrollView, Glide> Glides = [];
+    private const double GlideSeconds = 0.06; // time constant: ~95% of the way in 3x this (~180 ms), starting at full speed
+
+    /// <summary>
+    /// Moves the view by <paramref name="pixels"/>. A wheel click glides: the offset is moved in every rendered frame
+    /// (at the monitor's rate) toward a target that each click pushes further, easing out from full speed, so it reacts
+    /// at once and a series of clicks adds up, the way scrolling a page does. ScrollView's own animation eases in
+    /// (reads as a delay after each click), restarts from the current position on every ScrollBy (10 quick clicks
+    /// reached 27% of the distance) and takes about a second to settle.
+    /// </summary>
+    internal static void WheelBy(ScrollView scroll, double pixels, bool animate)
+    {
+        var glide = Glides.GetOrCreateValue(scroll);
+        if (!animate)
+        {
+            glide.Running = false;
+            var immediate = Math.Clamp(scroll.VerticalOffset + pixels, 0, scroll.ScrollableHeight);
+            scroll.ScrollTo(scroll.HorizontalOffset, immediate, new ScrollingScrollOptions(ScrollingAnimationMode.Disabled));
+            return;
+        }
+
+        if (!glide.Running)
+        {
+            glide.Running = true;
+            glide.Current = glide.Target = scroll.VerticalOffset;
+            glide.LastTick = System.Diagnostics.Stopwatch.GetTimestamp();
+            CompositionTarget.Rendering += Step;
+        }
+        glide.Target = Math.Clamp(glide.Target + pixels, 0, scroll.ScrollableHeight);
+
+        void Step(object? sender, object e)
+        {
+            var now = System.Diagnostics.Stopwatch.GetTimestamp();
+            var dt = (now - glide.LastTick) / (double)System.Diagnostics.Stopwatch.Frequency;
+            glide.LastTick = now;
+            if (!glide.Running || scroll.XamlRoot is null) { Stop(); return; }
+
+            // Exponential approach: speed is proportional to the distance left, so it never starts slowly.
+            glide.Current += (glide.Target - glide.Current) * (1 - Math.Exp(-dt / GlideSeconds));
+            var scale = scroll.XamlRoot.RasterizationScale;
+            var done = Math.Abs(glide.Target - glide.Current) < 0.5 / scale;
+            var offset = done ? glide.Target : Math.Round(glide.Current * scale) / scale; // whole pixels: sharp text
+            scroll.ScrollTo(scroll.HorizontalOffset, offset, new ScrollingScrollOptions(ScrollingAnimationMode.Disabled));
+            if (done) Stop();
+        }
+
+        void Stop()
+        {
+            glide.Running = false;
+            CompositionTarget.Rendering -= Step;
+        }
     }
 
     private static uint WheelScrollLines() =>
