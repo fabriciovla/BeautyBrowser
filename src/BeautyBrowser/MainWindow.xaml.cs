@@ -67,6 +67,12 @@ public sealed partial class MainWindow : Window
 
     private bool _sidebarShown;
     private bool _sidebarDocked;
+
+    // Below this width (DIP) a pinned sidebar would leave too little page: it floats instead, and goes back to pinned
+    // when the window grows. The saved preference is not touched.
+    private const double DockMinWidth = 900;
+    private bool _narrow;
+    private bool DockWanted => _shell.Settings.SidebarDocked && !_narrow;
     private bool _libraryShown;
     private bool _captionShown;
     private bool _fullscreen;
@@ -106,7 +112,7 @@ public sealed partial class MainWindow : Window
         Preview.Attach(_shell);
         Preview.ActionInvoked += (_, _) => HidePreview();
         Sidebar.PaletteRequested += (_, mode) => OpenPalette(mode);
-        Sidebar.DockToggled += (_, _) => _shell.Settings.SidebarDocked = !_sidebarDocked; // saved; SettingsChanged applies it
+        Sidebar.DockToggled += (_, _) => _shell.Settings.SidebarDocked = !_shell.Settings.SidebarDocked; // saved; SettingsChanged applies it
         Sidebar.LibraryRequested += (_, section) => OpenLibrary(section);
         Sidebar.NewSpaceRequested += (_, _) =>
         {
@@ -162,6 +168,7 @@ public sealed partial class MainWindow : Window
         // when the window leaves full screen.
         ApplyMinimumSize();
         AppWindow.Changed += (_, change) => { if (change.DidPresenterChange) ApplyMinimumSize(); };
+        Root.SizeChanged += (_, e) => UpdateNarrow(e.NewSize.Width);
 
         // Drag the window from the top of the page (a strip as tall as YouTube's bar) without opening the caption
         // buttons, only from empty spots so links, buttons and text keep working.
@@ -228,7 +235,8 @@ public sealed partial class MainWindow : Window
         _shell.Settings.SettingsChanged += (_, _) =>
         {
             ReadShellSettings();
-            if (_shell.Settings.SidebarDocked != _sidebarDocked) SetDocked(_shell.Settings.SidebarDocked);
+            Sidebar.IsDocked = _shell.Settings.SidebarDocked; // the button shows the preference, even when the window is too narrow to pin
+            if (DockWanted != _sidebarDocked) SetDocked(DockWanted);
             if (!_tabPreviews) HidePreview();
             if (!_showLoadBar) LoadBar.Opacity = 0;
         };
@@ -244,7 +252,9 @@ public sealed partial class MainWindow : Window
             else if (!restored && _shell.CurrentTab is null) _shell.NewTab();
             // First run (or --welcome): onboarding on top of everything.
             if (!_shell.Settings.OnboardingDone || Environment.GetCommandLineArgs().Contains("--welcome")) ShowOnboarding();
-            if (_shell.Settings.SidebarDocked) SetDocked(true, animate: false);
+            _narrow = Root.ActualWidth is > 0 and < DockMinWidth;
+            Sidebar.IsDocked = _shell.Settings.SidebarDocked;
+            if (DockWanted) SetDocked(true, animate: false);
             UpdateMaximized();
             ApplyLayout();
         };
@@ -791,11 +801,19 @@ public sealed partial class MainWindow : Window
     /// Pinned, the sidebar lands (its shadow goes away) and the page shifts right once. Unpinned it floats again and
     /// the page grows underneath.
     /// </summary>
+    private void UpdateNarrow(double width)
+    {
+        if (_fullscreen) return; // the screen is wide; leaving full screen reports the real size again
+        var narrow = width < DockMinWidth;
+        if (narrow == _narrow) return;
+        _narrow = narrow;
+        if (Root.IsLoaded && DockWanted != _sidebarDocked) SetDocked(DockWanted);
+    }
+
     private void SetDocked(bool docked, bool animate = true)
     {
         if (_sidebarDocked == docked && _sidebarShown) return;
         _sidebarDocked = docked;
-        Sidebar.IsDocked = docked;
         SetSidebarShown(true);
         Sidebar.Translation = new Vector3(0, 0, SidebarDepth);
         _sidebarArmed = true;
@@ -1036,7 +1054,7 @@ public sealed partial class MainWindow : Window
         _windowSettings.WindowMaximized = _wasMaximized;
     }
 
-    private const int MinWindowWidth = 400, MinWindowHeight = 500; // DIP
+    private const int MinWindowWidth = 720, MinWindowHeight = 480; // DIP
 
     private void ApplyMinimumSize()
     {
@@ -1701,7 +1719,7 @@ public sealed partial class MainWindow : Window
     private void ToggleDock()
     {
         if (_fullscreen) return;
-        _shell.Settings.SidebarDocked = !_sidebarDocked;
+        _shell.Settings.SidebarDocked = !_shell.Settings.SidebarDocked;
     }
 
     private void PrivateTab_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
