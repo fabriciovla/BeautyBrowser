@@ -56,6 +56,8 @@
             <TextBlock Style="{StaticResource BeautySectionLabel}" Text="{app:T En='Appearance', Es='Apariencia'}" />
             <Border Padding="12,10,12,12" Background="{StaticResource BeautySubtleFillBrush}" CornerRadius="10">
                 <StackPanel Spacing="8">
+                    <TextBlock FontSize="13" Text="{app:T En='Mode', Es='Modo'}" />
+                    <Grid x:Name="ModeChips" Margin="0,0,0,6" ColumnSpacing="4" />
                     <TextBlock FontSize="13" Text="{app:T En='Color', Es='Color'}" />
                     <StackPanel x:Name="ThemeRow" Margin="-4,0,0,6" Orientation="Horizontal" Spacing="2" />
                     <TextBlock FontSize="13" Text="{app:T En='Page zoom', Es='Zoom de las páginas'}" />
@@ -94,8 +96,8 @@
                                             <Setter Property="Padding" Value="4" />
                                             <Setter Property="MinWidth" Value="0" />
                                             <Setter Property="CornerRadius" Value="10" />
-                                            <Setter Property="Background" Value="#F7FFFFFF" />
-                                            <Setter Property="BorderBrush" Value="#14000000" />
+                                            <Setter Property="Background" Value="{StaticResource BeautySurfaceBrush}" />
+                                            <Setter Property="BorderBrush" Value="{StaticResource BeautyFillHoverBrush}" />
                                         </Style>
                                     </Flyout.FlyoutPresenterStyle>
                                     <StackPanel x:Name="TextureRows" Width="150" />
@@ -115,7 +117,7 @@
                     <!-- Live sample: the same glass with the selected texture. -->
                     <Border
                         Height="56"
-                        Background="#ECEEF3"
+                        Background="{StaticResource BeautySurfaceAltBrush}"
                         BorderBrush="{StaticResource BeautyInsetBorderBrush}"
                         BorderThickness="1"
                         CornerRadius="8">
@@ -260,6 +262,41 @@
             <TextBlock Style="{StaticResource BeautySectionLabel}" Text="{app:T En='Saved passwords', Es='Contraseñas guardadas'}" />
             <Border Padding="2" Background="{StaticResource BeautySubtleFillBrush}" CornerRadius="10">
                 <StackPanel x:Name="PasswordRows" />
+            </Border>
+
+            <TextBlock Style="{StaticResource BeautySectionLabel}" Text="{app:T En='Interface language', Es='Idioma de la interfaz'}" />
+            <Border Padding="2" Background="{StaticResource BeautySubtleFillBrush}" CornerRadius="10">
+                <StackPanel>
+                    <StackPanel x:Name="InterfaceLanguageRows" />
+                    <!-- Only shown after changing the language, which applies on restart. -->
+                    <Button
+                        x:Name="LanguageRestartRow"
+                        MinHeight="44"
+                        Padding="12,6,12,6"
+                        Click="Restart_Click"
+                        Style="{StaticResource BeautyListRowButton}"
+                        Visibility="Collapsed">
+                        <Grid ColumnSpacing="12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock
+                                VerticalAlignment="Center"
+                                FontSize="12"
+                                Foreground="{StaticResource BeautyTextSecondaryBrush}"
+                                Text="{app:T En='Applies on restart. Your tabs come back.', Es='Se aplica al reiniciar. Tus pestañas vuelven.'}"
+                                TextWrapping="Wrap" />
+                            <TextBlock
+                                Grid.Column="1"
+                                VerticalAlignment="Center"
+                                FontSize="12"
+                                FontWeight="SemiBold"
+                                Foreground="{StaticResource BeautyAccentBrush}"
+                                Text="{app:T En='Restart now', Es='Reiniciar ahora'}" />
+                        </Grid>
+                    </Button>
+                </StackPanel>
             </Border>
 
             <TextBlock Style="{StaticResource BeautySectionLabel}" Text="{app:T En='Preferred page language', Es='Idioma preferido de las páginas'}" />

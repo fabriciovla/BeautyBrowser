@@ -16,17 +16,22 @@
         BorderThickness="1"
         CornerRadius="14">
         <StackPanel>
-            <Grid Height="168" Background="#F3F3F6" CornerRadius="13,13,0,0">
+            <Grid Height="168" Background="{StaticResource BeautyThumbBrush}" CornerRadius="13,13,0,0">
                 <Image
                     x:Name="EmptyIcon"
                     Width="32"
                     Height="32"
                     HorizontalAlignment="Center"
                     VerticalAlignment="Center" />
-                <Image
-                    x:Name="Thumbnail"
-                    VerticalAlignment="Top"
-                    Stretch="UniformToFill" />
+                <!-- A brush, not an Image: a Border clips its background to the rounded corners. -->
+                <Border CornerRadius="13,13,0,0">
+                    <Border.Background>
+                        <ImageBrush
+                            x:Name="Thumbnail"
+                            AlignmentY="Top"
+                            Stretch="UniformToFill" />
+                    </Border.Background>
+                </Border>
                 <Rectangle Height="1" VerticalAlignment="Bottom" Fill="{StaticResource BeautyDividerBrush}" />
             </Grid>
 

@@ -100,6 +100,13 @@ public sealed class SettingsService
         set => Save("theme", value);
     }
 
+    /// <summary>"light", "dark" or "system" (follows Windows).</summary>
+    public string ColorMode
+    {
+        get => _db.GetSetting("color_mode", "light") switch { "dark" => "dark", "system" => "system", _ => "light" };
+        set => Save("color_mode", value);
+    }
+
     /// <summary>Whether onboarding (the first-run setup inside the browser) is done.</summary>
     public bool OnboardingDone
     {
@@ -223,6 +230,36 @@ public sealed class SettingsService
         set => Save("block_popups", value);
     }
 
+
+    /// <summary>Position and size of the window when it was last closed (not maximized); null the first time.</summary>
+    public Windows.Graphics.RectInt32? WindowBounds
+    {
+        get => GetInt("window_w", 0) > 0
+            ? new Windows.Graphics.RectInt32(GetInt("window_x", 0), GetInt("window_y", 0), GetInt("window_w", 0), GetInt("window_h", 0))
+            : null;
+        set
+        {
+            if (value is not { } r) return;
+            Save("window_x", r.X.ToString(CultureInfo.InvariantCulture));
+            Save("window_y", r.Y.ToString(CultureInfo.InvariantCulture));
+            Save("window_w", r.Width.ToString(CultureInfo.InvariantCulture));
+            Save("window_h", r.Height.ToString(CultureInfo.InvariantCulture));
+        }
+    }
+
+    /// <summary>The window was maximized when it was last closed.</summary>
+    public bool WindowMaximized
+    {
+        get => GetBool("window_maximized", false);
+        set => Save("window_maximized", value);
+    }
+
+    /// <summary>Interface language (system, Español or English). Applies after restarting BeautyBrowser.</summary>
+    public LanguageChoice Language
+    {
+        get => L.SavedChoice;
+        set => L.SaveChoice(value);
+    }
 
     public string PageLanguages
     {
