@@ -262,6 +262,41 @@
                 <StackPanel x:Name="PasswordRows" />
             </Border>
 
+            <TextBlock Style="{StaticResource BeautySectionLabel}" Text="{app:T En='Interface language', Es='Idioma de la interfaz'}" />
+            <Border Padding="2" Background="{StaticResource BeautySubtleFillBrush}" CornerRadius="10">
+                <StackPanel>
+                    <StackPanel x:Name="InterfaceLanguageRows" />
+                    <!-- Only shown after changing the language, which applies on restart. -->
+                    <Button
+                        x:Name="LanguageRestartRow"
+                        MinHeight="44"
+                        Padding="12,6,12,6"
+                        Click="Restart_Click"
+                        Style="{StaticResource BeautyListRowButton}"
+                        Visibility="Collapsed">
+                        <Grid ColumnSpacing="12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock
+                                VerticalAlignment="Center"
+                                FontSize="12"
+                                Foreground="{StaticResource BeautyTextSecondaryBrush}"
+                                Text="{app:T En='Applies on restart. Your tabs come back.', Es='Se aplica al reiniciar. Tus pestañas vuelven.'}"
+                                TextWrapping="Wrap" />
+                            <TextBlock
+                                Grid.Column="1"
+                                VerticalAlignment="Center"
+                                FontSize="12"
+                                FontWeight="SemiBold"
+                                Foreground="{StaticResource BeautyAccentBrush}"
+                                Text="{app:T En='Restart now', Es='Reiniciar ahora'}" />
+                        </Grid>
+                    </Button>
+                </StackPanel>
+            </Border>
+
             <TextBlock Style="{StaticResource BeautySectionLabel}" Text="{app:T En='Preferred page language', Es='Idioma preferido de las páginas'}" />
             <Border Padding="2" Background="{StaticResource BeautySubtleFillBrush}" CornerRadius="10">
                 <StackPanel x:Name="LanguageRows" />

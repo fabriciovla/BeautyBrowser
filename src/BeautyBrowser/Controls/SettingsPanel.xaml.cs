@@ -105,6 +105,14 @@ public sealed partial class SettingsPanel : UserControl
              (L.T("Ask sites not to track you", "Pedir a los sitios que no te rastreen"), L.T("Sends the \"Do Not Track\" signal", "Envía la señal \"No rastrear\""),
                  () => s.DoNotTrack, v => s.DoNotTrack = v)]);
 
+        OptionRows(InterfaceLanguageRows,
+        [
+            (L.T("System", "Sistema"), null, () => s.Language == LanguageChoice.System, () => { s.Language = LanguageChoice.System; UpdateLanguageRestart(); }),
+            ("Español", null, () => s.Language == LanguageChoice.Spanish, () => { s.Language = LanguageChoice.Spanish; UpdateLanguageRestart(); }),
+            ("English", null, () => s.Language == LanguageChoice.English, () => { s.Language = LanguageChoice.English; UpdateLanguageRestart(); }),
+        ]);
+        UpdateLanguageRestart();
+
         OptionRows(LanguageRows, SettingsService.AvailablePageLanguages
             .Select(lang => (lang.Name, (string?)null, (Func<bool>)(() => lang.Languages == s.PageLanguages),
                 (Action)(() => s.PageLanguages = lang.Languages)))
@@ -195,6 +203,9 @@ public sealed partial class SettingsPanel : UserControl
     }
 
     private bool _hardwareAtStart;
+
+    private void UpdateLanguageRestart() =>
+        LanguageRestartRow.Visibility = Settings.Language != L.Choice ? Visibility.Visible : Visibility.Collapsed;
 
     private void UpdateRestartRow() =>
         RestartRow.Visibility = _shell is not null && Settings.HardwareAcceleration != _hardwareAtStart
