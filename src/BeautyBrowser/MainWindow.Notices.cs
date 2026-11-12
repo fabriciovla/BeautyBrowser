@@ -1,4 +1,4 @@
-using BeautyKit;
+﻿using BeautyKit;
 using Microsoft.UI.Xaml;
 
 namespace BeautyBrowser;
@@ -90,10 +90,11 @@ public sealed partial class MainWindow
             Primary: () =>
             {
                 if (origin.Length == 0) return;
-                _shell.SitePermissions.Remember(origin, PagePermission.Popups, allowed: true);
+                if (!tab.IsPrivate) _shell.SitePermissions.Remember(origin, PagePermission.Popups, allowed: true); // private: this session only
                 BrowserTab.AllowPopupsFrom(origin);
                 // The popup that was blocked opens now, since the user wants it.
-                if (url.Length > 0 && !url.StartsWith("about:", StringComparison.OrdinalIgnoreCase)) _shell.NewTab(url);
+                // Only web addresses: a data: page would show content the site wrote, with no address of its own.
+                if (Uri.TryCreate(url, UriKind.Absolute, out var target) && target.Scheme is "http" or "https") _shell.NewTab(url);
             },
             SecondaryLabel: L.T("Dismiss", "Cerrar"),
             Secondary: () => { });
