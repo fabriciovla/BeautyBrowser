@@ -934,9 +934,9 @@ public sealed partial class MainWindow : Window
         Preview.Measure(new Size(TabPreview.CardWidth, double.PositiveInfinity));
         var height = Preview.DesiredSize.Height;
 
-        // Next to the sidebar, level with the tab (a bit higher, as in Dia), without leaving the window.
+        // Next to the sidebar, centered on the tab, without leaving the window.
         var rowTop = row.TransformToVisual(Root).TransformPoint(new Point(0, 0)).Y;
-        var top = rowTop + row.ActualHeight / 2 - height * 0.62;
+        var top = rowTop + row.ActualHeight / 2 - height * 0.5;
         top = Math.Clamp(top, Frame, Math.Max(Frame, Root.ActualHeight - height - Frame));
         var left = Sidebar.ActualWidth + PreviewGap;
 
