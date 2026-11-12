@@ -16,7 +16,7 @@
         BorderThickness="1"
         CornerRadius="14">
         <StackPanel>
-            <Grid Height="168" Background="#F3F3F6" CornerRadius="13,13,0,0">
+            <Grid Height="168" Background="{StaticResource BeautyThumbBrush}" CornerRadius="13,13,0,0">
                 <Image
                     x:Name="EmptyIcon"
                     Width="32"

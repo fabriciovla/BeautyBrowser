@@ -45,21 +45,142 @@ public static class AppTheme
         var resources = Application.Current.Resources;
         var accent = option.Color ?? ClassicAccent;
         if (resources["BeautyAccentBrush"] is SolidColorBrush accentBrush) accentBrush.Color = accent;
-        if (resources["BeautyPanelBrush"] is AcrylicBrush panel)
-        {
-            var tint = option.Color is { } color ? Mix(ClassicPanel, color, 0.2) : ClassicPanel;
-            panel.TintColor = tint;
-            panel.FallbackColor = tint;
-        }
-        Changed?.Invoke();
+        Retarget(animate: _modeApplied);
     }
 
     private static bool _applied;
 
-    /// <summary>The tint over the window glass (transparent for Classic).</summary>
-    public static Color WindowTint => Current.Color is { } color
-        ? Color.FromArgb(0x4D, color.R, color.G, color.B)
+    /// <summary>Dark mode (Settings → Appearance), or the light look.</summary>
+    public static bool IsDark { get; private set; }
+
+    /// <summary>The private space is showing: always dark, a neutral gray, like other browsers' incognito windows.</summary>
+    public static bool IsPrivate { get; private set; }
+
+    /// <summary>Raised halfway through a change between light and dark, when the glass under the tint can flip.</summary>
+    public static event Action<bool>? GlassDarkChanged;
+
+    private static readonly Color DarkPanel = Rgb(0x26, 0x26, 0x2C);
+    private static readonly Color DarkGlass = Rgb(0x1C, 0x1C, 0x21);
+
+    // The shared brushes in dark mode; their light colors are kept to go back.
+    private static readonly (string Key, uint Dark)[] DarkColors =
+    [
+        ("BeautyTextBrush", 0xFFECECF1),
+        ("BeautyTextSecondaryBrush", 0xFF9A9AA5),
+        ("BeautySubtleFillBrush", 0x14FFFFFF),
+        ("BeautySubtleFillHoverBrush", 0x22FFFFFF),
+        ("BeautyTileBrush", 0x14FFFFFF),
+        ("BeautyTileHoverBrush", 0x22FFFFFF),
+        ("BeautyTileActiveBrush", 0xFF3A3A42),
+        ("BeautyTileBorderBrush", 0x14FFFFFF),
+        ("BeautyTileActiveBorderBrush", 0x33FFFFFF),
+        ("BeautyDividerBrush", 0x1AFFFFFF),
+        ("BeautyPanelBorderBrush", 0x26FFFFFF),
+        ("BeautyCardBrush", 0xFF2C2C33),
+        ("BeautyMediaCardBrush", 0xE02C2C33),
+        ("BeautyInsetBrush", 0x33000000),
+        ("BeautyInsetBorderBrush", 0x14FFFFFF),
+        ("BeautyLibraryListBrush", 0x14FFFFFF),
+        ("BeautyFillLowBrush", 0x10FFFFFF),
+        ("BeautyFillHoverBrush", 0x1CFFFFFF),
+        ("BeautyFillPressedBrush", 0x28FFFFFF),
+        ("BeautyThumbBrush", 0xFF2C2C33),
+        ("BeautySurfaceBrush", 0xF22C2C33),
+        ("BeautySurfaceAltBrush", 0xFF33333A),
+        ("BeautyPopupHoverBrush", 0xFF38383F),
+        ("BeautyPopupPressedBrush", 0xFF45454D),
+    ];
+
+    private static readonly Dictionary<string, Color> LightColors = [];
+
+    /// <summary>Switches between light, dark and the private space's look, with a short crossfade.</summary>
+    public static void SetMode(bool dark, bool isPrivate)
+    {
+        if (IsDark == dark && IsPrivate == isPrivate && _modeApplied) return;
+        var animate = _modeApplied;
+        _modeApplied = true;
+        IsDark = dark;
+        IsPrivate = isPrivate;
+        Retarget(animate);
+    }
+
+    private static bool _modeApplied;
+    private static bool _glassDark;
+
+    private static bool LooksDark => IsDark || IsPrivate;
+
+    // Moves every themed color (shared brushes, sidebar glass, window tint) to the current mode and color.
+    private static void Retarget(bool animate)
+    {
+        var resources = Application.Current.Resources;
+        var changes = new List<(Action<Color> Set, Color From, Color To)>();
+        foreach (var (key, dark) in DarkColors)
+        {
+            if (resources[key] is not SolidColorBrush brush) continue;
+            if (!LightColors.ContainsKey(key)) LightColors[key] = brush.Color;
+            var to = LooksDark ? Argb(dark) : LightColors[key];
+            changes.Add((c => brush.Color = c, brush.Color, to));
+        }
+        if (resources["BeautyPanelBrush"] is AcrylicBrush panel)
+        {
+            changes.Add((c => { panel.TintColor = c; panel.FallbackColor = c; }, panel.TintColor, PanelTint()));
+        }
+
+        var toDark = LooksDark;
+        if (!animate)
+        {
+            foreach (var (set, _, to) in changes) set(to);
+            TintChanged?.Invoke(WindowTint);
+            SetGlassDark(toDark);
+            Changed?.Invoke();
+            return;
+        }
+
+        // Mixing colors frame by frame passes through a muddy gray, and fading the panels one by one shows the ones
+        // underneath. Instead the window crossfades: a still of the old look covers it while everything switches
+        // underneath, then the still fades out (see MainWindow.CrossfadeTheme).
+        void Switch()
+        {
+            foreach (var (set, _, to) in changes) set(to);
+            TintChanged?.Invoke(WindowTint);
+            SetGlassDark(toDark);
+            Changed?.Invoke();
+        }
+        if (Crossfade is { } crossfade) _ = crossfade(Switch);
+        else Switch();
+    }
+
+    /// <summary>How long light ⇄ dark takes: the panels' crossfade, the glass tint and the start page all use it.</summary>
+    public static readonly TimeSpan SwitchDuration = TimeSpan.FromMilliseconds(300);
+
+    /// <summary>Covers the window with a still of its current look, runs the switch, and fades the still away.</summary>
+    public static Func<Action, Task>? Crossfade { get; set; }
+
+    /// <summary>The window tint's new color; the window fades its tint to it.</summary>
+    public static event Action<Color>? TintChanged;
+
+    private static void SetGlassDark(bool dark)
+    {
+        if (_glassDark == dark) return;
+        _glassDark = dark;
+        GlassDarkChanged?.Invoke(dark);
+    }
+
+    private static Color PanelTint() =>
+        IsPrivate ? DarkPanel
+        : IsDark ? Current.Color is { } c ? Mix(DarkPanel, c, 0.12) : DarkPanel
+        : Current.Color is { } color ? Mix(ClassicPanel, color, 0.2) : ClassicPanel;
+
+    /// <summary>The tint over the window glass (transparent for light Classic).</summary>
+    public static Color WindowTint =>
+        IsPrivate ? Color.FromArgb(0xE0, 0x1E, 0x1E, 0x23)
+        : IsDark ? WithAlpha(Current.Color is { } c ? Mix(DarkGlass, c, 0.14) : DarkGlass, 0xD8)
+        : Current.Color is { } color ? Color.FromArgb(0x4D, color.R, color.G, color.B)
         : Color.FromArgb(0, 0, 0, 0);
+
+    private static Color WithAlpha(Color c, byte a) => Color.FromArgb(a, c.R, c.G, c.B);
+
+    private static Color Argb(uint v) => Color.FromArgb((byte)(v >> 24), (byte)(v >> 16), (byte)(v >> 8), (byte)v);
 
     public static Color Mix(Color a, Color b, double t) => Color.FromArgb(255,
         (byte)Math.Round(a.R + (b.R - a.R) * t),
