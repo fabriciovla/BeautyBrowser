@@ -209,13 +209,12 @@ public sealed partial class MainWindow : Window
         ThemeTint.Background = new SolidColorBrush(AppTheme.WindowTint);
         ThemeTint.BackgroundTransition = new BrushTransition { Duration = TimeSpan.FromMilliseconds(380) };
         AppTheme.TintChanged += color => ThemeTint.Background = new SolidColorBrush(color);
-        // Their content, not the controls themselves: those carry XAML transitions, which lock their visuals.
-        AppTheme.FadingPanels.AddRange(new UIElement?[] { Sidebar.Content, Library.Content, Palette.Content }.OfType<UIElement>());
+        AppTheme.Crossfade = CrossfadeTheme;
         AppTheme.GlassDarkChanged += dark =>
         {
             // On the window's children, not the root: the Mica glass follows the root's theme and recreating it flashes
             // black for a frame. The dark look over the glass comes from the tint (AppTheme.WindowTintBrush).
-            foreach (var child in Root.Children.OfType<FrameworkElement>())
+            foreach (var child in Root.Children.OfType<FrameworkElement>().Where(c => c != _themeStill))
                 child.RequestedTheme = dark ? ElementTheme.Dark : ElementTheme.Light;
             ApplyCaptionColors(dark);
         };
@@ -285,6 +284,63 @@ public sealed partial class MainWindow : Window
             foreach (var tab in _shell.Spaces.Where(s => !s.IsPrivate).SelectMany(s => s.Tabs)) tab.SetStartPageDark(dark);
         }
         AppTheme.SetMode(dark, _shell.CurrentSpace?.IsPrivate == true);
+    }
+
+    private Image? _themeStill;
+
+    /// <summary>
+    /// Light ⇄ dark as one smooth crossfade: a still of the window as it looks now (the page and the glass are not in
+    /// it, so they show through and fade on their own) covers it, everything switches underneath in one go, and the
+    /// still fades out on the compositor, smooth even while the UI thread lays out the new colors.
+    /// </summary>
+    private async Task CrossfadeTheme(Action switchTheme)
+    {
+        if (_themeStill is { } previous) { Root.Children.Remove(previous); _themeStill = null; }
+        if (Root.ActualWidth < 1 || !Root.IsLoaded) { switchTheme(); return; }
+
+        var still = new Microsoft.UI.Xaml.Media.Imaging.RenderTargetBitmap();
+        try { await still.RenderAsync(Root); }
+        catch { switchTheme(); return; }
+
+        // Only over the panels: the page cannot be captured (it would show as a blank card) and fades on its own.
+        var edge = WebView.TransformToVisual(Root).TransformPoint(new Point(0, 0)).X;
+        foreach (var panel in new FrameworkElement[] { Sidebar, LibraryHost })
+        {
+            if (panel.Visibility != Visibility.Visible || panel.Opacity < 0.01 || panel.ActualWidth < 1) continue;
+            edge = Math.Max(edge, panel.TransformToVisual(Root).TransformPoint(new Point(panel.ActualWidth, 0)).X);
+        }
+        var image = new Image
+        {
+            Source = still,
+            Stretch = Stretch.None,
+            Width = Root.ActualWidth,
+            Height = Root.ActualHeight,
+            IsHitTestVisible = false,
+            HorizontalAlignment = HorizontalAlignment.Left,
+            VerticalAlignment = VerticalAlignment.Top,
+            Clip = new RectangleGeometry { Rect = new Rect(0, 0, edge, Root.ActualHeight) },
+        };
+        _themeStill = image;
+        Root.Children.Add(image);
+        switchTheme();
+
+        // After the new look has been laid out once, so the still never uncovers half-switched controls.
+        await Task.Delay(30);
+        if (_themeStill != image) return;
+        var visual = Microsoft.UI.Xaml.Hosting.ElementCompositionPreview.GetElementVisual(image);
+        var compositor = visual.Compositor;
+        var fade = compositor.CreateScalarKeyFrameAnimation();
+        fade.InsertKeyFrame(0, 1);
+        fade.InsertKeyFrame(1, 0, compositor.CreateCubicBezierEasingFunction(new(0.33f, 0f), new(0.2f, 1f)));
+        fade.Duration = TimeSpan.FromMilliseconds(320);
+        var batch = compositor.CreateScopedBatch(Microsoft.UI.Composition.CompositionBatchTypes.Animation);
+        visual.StartAnimation("Opacity", fade);
+        batch.End();
+        batch.Completed += (_, _) => DispatcherQueue.TryEnqueue(() =>
+        {
+            Root.Children.Remove(image);
+            if (_themeStill == image) _themeStill = null;
+        });
     }
 
     private static readonly Windows.UI.ViewManagement.UISettings WindowsColors = new();

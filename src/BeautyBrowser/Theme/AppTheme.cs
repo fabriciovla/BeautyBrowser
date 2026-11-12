@@ -129,7 +129,6 @@ public static class AppTheme
         var toDark = LooksDark;
         if (!animate)
         {
-            _fadeVersion++;
             foreach (var (set, _, to) in changes) set(to);
             TintChanged?.Invoke(WindowTint);
             SetGlassDark(toDark);
@@ -137,63 +136,25 @@ public static class AppTheme
             return;
         }
 
-        // Mixing light and dark colors frame by frame passes through a muddy gray where text cannot be read, and
-        // switching every brush and control theme takes the UI thread a few hundred ms. So the panels fade out on the
-        // compositor (smooth even while the UI thread is busy), everything switches while they are hidden, and they
-        // fade back in. The window tint glides to its new color on the compositor too (TintChanged + BrushTransition).
-        TintChanged?.Invoke(WindowTint);
-        var visuals = FadingPanels.Select(VisualOf).OfType<Microsoft.UI.Composition.Visual>().ToList();
-        var version = ++_fadeVersion;
-        if (visuals.Count == 0)
+        // Mixing colors frame by frame passes through a muddy gray, and fading the panels one by one shows the ones
+        // underneath. Instead the window crossfades: a still of the old look covers it while everything switches
+        // underneath, then the still fades out (see MainWindow.CrossfadeTheme).
+        void Switch()
         {
             foreach (var (set, _, to) in changes) set(to);
+            TintChanged?.Invoke(WindowTint);
             SetGlassDark(toDark);
             Changed?.Invoke();
-            return;
         }
-
-        var compositor = visuals[0].Compositor;
-        var ease = compositor.CreateCubicBezierEasingFunction(new(0.4f, 0f), new(0.2f, 1f));
-        var fadeOut = compositor.CreateScalarKeyFrameAnimation();
-        fadeOut.InsertKeyFrame(1, 0, ease);
-        fadeOut.Duration = TimeSpan.FromMilliseconds(130);
-        var batch = compositor.CreateScopedBatch(Microsoft.UI.Composition.CompositionBatchTypes.Animation);
-        foreach (var visual in visuals) visual.StartAnimation("Opacity", fadeOut);
-        batch.End();
-        var ui = Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread();
-        batch.Completed += (_, _) => ui.TryEnqueue(() =>
-        {
-            if (version != _fadeVersion) return; // a newer change took over
-            foreach (var (set, _, to) in changes) set(to);
-            SetGlassDark(toDark);
-            Changed?.Invoke();
-            // Low priority: after the new colors have been laid out and drawn once.
-            ui.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, () =>
-            {
-                if (version != _fadeVersion) return;
-                var fadeIn = compositor.CreateScalarKeyFrameAnimation();
-                fadeIn.InsertKeyFrame(0, 0);
-                fadeIn.InsertKeyFrame(1, 1, ease);
-                fadeIn.Duration = TimeSpan.FromMilliseconds(220);
-                foreach (var visual in visuals) visual.StartAnimation("Opacity", fadeIn);
-            });
-        });
+        if (Crossfade is { } crossfade) _ = crossfade(Switch);
+        else Switch();
     }
 
-    private static int _fadeVersion;
+    /// <summary>Covers the window with a still of its current look, runs the switch, and fades the still away.</summary>
+    public static Func<Action, Task>? Crossfade { get; set; }
 
     /// <summary>The window tint's new color; the window fades its tint to it.</summary>
     public static event Action<Color>? TintChanged;
-
-    /// <summary>The window's panels (sidebar, library…) that fade while the colors switch.</summary>
-    public static List<UIElement> FadingPanels { get; } = [];
-
-    // An element with a XAML transition (OpacityTransition…) refuses its visual: it is skipped, never a crash.
-    private static Microsoft.UI.Composition.Visual? VisualOf(UIElement element)
-    {
-        try { return Microsoft.UI.Xaml.Hosting.ElementCompositionPreview.GetElementVisual(element); }
-        catch (UnauthorizedAccessException) { return null; }
-    }
 
     private static void SetGlassDark(bool dark)
     {
