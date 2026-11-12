@@ -53,6 +53,11 @@ public sealed partial class BrowserTab
             return tab.TryHandleExternal(request.Url, pageUrl);
         }
 
+        // Middle click or Ctrl+click on a normal link: Chromium asks here instead of creating a popup.
+        protected override bool OnOpenUrlFromTab(IWebBrowser chromiumWebBrowser, IBrowser browser, IFrame frame,
+            string targetUrl, WindowOpenDisposition targetDisposition, bool userGesture) =>
+            tab.OpenUrlFromTab(browser, frame, targetUrl, targetDisposition, userGesture);
+
         // Runs on Chromium's thread. Crash, kill or out of memory: the page would stay frozen without a word.
         protected override void OnRenderProcessTerminated(IWebBrowser chromiumWebBrowser, IBrowser browser,
             CefTerminationStatus status, int errorCode, string errorMessage) => tab.RendererTerminated();
