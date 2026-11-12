@@ -224,6 +224,13 @@ public sealed class SettingsService
     }
 
 
+    /// <summary>Interface language (system, Español or English). Applies after restarting BeautyBrowser.</summary>
+    public LanguageChoice Language
+    {
+        get => L.SavedChoice;
+        set => L.SaveChoice(value);
+    }
+
     public string PageLanguages
     {
         get => _db.GetSetting("page_languages", AvailablePageLanguages[L.Spanish ? 0 : 2].Languages);
