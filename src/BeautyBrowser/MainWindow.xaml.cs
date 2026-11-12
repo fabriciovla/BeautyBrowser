@@ -157,6 +157,10 @@ public sealed partial class MainWindow : Window
         AppWindow.Changed += (_, change) => { if (change.DidSizeChange) ApplyFullscreenLayout(); };
         // Maximized: the page reaches the screen edges, without the glass frame.
         AppWindow.Changed += (_, change) => { if (change.DidPresenterChange || change.DidSizeChange) UpdateMaximized(); };
+        // The window cannot shrink below a phone-sized one. Each presenter is a new object, so this is applied again
+        // when the window leaves full screen.
+        ApplyMinimumSize();
+        AppWindow.Changed += (_, change) => { if (change.DidPresenterChange) ApplyMinimumSize(); };
 
         // Drag the window from the top of the page (a strip as tall as YouTube's bar) without opening the caption
         // buttons, only from empty spots so links, buttons and text keep working.
@@ -851,6 +855,19 @@ public sealed partial class MainWindow : Window
         if (_shell.CurrentTab is { } tab) _shell.CloseDevTools(tab);
     }
 
+
+    private const int MinWindowWidth = 400, MinWindowHeight = 500; // DIP
+
+    private void ApplyMinimumSize()
+    {
+        if (AppWindow.Presenter is not OverlappedPresenter presenter) return;
+        var scale = GetDpiForWindow(_hwnd) / 96.0;
+        presenter.PreferredMinimumWidth = (int)Math.Ceiling(MinWindowWidth * scale);
+        presenter.PreferredMinimumHeight = (int)Math.Ceiling(MinWindowHeight * scale);
+    }
+
+    [LibraryImport("user32.dll")]
+    private static partial uint GetDpiForWindow(nint hWnd);
 
     private void SetFullscreen(bool fullscreen)
     {
