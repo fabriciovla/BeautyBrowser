@@ -34,6 +34,13 @@ public sealed class UpdateService
     private const string DownloadPrefix = $"https://github.com/{Repository}/releases/download/";
     private const string SetupAsset = "BeautyBrowserSetup.exe";
     private const string ChecksumAsset = SetupAsset + ".sha256";
+    private const string SignatureAsset = SetupAsset + ".sig";
+
+    // Public half of the release signing key (ECDSA P-256). The private half never leaves the machine that publishes
+    // releases (tools\publish-release.ps1), so a release uploaded by anyone else (a stolen GitHub account or token)
+    // carries no valid signature and is not installed. The hash alone does not prove that: it comes from the same place.
+    private const string ReleaseKey =
+        "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAErlHjNbZ6j2FU6gVW8Si0wM5x6x6gd+OSdD/DzBaKKDwHrdPGCsbxTp/09isXrc7sUwoejUkO/NsbnhO+89xvFA==";
 
     private static readonly TimeSpan FirstCheck = TimeSpan.FromSeconds(30); // not while the browser is starting up
     private static readonly TimeSpan CheckEvery = TimeSpan.FromHours(6);
@@ -129,7 +136,7 @@ public sealed class UpdateService
             }
             var version = tag.TrimStart('v', 'V');
 
-            string? setupUrl = null, checksumUrl = null, digest = null;
+            string? setupUrl = null, checksumUrl = null, signatureUrl = null, digest = null;
             foreach (var asset in root.GetProperty("assets").EnumerateArray())
             {
                 var name = asset.GetProperty("name").GetString();
@@ -145,6 +152,10 @@ public sealed class UpdateService
                 else if (name == ChecksumAsset)
                 {
                     checksumUrl = url;
+                }
+                else if (name == SignatureAsset)
+                {
+                    signatureUrl = url;
                 }
             }
             if (setupUrl is null)
@@ -163,6 +174,13 @@ public sealed class UpdateService
                 return;
             }
             digest = digest.ToLowerInvariant();
+
+            // Signed by whoever holds the release key, or nothing is downloaded.
+            if (signatureUrl is null || !IsSigned(digest, (await http.GetStringAsync(signatureUrl)).Trim()))
+            {
+                SetUnlessReady(UpdateState.Failed);
+                return;
+            }
 
             Directory.CreateDirectory(UpdatesFolder);
             var target = Path.Combine(UpdatesFolder, $"BeautyBrowserSetup-{version}.exe");
@@ -225,6 +243,21 @@ public sealed class UpdateService
         catch
         {
             return false;
+        }
+    }
+
+    /// <summary>Whether <paramref name="signature"/> (base64, IEEE P1363) is the release key's signature of the SHA-256.</summary>
+    internal static bool IsSigned(string sha256Hex, string signature)
+    {
+        try
+        {
+            using var key = ECDsa.Create();
+            key.ImportSubjectPublicKeyInfo(Convert.FromBase64String(ReleaseKey), out _);
+            return key.VerifyHash(Convert.FromHexString(sha256Hex), Convert.FromBase64String(signature));
+        }
+        catch
+        {
+            return false; // malformed: not signed
         }
     }
 
