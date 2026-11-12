@@ -45,21 +45,70 @@ public static class AppTheme
         var resources = Application.Current.Resources;
         var accent = option.Color ?? ClassicAccent;
         if (resources["BeautyAccentBrush"] is SolidColorBrush accentBrush) accentBrush.Color = accent;
-        if (resources["BeautyPanelBrush"] is AcrylicBrush panel)
-        {
-            var tint = option.Color is { } color ? Mix(ClassicPanel, color, 0.2) : ClassicPanel;
-            panel.TintColor = tint;
-            panel.FallbackColor = tint;
-        }
+        ApplyPanel();
         Changed?.Invoke();
     }
 
     private static bool _applied;
 
-    /// <summary>The tint over the window glass (transparent for Classic).</summary>
-    public static Color WindowTint => Current.Color is { } color
-        ? Color.FromArgb(0x4D, color.R, color.G, color.B)
+    /// <summary>The tint over the window glass (transparent for Classic; dark gray in the private space).</summary>
+    public static Color WindowTint => IsPrivate ? Color.FromArgb(0xE0, 0x1E, 0x1E, 0x23)
+        : Current.Color is { } color ? Color.FromArgb(0x4D, color.R, color.G, color.B)
         : Color.FromArgb(0, 0, 0, 0);
+
+    /// <summary>The private space is showing: the app turns dark, like other browsers' incognito windows.</summary>
+    public static bool IsPrivate { get; private set; }
+
+    private static readonly Color PrivatePanel = Rgb(0x26, 0x26, 0x2C);
+
+    // The shared brushes in the private space; their light colors are kept to restore them.
+    private static readonly (string Key, uint Dark)[] PrivateColors =
+    [
+        ("BeautyTextBrush", 0xFFECECF1),
+        ("BeautyTextSecondaryBrush", 0xFF9A9AA5),
+        ("BeautySubtleFillBrush", 0x14FFFFFF),
+        ("BeautySubtleFillHoverBrush", 0x22FFFFFF),
+        ("BeautyTileBrush", 0x14FFFFFF),
+        ("BeautyTileHoverBrush", 0x22FFFFFF),
+        ("BeautyTileActiveBrush", 0xFF3A3A42),
+        ("BeautyTileBorderBrush", 0x14FFFFFF),
+        ("BeautyTileActiveBorderBrush", 0x33FFFFFF),
+        ("BeautyDividerBrush", 0x1AFFFFFF),
+        ("BeautyPanelBorderBrush", 0x26FFFFFF),
+        ("BeautyCardBrush", 0xFF2C2C33),
+        ("BeautyMediaCardBrush", 0xE02C2C33),
+        ("BeautyInsetBrush", 0x33000000),
+        ("BeautyInsetBorderBrush", 0x14FFFFFF),
+        ("BeautyLibraryListBrush", 0x14FFFFFF),
+    ];
+
+    private static readonly Dictionary<string, Color> LightColors = [];
+
+    public static void SetPrivate(bool isPrivate)
+    {
+        if (IsPrivate == isPrivate) return;
+        IsPrivate = isPrivate;
+
+        var resources = Application.Current.Resources;
+        foreach (var (key, dark) in PrivateColors)
+        {
+            if (resources[key] is not SolidColorBrush brush) continue;
+            if (!LightColors.ContainsKey(key)) LightColors[key] = brush.Color;
+            brush.Color = isPrivate
+                ? Color.FromArgb((byte)(dark >> 24), (byte)(dark >> 16), (byte)(dark >> 8), (byte)dark)
+                : LightColors[key];
+        }
+        ApplyPanel();
+        Changed?.Invoke();
+    }
+
+    private static void ApplyPanel()
+    {
+        if (Application.Current.Resources["BeautyPanelBrush"] is not AcrylicBrush panel) return;
+        var tint = IsPrivate ? PrivatePanel : Current.Color is { } color ? Mix(ClassicPanel, color, 0.2) : ClassicPanel;
+        panel.TintColor = tint;
+        panel.FallbackColor = tint;
+    }
 
     public static Color Mix(Color a, Color b, double t) => Color.FromArgb(255,
         (byte)Math.Round(a.R + (b.R - a.R) * t),

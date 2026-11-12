@@ -202,6 +202,7 @@ public sealed partial class MainWindow : Window
 
         // Glass texture and sidebar options from settings, applied live when they change.
         ReadShellSettings();
+        _shell.CurrentSpaceChanged += (_, _) => ApplyPrivateLook();
         _shell.Settings.SettingsChanged += (_, _) =>
         {
             ReadShellSettings();
@@ -241,7 +242,16 @@ public sealed partial class MainWindow : Window
         _showLoadBar = s.ShowLoadBar;
         Controls.NoiseLayer.Configure(s.GlassTexture, s.GlassGrain / 100.0, s.GlassSoftness / 100.0);
         AppTheme.Apply(s.ThemeKey);
+        ApplyPrivateLook();
+    }
+
+    /// <summary>The private space is dark, like other browsers' incognito windows; the others use the chosen theme.</summary>
+    private void ApplyPrivateLook()
+    {
+        var isPrivate = _shell.CurrentSpace?.IsPrivate == true;
+        AppTheme.SetPrivate(isPrivate);
         ThemeTint.Background = new SolidColorBrush(AppTheme.WindowTint);
+        Root.RequestedTheme = isPrivate ? ElementTheme.Dark : ElementTheme.Default; // also darkens the Mica glass
     }
 
     /// <summary>Windows glass, without a title bar or system buttons.</summary>

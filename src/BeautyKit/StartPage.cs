@@ -34,12 +34,13 @@ public static class StartPage
     /// factory too or beauty://newtab fails with ERR_UNKNOWN_URL_SCHEME.
     /// </summary>
     internal static void Register(IRequestContext context) =>
-        context.RegisterSchemeHandlerFactory(Scheme, "newtab", new Factory());
+        context.RegisterSchemeHandlerFactory(Scheme, "newtab", new Factory(isPrivate: true));
 
-    private sealed class Factory : ISchemeHandlerFactory
+    /// <param name="isPrivate">The private space's page: dark, says what is not kept, and has no app cards.</param>
+    private sealed class Factory(bool isPrivate = false) : ISchemeHandlerFactory
     {
         public IResourceHandler Create(IBrowser browser, IFrame frame, string schemeName, IRequest request) =>
-            ResourceHandler.FromString(Html(), Encoding.UTF8, mimeType: "text/html");
+            ResourceHandler.FromString(Html(isPrivate), Encoding.UTF8, mimeType: "text/html");
     }
 
     /// <summary>Name of the search engine the user chose in settings ("Google", "DuckDuckGo"…).</summary>
@@ -81,14 +82,19 @@ public static class StartPage
         }
     }
 
-    private static string Html()
+    private static string Html(bool isPrivate)
     {
         var template = BrowserTab.SearchUrlTemplate;
         var engine = EngineName(template);
-        var apps = Apps.Select(a => new { name = a.Name, image = Asset(a.Preview), url = L.T(a.UrlEnglish, a.UrlSpanish) }).ToArray();
+        var apps = Apps.Where(_ => !isPrivate).Select(a => new { name = a.Name, image = Asset(a.Preview), url = L.T(a.UrlEnglish, a.UrlSpanish) }).ToArray();
         return Page
             .Replace("__LANG__", L.T("en", "es"))
-            .Replace("__TITLE__", L.T("New tab", "Nueva pestaña"))
+            .Replace("__CLASS__", isPrivate ? "private" : "")
+            .Replace("__PRIVATE_TITLE__", L.T("You're browsing privately", "Estás navegando en privado"))
+            .Replace("__PRIVATE_NOTE__", L.T(
+                "History, cookies, site data and what you type in forms are not kept. They are erased when you close the last private tab. Downloads stay on your PC.",
+                "No se guardan el historial, las cookies, los datos de los sitios ni lo que escribís en formularios: se borran al cerrar la última pestaña privada. Las descargas sí quedan en tu PC."))
+            .Replace("__TITLE__", isPrivate ? L.T("Private tab", "Pestaña privada") : L.T("New tab", "Nueva pestaña"))
             .Replace("__PLACEHOLDER__", L.T($"Search {engine} or type an address", $"Buscá en {engine} o escribí una dirección"))
             .Replace("__ENTER__", L.T("to search with", "para buscar con"))
             .Replace("__SEARCH_LABEL__", L.T("Search", "Buscar"))
@@ -102,7 +108,7 @@ public static class StartPage
 
     private const string Page = """
         <!doctype html>
-        <html lang="__LANG__">
+        <html lang="__LANG__" class="__CLASS__">
         <head>
         <meta charset="utf-8">
         <title>__TITLE__</title>
@@ -172,6 +178,18 @@ public static class StartPage
           .in { animation: in .55s cubic-bezier(.2, .8, .2, 1) both; }
           @keyframes in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
           @keyframes float { 50% { transform: translateY(-3px); } }
+
+          /* Private space: dark, like other browsers' incognito windows. */
+          .note { display: none; }
+          .private { color-scheme: dark; --text: #ececf1; --soft: #8e8e99; }
+          .private body { background: radial-gradient(1400px 900px at 50% 0%, #2a2a31 0%, #202026 55%, #1a1a1f 100%); }
+          .private body::before { opacity: .05; }
+          .private form { background: #2c2c33; border-color: rgba(255, 255, 255, .08); box-shadow: 0 10px 32px rgba(0, 0, 0, .35); }
+          .private form:focus-within { border-color: rgba(255, 255, 255, .16); box-shadow: 0 14px 40px rgba(0, 0, 0, .45); }
+          .private .foot b, .private kbd { color: #b4b4be; }
+          .private kbd, .private button { background: #38383f; border-color: rgba(255, 255, 255, .06); color: #8e8e99; }
+          .private button.on { background: #ececf1; color: #1d1d20; }
+          .private .note { display: block; max-width: 470px; margin: 12px 0 0; font-size: 14.5px; line-height: 1.55; color: var(--soft); text-align: center; }
         </style>
         </head>
         <body>
@@ -193,6 +211,7 @@ public static class StartPage
             </div>
           </form>
           <h1 class="in" style="animation-delay:.1s"></h1>
+          <p class="note in" style="animation-delay:.15s">__PRIVATE_NOTE__</p>
         </main>
         <div class="showcase"></div>
         <script>
@@ -202,7 +221,8 @@ public static class StartPage
 
           const hour = new Date().getHours();
           const hello = hour >= 5 && hour < 12 ? TEXT[0] : hour >= 12 && hour < 20 ? TEXT[1] : TEXT[2];
-          document.querySelector('h1').textContent = hello + ' ' + TEXT[3];
+          document.querySelector('h1').textContent = document.documentElement.classList.contains('private')
+            ? '__PRIVATE_TITLE__' : hello + ' ' + TEXT[3];
 
           const q = document.getElementById('q');
           const go = document.getElementById('go');
