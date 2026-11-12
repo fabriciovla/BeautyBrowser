@@ -481,6 +481,7 @@ public sealed partial class BrowserView : ContentControl
 
     private void OnCursorChanged(CursorType type)
     {
+        SetCursorHidden(type == CursorType.None);
         var shape = type.ToString() switch
         {
             "Hand" => InputSystemCursorShape.Hand,
