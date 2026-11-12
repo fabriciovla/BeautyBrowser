@@ -150,6 +150,9 @@ public static class AppTheme
         else Switch();
     }
 
+    /// <summary>How long light ⇄ dark takes: the panels' crossfade, the glass tint and the start page all use it.</summary>
+    public static readonly TimeSpan SwitchDuration = TimeSpan.FromMilliseconds(300);
+
     /// <summary>Covers the window with a still of its current look, runs the switch, and fades the still away.</summary>
     public static Func<Action, Task>? Crossfade { get; set; }
 

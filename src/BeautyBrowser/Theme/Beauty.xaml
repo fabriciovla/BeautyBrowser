@@ -46,14 +46,82 @@
         TintLuminosityOpacity="0.92"
         TintOpacity="0.72" />
 
-    <Style x:Key="BeautyIconButton" TargetType="Button" BasedOn="{StaticResource DefaultButtonStyle}">
+    <!--
+        Every Beauty button. Its own template instead of Windows': hover is a soft fill over the button's own background
+        that fades in, the text keeps its color, and there is no white plate, border or elevation. The fills come from
+        the theme, so light and dark look alike.
+    -->
+    <Style x:Key="BeautyIconButton" TargetType="Button">
         <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderBrush" Value="Transparent" />
         <Setter Property="BorderThickness" Value="0" />
         <Setter Property="Padding" Value="7" />
         <Setter Property="MinWidth" Value="0" />
         <Setter Property="MinHeight" Value="0" />
+        <Setter Property="HorizontalContentAlignment" Value="Center" />
+        <Setter Property="VerticalContentAlignment" Value="Center" />
+        <Setter Property="FontFamily" Value="{ThemeResource ContentControlThemeFontFamily}" />
+        <Setter Property="FontSize" Value="{ThemeResource ControlContentThemeFontSize}" />
         <Setter Property="Foreground" Value="{StaticResource BeautyTextBrush}" />
         <Setter Property="CornerRadius" Value="{StaticResource BeautyItemCornerRadius}" />
+        <Setter Property="UseSystemFocusVisuals" Value="True" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Grid
+                        x:Name="Plate"
+                        Background="{TemplateBinding Background}"
+                        BorderBrush="{TemplateBinding BorderBrush}"
+                        BorderThickness="{TemplateBinding BorderThickness}"
+                        CornerRadius="{TemplateBinding CornerRadius}">
+                        <Border
+                            x:Name="Hover"
+                            Background="{StaticResource BeautyFillHoverBrush}"
+                            CornerRadius="{TemplateBinding CornerRadius}"
+                            Opacity="0">
+                            <Border.OpacityTransition>
+                                <ScalarTransition Duration="0:0:0.12" />
+                            </Border.OpacityTransition>
+                        </Border>
+                        <ContentPresenter
+                            x:Name="Content"
+                            Padding="{TemplateBinding Padding}"
+                            HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}"
+                            VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}"
+                            Content="{TemplateBinding Content}"
+                            ContentTemplate="{TemplateBinding ContentTemplate}"
+                            ContentTransitions="{TemplateBinding ContentTransitions}"
+                            FontFamily="{TemplateBinding FontFamily}"
+                            FontSize="{TemplateBinding FontSize}"
+                            FontWeight="{TemplateBinding FontWeight}"
+                            Foreground="{TemplateBinding Foreground}" />
+                        <VisualStateManager.VisualStateGroups>
+                            <VisualStateGroup x:Name="CommonStates">
+                                <VisualState x:Name="Normal" />
+                                <VisualState x:Name="PointerOver">
+                                    <VisualState.Setters>
+                                        <Setter Target="Hover.Opacity" Value="1" />
+                                        <Setter Target="Content.Foreground" Value="{StaticResource BeautyTextBrush}" />
+                                    </VisualState.Setters>
+                                </VisualState>
+                                <VisualState x:Name="Pressed">
+                                    <VisualState.Setters>
+                                        <Setter Target="Hover.Opacity" Value="1" />
+                                        <Setter Target="Hover.Background" Value="{StaticResource BeautyFillPressedBrush}" />
+                                        <Setter Target="Content.Foreground" Value="{StaticResource BeautyTextBrush}" />
+                                    </VisualState.Setters>
+                                </VisualState>
+                                <VisualState x:Name="Disabled">
+                                    <VisualState.Setters>
+                                        <Setter Target="Plate.Opacity" Value="0.4" />
+                                    </VisualState.Setters>
+                                </VisualState>
+                            </VisualStateGroup>
+                        </VisualStateManager.VisualStateGroups>
+                    </Grid>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
     </Style>
 
     <!-- Sidebar row ("New tab" and the like). -->
@@ -75,6 +143,11 @@
             <Setter.Value>
                 <ControlTemplate TargetType="Button">
                     <Grid x:Name="Plate" Background="Transparent" CornerRadius="11">
+                        <Border x:Name="Hover" Background="{StaticResource BeautyFillHoverBrush}" CornerRadius="11" Opacity="0">
+                            <Border.OpacityTransition>
+                                <ScalarTransition Duration="0:0:0.12" />
+                            </Border.OpacityTransition>
+                        </Border>
                         <ContentPresenter
                             x:Name="Content"
                             HorizontalAlignment="Center"
@@ -86,13 +159,14 @@
                                 <VisualState x:Name="Normal" />
                                 <VisualState x:Name="PointerOver">
                                     <VisualState.Setters>
-                                        <Setter Target="Plate.Background" Value="#12000000" />
+                                        <Setter Target="Hover.Opacity" Value="1" />
                                         <Setter Target="Content.Foreground" Value="{StaticResource BeautyTextBrush}" />
                                     </VisualState.Setters>
                                 </VisualState>
                                 <VisualState x:Name="Pressed">
                                     <VisualState.Setters>
-                                        <Setter Target="Plate.Background" Value="#1F000000" />
+                                        <Setter Target="Hover.Opacity" Value="1" />
+                                        <Setter Target="Hover.Background" Value="{StaticResource BeautyFillPressedBrush}" />
                                         <Setter Target="Content.Foreground" Value="{StaticResource BeautyTextBrush}" />
                                     </VisualState.Setters>
                                 </VisualState>

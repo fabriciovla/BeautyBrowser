@@ -207,7 +207,8 @@ public sealed partial class MainWindow : Window
 
         // Glass texture and sidebar options from settings, applied live when they change.
         ThemeTint.Background = new SolidColorBrush(AppTheme.WindowTint);
-        ThemeTint.BackgroundTransition = new BrushTransition { Duration = TimeSpan.FromMilliseconds(380) };
+        ThemeTint.BackgroundTransition = new BrushTransition { Duration = AppTheme.SwitchDuration };
+        AppTheme.Changed += PushStartPageMode; // at the switch itself, so the page fades together with the rest
         AppTheme.TintChanged += color => ThemeTint.Background = new SolidColorBrush(color);
         AppTheme.Crossfade = CrossfadeTheme;
         AppTheme.GlassDarkChanged += dark =>
@@ -278,12 +279,13 @@ public sealed partial class MainWindow : Window
             "system" => WindowsUsesDarkMode(),
             _ => false,
         };
-        if (StartPage.Dark != dark)
-        {
-            StartPage.Dark = dark;
-            foreach (var tab in _shell.Spaces.Where(s => !s.IsPrivate).SelectMany(s => s.Tabs)) tab.SetStartPageDark(dark);
-        }
+        StartPage.Dark = dark;
         AppTheme.SetMode(dark, _shell.CurrentSpace?.IsPrivate == true);
+    }
+
+    private void PushStartPageMode()
+    {
+        foreach (var tab in _shell.Spaces.Where(s => !s.IsPrivate).SelectMany(s => s.Tabs)) tab.SetStartPageDark(StartPage.Dark);
     }
 
     private Image? _themeStill;
@@ -324,15 +326,14 @@ public sealed partial class MainWindow : Window
         Root.Children.Add(image);
         switchTheme();
 
-        // After the new look has been laid out once, so the still never uncovers half-switched controls.
-        await Task.Delay(30);
         if (_themeStill != image) return;
         var visual = Microsoft.UI.Xaml.Hosting.ElementCompositionPreview.GetElementVisual(image);
         var compositor = visual.Compositor;
         var fade = compositor.CreateScalarKeyFrameAnimation();
         fade.InsertKeyFrame(0, 1);
-        fade.InsertKeyFrame(1, 0, compositor.CreateCubicBezierEasingFunction(new(0.33f, 0f), new(0.2f, 1f)));
-        fade.Duration = TimeSpan.FromMilliseconds(320);
+        // The same curve and length as the page's CSS fade and the tint (AppTheme.SwitchDuration).
+        fade.InsertKeyFrame(1, 0, compositor.CreateCubicBezierEasingFunction(new(0.4f, 0f), new(0.2f, 1f)));
+        fade.Duration = AppTheme.SwitchDuration;
         var batch = compositor.CreateScopedBatch(Microsoft.UI.Composition.CompositionBatchTypes.Animation);
         visual.StartAnimation("Opacity", fade);
         batch.End();
