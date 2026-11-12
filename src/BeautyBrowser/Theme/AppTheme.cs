@@ -140,12 +140,41 @@ public static class AppTheme
             return;
         }
 
-        // The tint covers the glass while it flips, so the switch reads as one smooth fade.
-        Motion.Animate("app-theme", TimeSpan.FromMilliseconds(420), t =>
+        // Mixing light and dark colors frame by frame passes through a muddy gray where text cannot be read. Instead
+        // the panels fade out, every color switches while they are hidden, and they fade back in; the window tint
+        // glides from one color to the other underneath the whole time.
+        var (tint, tintFrom, tintTo) = changes[^1];
+        var swapped = false;
+        Motion.Animate("app-theme", TimeSpan.FromMilliseconds(380), t =>
         {
-            foreach (var (set, from, to) in changes) set(Lerp(from, to, t));
-            if (t >= 0.5) SetGlassDark(toDark);
-        }, ease: EaseInOut, completed: () => Changed?.Invoke());
+            tint(Lerp(tintFrom, tintTo, t));
+            var fade = t < 0.4 ? 1 - t / 0.4 : t < 0.5 ? 0 : (t - 0.5) / 0.5;
+            if (!swapped && t >= 0.4)
+            {
+                swapped = true;
+                foreach (var (set, _, to) in changes.SkipLast(1)) set(to);
+                SetGlassDark(toDark);
+            }
+            SetPanelsOpacity((float)EaseInOut(fade));
+        }, ease: x => x, completed: () =>
+        {
+            SetPanelsOpacity(1);
+            Changed?.Invoke();
+        });
+    }
+
+    /// <summary>The window's panels (sidebar, library…) that fade while the colors switch.</summary>
+    public static List<UIElement> FadingPanels { get; } = [];
+
+    private static void SetPanelsOpacity(float opacity)
+    {
+        // The composition visual's opacity multiplies the element's own, so show/hide animations are left alone. An
+        // element with a XAML transition (OpacityTransition…) refuses its visual: it is skipped, never a crash.
+        foreach (var panel in FadingPanels)
+        {
+            try { Microsoft.UI.Xaml.Hosting.ElementCompositionPreview.GetElementVisual(panel).Opacity = opacity; }
+            catch (UnauthorizedAccessException) { }
+        }
     }
 
     private static void SetGlassDark(bool dark)

@@ -206,9 +206,14 @@ public sealed partial class MainWindow : Window
 
         // Glass texture and sidebar options from settings, applied live when they change.
         ThemeTint.Background = AppTheme.WindowTintBrush;
+        // Their content, not the controls themselves: those carry XAML transitions, which lock their visuals.
+        AppTheme.FadingPanels.AddRange(new UIElement?[] { Sidebar.Content, Library.Content, Palette.Content }.OfType<UIElement>());
         AppTheme.GlassDarkChanged += dark =>
         {
-            Root.RequestedTheme = dark ? ElementTheme.Dark : ElementTheme.Light; // Mica follows it
+            // On the window's children, not the root: the Mica glass follows the root's theme and recreating it flashes
+            // black for a frame. The dark look over the glass comes from the tint (AppTheme.WindowTintBrush).
+            foreach (var child in Root.Children.OfType<FrameworkElement>())
+                child.RequestedTheme = dark ? ElementTheme.Dark : ElementTheme.Light;
             ApplyCaptionColors(dark);
         };
         ReadShellSettings();
@@ -271,7 +276,11 @@ public sealed partial class MainWindow : Window
             "system" => WindowsUsesDarkMode(),
             _ => false,
         };
-        StartPage.Dark = dark;
+        if (StartPage.Dark != dark)
+        {
+            StartPage.Dark = dark;
+            foreach (var tab in _shell.Spaces.Where(s => !s.IsPrivate).SelectMany(s => s.Tabs)) tab.SetStartPageDark(dark);
+        }
         AppTheme.SetMode(dark, _shell.CurrentSpace?.IsPrivate == true);
     }
 

@@ -185,7 +185,13 @@ public static class StartPage
           /* Dark mode, and the private space (always dark, like other browsers' incognito windows). */
           .note { display: none; }
           :is(.private, .dark) { color-scheme: dark; --text: #ececf1; --soft: #8e8e99; }
-          :is(.private, .dark) body { background: radial-gradient(1400px 900px at 50% 0%, #2a2a31 0%, #202026 55%, #1a1a1f 100%); }
+          html::after {
+            content: ""; position: fixed; inset: 0; z-index: 0; pointer-events: none; opacity: 0; transition: opacity .35s ease;
+            background: radial-gradient(1400px 900px at 50% 0%, #2a2a31 0%, #202026 55%, #1a1a1f 100%);
+          }
+          :is(.private, .dark)::after { opacity: 1; }
+          .showcase { z-index: 1; }
+          body, form, input, kbd, button, .card { transition: color .35s, background-color .35s, border-color .35s, box-shadow .35s; }
           :is(.private, .dark) body::before { opacity: .05; }
           :is(.private, .dark) form { background: #2c2c33; border-color: rgba(255, 255, 255, .08); box-shadow: 0 10px 32px rgba(0, 0, 0, .35); }
           :is(.private, .dark) form:focus-within { border-color: rgba(255, 255, 255, .16); box-shadow: 0 14px 40px rgba(0, 0, 0, .45); }
