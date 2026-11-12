@@ -88,6 +88,7 @@ public sealed partial class MainWindow : Window
         // InitializeComponent so BrowserView already knows BrowserTab.UseGpu when it is created.
         var database = new Services.DatabaseService();
         var startupSettings = new Services.SettingsService(database);
+        _windowSettings = startupSettings;
         _engine = BrowserEngine.Initialize(_hwnd, DispatcherQueue,
             hardwareAcceleration: startupSettings.HardwareAcceleration,
             pageLanguages: startupSettings.PageLanguages);
@@ -311,7 +312,7 @@ public sealed partial class MainWindow : Window
         titleBar.ButtonInactiveBackgroundColor = Colors.Transparent;
         titleBar.PreferredHeightOption = TitleBarHeightOption.Collapsed;
 
-        AppWindow.Resize(new SizeInt32(1400, 900));
+        RestoreWindowPlacement();
         var icon = Path.Combine(AppContext.BaseDirectory, "BeautyBrowser.ico");
         if (File.Exists(icon)) AppWindow.SetIcon(icon); // taskbar and Alt+Tab
     }
@@ -370,6 +371,7 @@ public sealed partial class MainWindow : Window
 
     private void Shutdown()
     {
+        SaveWindowPlacement();
         // Closing every tab and shutting Chromium down takes a few seconds with many tabs: the window goes away right
         // away instead of staying frozen on screen meanwhile.
         AppWindow.Hide();
@@ -914,6 +916,62 @@ public sealed partial class MainWindow : Window
         if (_shell.CurrentTab is { } tab) _shell.CloseDevTools(tab);
     }
 
+
+    private Services.SettingsService _windowSettings = null!;
+    private RectInt32? _normalBounds;
+    private bool _wasMaximized;
+
+    /// <summary>Opens where the window was closed (size, position, maximized), or centered if that is off every screen.</summary>
+    private void RestoreWindowPlacement()
+    {
+        if (_windowSettings.WindowBounds is { } saved)
+        {
+            var area = DisplayArea.GetFromRect(saved, DisplayAreaFallback.None);
+            if (area is null)
+            {
+                // Off every monitor (one was unplugged): the primary one, centered.
+                area = DisplayArea.Primary;
+                var work = area.WorkArea;
+                saved.Width = Math.Min(saved.Width, work.Width);
+                saved.Height = Math.Min(saved.Height, work.Height);
+                saved.X = work.X + (work.Width - saved.Width) / 2;
+                saved.Y = work.Y + (work.Height - saved.Height) / 2;
+            }
+            AppWindow.MoveAndResize(saved);
+            _normalBounds = saved;
+            if (_windowSettings.WindowMaximized && AppWindow.Presenter is OverlappedPresenter window)
+            {
+                window.Maximize();
+                _wasMaximized = true;
+            }
+        }
+        else
+        {
+            AppWindow.Resize(new SizeInt32(1400, 900));
+        }
+
+        // Follow the window while it is in its normal state, and remember if it is maximized. Full screen changes
+        // neither: it is never saved.
+        AppWindow.Changed += (_, _) =>
+        {
+            if (_fullscreen || AppWindow.Presenter is not OverlappedPresenter presenter) return;
+            _wasMaximized = presenter.State == OverlappedPresenterState.Maximized;
+            if (presenter.State == OverlappedPresenterState.Restored)
+                _normalBounds = new RectInt32(AppWindow.Position.X, AppWindow.Position.Y, AppWindow.Size.Width, AppWindow.Size.Height);
+        };
+    }
+
+    private void SaveWindowPlacement()
+    {
+        // Nothing tracked yet (the window never left its first state): only a plain window is worth saving.
+        if (_normalBounds is not { } bounds)
+        {
+            if (_fullscreen || AppWindow.Presenter is not OverlappedPresenter { State: OverlappedPresenterState.Restored }) return;
+            bounds = new RectInt32(AppWindow.Position.X, AppWindow.Position.Y, AppWindow.Size.Width, AppWindow.Size.Height);
+        }
+        _windowSettings.WindowBounds = bounds;
+        _windowSettings.WindowMaximized = _wasMaximized;
+    }
 
     private const int MinWindowWidth = 400, MinWindowHeight = 500; // DIP
 
