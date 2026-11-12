@@ -56,9 +56,6 @@ public static class AppTheme
     /// <summary>The private space is showing: always dark, a neutral gray, like other browsers' incognito windows.</summary>
     public static bool IsPrivate { get; private set; }
 
-    /// <summary>The tint over the window glass. The window uses this brush; it changes color in place.</summary>
-    public static SolidColorBrush WindowTintBrush { get; } = new(Color.FromArgb(0, 0, 0, 0));
-
     /// <summary>Raised halfway through a change between light and dark, when the glass under the tint can flip.</summary>
     public static event Action<bool>? GlassDarkChanged;
 
@@ -128,11 +125,26 @@ public static class AppTheme
         {
             changes.Add((c => { panel.TintColor = c; panel.FallbackColor = c; }, panel.TintColor, PanelTint()));
         }
-        changes.Add((c => WindowTintBrush.Color = c, WindowTintBrush.Color, WindowTint));
 
         var toDark = LooksDark;
-        Motion.Cancel("app-theme");
         if (!animate)
+        {
+            _fadeVersion++;
+            foreach (var (set, _, to) in changes) set(to);
+            TintChanged?.Invoke(WindowTint);
+            SetGlassDark(toDark);
+            Changed?.Invoke();
+            return;
+        }
+
+        // Mixing light and dark colors frame by frame passes through a muddy gray where text cannot be read, and
+        // switching every brush and control theme takes the UI thread a few hundred ms. So the panels fade out on the
+        // compositor (smooth even while the UI thread is busy), everything switches while they are hidden, and they
+        // fade back in. The window tint glides to its new color on the compositor too (TintChanged + BrushTransition).
+        TintChanged?.Invoke(WindowTint);
+        var visuals = FadingPanels.Select(VisualOf).OfType<Microsoft.UI.Composition.Visual>().ToList();
+        var version = ++_fadeVersion;
+        if (visuals.Count == 0)
         {
             foreach (var (set, _, to) in changes) set(to);
             SetGlassDark(toDark);
@@ -140,41 +152,47 @@ public static class AppTheme
             return;
         }
 
-        // Mixing light and dark colors frame by frame passes through a muddy gray where text cannot be read. Instead
-        // the panels fade out, every color switches while they are hidden, and they fade back in; the window tint
-        // glides from one color to the other underneath the whole time.
-        var (tint, tintFrom, tintTo) = changes[^1];
-        var swapped = false;
-        Motion.Animate("app-theme", TimeSpan.FromMilliseconds(380), t =>
+        var compositor = visuals[0].Compositor;
+        var ease = compositor.CreateCubicBezierEasingFunction(new(0.4f, 0f), new(0.2f, 1f));
+        var fadeOut = compositor.CreateScalarKeyFrameAnimation();
+        fadeOut.InsertKeyFrame(1, 0, ease);
+        fadeOut.Duration = TimeSpan.FromMilliseconds(130);
+        var batch = compositor.CreateScopedBatch(Microsoft.UI.Composition.CompositionBatchTypes.Animation);
+        foreach (var visual in visuals) visual.StartAnimation("Opacity", fadeOut);
+        batch.End();
+        var ui = Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread();
+        batch.Completed += (_, _) => ui.TryEnqueue(() =>
         {
-            tint(Lerp(tintFrom, tintTo, t));
-            var fade = t < 0.4 ? 1 - t / 0.4 : t < 0.5 ? 0 : (t - 0.5) / 0.5;
-            if (!swapped && t >= 0.4)
-            {
-                swapped = true;
-                foreach (var (set, _, to) in changes.SkipLast(1)) set(to);
-                SetGlassDark(toDark);
-            }
-            SetPanelsOpacity((float)EaseInOut(fade));
-        }, ease: x => x, completed: () =>
-        {
-            SetPanelsOpacity(1);
+            if (version != _fadeVersion) return; // a newer change took over
+            foreach (var (set, _, to) in changes) set(to);
+            SetGlassDark(toDark);
             Changed?.Invoke();
+            // Low priority: after the new colors have been laid out and drawn once.
+            ui.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, () =>
+            {
+                if (version != _fadeVersion) return;
+                var fadeIn = compositor.CreateScalarKeyFrameAnimation();
+                fadeIn.InsertKeyFrame(0, 0);
+                fadeIn.InsertKeyFrame(1, 1, ease);
+                fadeIn.Duration = TimeSpan.FromMilliseconds(220);
+                foreach (var visual in visuals) visual.StartAnimation("Opacity", fadeIn);
+            });
         });
     }
+
+    private static int _fadeVersion;
+
+    /// <summary>The window tint's new color; the window fades its tint to it.</summary>
+    public static event Action<Color>? TintChanged;
 
     /// <summary>The window's panels (sidebar, library…) that fade while the colors switch.</summary>
     public static List<UIElement> FadingPanels { get; } = [];
 
-    private static void SetPanelsOpacity(float opacity)
+    // An element with a XAML transition (OpacityTransition…) refuses its visual: it is skipped, never a crash.
+    private static Microsoft.UI.Composition.Visual? VisualOf(UIElement element)
     {
-        // The composition visual's opacity multiplies the element's own, so show/hide animations are left alone. An
-        // element with a XAML transition (OpacityTransition…) refuses its visual: it is skipped, never a crash.
-        foreach (var panel in FadingPanels)
-        {
-            try { Microsoft.UI.Xaml.Hosting.ElementCompositionPreview.GetElementVisual(panel).Opacity = opacity; }
-            catch (UnauthorizedAccessException) { }
-        }
+        try { return Microsoft.UI.Xaml.Hosting.ElementCompositionPreview.GetElementVisual(element); }
+        catch (UnauthorizedAccessException) { return null; }
     }
 
     private static void SetGlassDark(bool dark)
@@ -195,14 +213,6 @@ public static class AppTheme
         : IsDark ? WithAlpha(Current.Color is { } c ? Mix(DarkGlass, c, 0.14) : DarkGlass, 0xD8)
         : Current.Color is { } color ? Color.FromArgb(0x4D, color.R, color.G, color.B)
         : Color.FromArgb(0, 0, 0, 0);
-
-    private static double EaseInOut(double t) => t < 0.5 ? 4 * t * t * t : 1 - Math.Pow(-2 * t + 2, 3) / 2;
-
-    private static Color Lerp(Color a, Color b, double t) => Color.FromArgb(
-        (byte)Math.Round(a.A + (b.A - a.A) * t),
-        (byte)Math.Round(a.R + (b.R - a.R) * t),
-        (byte)Math.Round(a.G + (b.G - a.G) * t),
-        (byte)Math.Round(a.B + (b.B - a.B) * t));
 
     private static Color WithAlpha(Color c, byte a) => Color.FromArgb(a, c.R, c.G, c.B);
 

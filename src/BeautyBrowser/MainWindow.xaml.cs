@@ -205,7 +205,9 @@ public sealed partial class MainWindow : Window
         _previewHideTimer.Tick += (_, _) => { if (!_previewHovered) HidePreview(); };
 
         // Glass texture and sidebar options from settings, applied live when they change.
-        ThemeTint.Background = AppTheme.WindowTintBrush;
+        ThemeTint.Background = new SolidColorBrush(AppTheme.WindowTint);
+        ThemeTint.BackgroundTransition = new BrushTransition { Duration = TimeSpan.FromMilliseconds(380) };
+        AppTheme.TintChanged += color => ThemeTint.Background = new SolidColorBrush(color);
         // Their content, not the controls themselves: those carry XAML transitions, which lock their visuals.
         AppTheme.FadingPanels.AddRange(new UIElement?[] { Sidebar.Content, Library.Content, Palette.Content }.OfType<UIElement>());
         AppTheme.GlassDarkChanged += dark =>
