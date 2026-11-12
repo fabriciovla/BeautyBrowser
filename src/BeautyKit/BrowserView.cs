@@ -481,6 +481,7 @@ public sealed partial class BrowserView : ContentControl
 
     private void OnCursorChanged(CursorType type)
     {
+        SetCursorHidden(type == CursorType.None);
         // InputSystemCursorShape has no Copy, Alias, ContextMenu or Zoom shapes: those stay on the arrow.
         var shape = type.ToString() switch
         {
