@@ -78,11 +78,7 @@
                             x:Name="Hover"
                             Background="{StaticResource BeautyFillHoverBrush}"
                             CornerRadius="{TemplateBinding CornerRadius}"
-                            Opacity="0">
-                            <Border.OpacityTransition>
-                                <ScalarTransition Duration="0:0:0.12" />
-                            </Border.OpacityTransition>
-                        </Border>
+                            Opacity="0" />
                         <ContentPresenter
                             x:Name="Content"
                             Padding="{TemplateBinding Padding}"
@@ -97,16 +93,24 @@
                             Foreground="{TemplateBinding Foreground}" />
                         <VisualStateManager.VisualStateGroups>
                             <VisualStateGroup x:Name="CommonStates">
-                                <VisualState x:Name="Normal" />
+                                <VisualState x:Name="Normal">
+                                    <Storyboard>
+                                        <DoubleAnimation Storyboard.TargetName="Hover" Storyboard.TargetProperty="Opacity" To="0" Duration="0:0:0.160" />
+                                    </Storyboard>
+                                </VisualState>
                                 <VisualState x:Name="PointerOver">
+                                    <Storyboard>
+                                        <DoubleAnimation Storyboard.TargetName="Hover" Storyboard.TargetProperty="Opacity" To="1" Duration="0:0:0.120" />
+                                    </Storyboard>
                                     <VisualState.Setters>
-                                        <Setter Target="Hover.Opacity" Value="1" />
                                         <Setter Target="Content.Foreground" Value="{StaticResource BeautyTextBrush}" />
                                     </VisualState.Setters>
                                 </VisualState>
                                 <VisualState x:Name="Pressed">
+                                    <Storyboard>
+                                        <DoubleAnimation Storyboard.TargetName="Hover" Storyboard.TargetProperty="Opacity" To="1" Duration="0:0:0.120" />
+                                    </Storyboard>
                                     <VisualState.Setters>
-                                        <Setter Target="Hover.Opacity" Value="1" />
                                         <Setter Target="Hover.Background" Value="{StaticResource BeautyFillPressedBrush}" />
                                         <Setter Target="Content.Foreground" Value="{StaticResource BeautyTextBrush}" />
                                     </VisualState.Setters>
@@ -143,11 +147,7 @@
             <Setter.Value>
                 <ControlTemplate TargetType="Button">
                     <Grid x:Name="Plate" Background="Transparent" CornerRadius="11">
-                        <Border x:Name="Hover" Background="{StaticResource BeautyFillHoverBrush}" CornerRadius="11" Opacity="0">
-                            <Border.OpacityTransition>
-                                <ScalarTransition Duration="0:0:0.12" />
-                            </Border.OpacityTransition>
-                        </Border>
+                        <Border x:Name="Hover" Background="{StaticResource BeautyFillHoverBrush}" CornerRadius="11" Opacity="0" />
                         <ContentPresenter
                             x:Name="Content"
                             HorizontalAlignment="Center"
@@ -156,16 +156,24 @@
                             Foreground="{TemplateBinding Foreground}" />
                         <VisualStateManager.VisualStateGroups>
                             <VisualStateGroup x:Name="CommonStates">
-                                <VisualState x:Name="Normal" />
+                                <VisualState x:Name="Normal">
+                                    <Storyboard>
+                                        <DoubleAnimation Storyboard.TargetName="Hover" Storyboard.TargetProperty="Opacity" To="0" Duration="0:0:0.160" />
+                                    </Storyboard>
+                                </VisualState>
                                 <VisualState x:Name="PointerOver">
+                                    <Storyboard>
+                                        <DoubleAnimation Storyboard.TargetName="Hover" Storyboard.TargetProperty="Opacity" To="1" Duration="0:0:0.120" />
+                                    </Storyboard>
                                     <VisualState.Setters>
-                                        <Setter Target="Hover.Opacity" Value="1" />
                                         <Setter Target="Content.Foreground" Value="{StaticResource BeautyTextBrush}" />
                                     </VisualState.Setters>
                                 </VisualState>
                                 <VisualState x:Name="Pressed">
+                                    <Storyboard>
+                                        <DoubleAnimation Storyboard.TargetName="Hover" Storyboard.TargetProperty="Opacity" To="1" Duration="0:0:0.120" />
+                                    </Storyboard>
                                     <VisualState.Setters>
-                                        <Setter Target="Hover.Opacity" Value="1" />
                                         <Setter Target="Hover.Background" Value="{StaticResource BeautyFillPressedBrush}" />
                                         <Setter Target="Content.Foreground" Value="{StaticResource BeautyTextBrush}" />
                                     </VisualState.Setters>

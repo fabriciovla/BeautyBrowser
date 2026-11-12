@@ -348,7 +348,7 @@ public sealed partial class SettingsPanel : UserControl
             var state = on;
             void Paint()
             {
-                track.Background = state ? Brush("BeautyAccentBrush") : new SolidColorBrush(ColorHelper.FromArgb(0x33, 0, 0, 0));
+                track.Background = state ? Brush("BeautyAccentBrush") : Brush("BeautyFillPressedBrush");
                 knob.Translation = new Vector3(state ? 16 : 0, 0, 0);
             }
             Paint();

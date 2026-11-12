@@ -143,7 +143,7 @@ public sealed partial class TabSwitcher : UserControl
                 {
                     Height = ThumbnailHeight,
                     CornerRadius = new CornerRadius(9),
-                    Background = new SolidColorBrush(ColorHelper.FromArgb(255, 241, 241, 244)),
+                    Background = Brush("BeautyThumbBrush"),
                     BorderBrush = Brush("BeautyInsetBorderBrush"),
                     BorderThickness = new Thickness(1),
                     Child = preview,
