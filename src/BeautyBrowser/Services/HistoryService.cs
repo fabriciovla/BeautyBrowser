@@ -225,6 +225,26 @@ public sealed class HistoryService
             })
             .ToList();
 
+    /// <summary>
+    /// The exact pages visited most often (twitch.tv/somestreamer, not just twitch.tv), without sign-in pages or search
+    /// results.
+    /// </summary>
+    public IReadOnlyList<HistoryEntry> TopPages(int max) =>
+        _cache
+            .Where(e => Uri.TryCreate(e.Url, UriKind.Absolute, out var u) &&
+                        (u.Scheme == Uri.UriSchemeHttps || u.Scheme == Uri.UriSchemeHttp) &&
+                        !IsUtilityHost(u.Host) && !IsSearchResults(u))
+            .OrderByDescending(e => e.VisitCount)
+            .ThenByDescending(e => e.LastVisit)
+            .Take(max)
+            .ToList();
+
+    // google.com/search?q=…, bing.com/search, duckduckgo.com/?q=…: searches, not places to go back to.
+    private static bool IsSearchResults(Uri uri) =>
+        uri.AbsolutePath.Equals("/search", StringComparison.OrdinalIgnoreCase) ||
+        uri.AbsolutePath.Equals("/results", StringComparison.OrdinalIgnoreCase) && uri.Query.Contains("search_query=") ||
+        uri.Query.StartsWith("?q=", StringComparison.Ordinal) || uri.Query.Contains("&q=");
+
     // Sign-in and account subdomains (accounts.google.com, login.microsoftonline.com…).
     private static readonly string[] UtilitySubdomains = ["accounts", "account", "login", "signin", "auth", "sso", "oauth", "myaccount"];
 

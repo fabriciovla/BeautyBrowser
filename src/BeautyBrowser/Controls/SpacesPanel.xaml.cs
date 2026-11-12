@@ -25,10 +25,15 @@ public sealed partial class SpacesPanel : UserControl
     private static readonly TimeSpan HoverFade = TimeSpan.FromMilliseconds(140);
 
     private static readonly Color Transparent = Colors.Transparent;
-    private static readonly Color HoverWhite = Color.FromArgb(0x99, 0xFF, 0xFF, 0xFF);
-    private static readonly Color Ink = Color.FromArgb(0xFF, 0x1F, 0x1F, 0x24);
-    private static readonly Color SoftFill = Color.FromArgb(0x0E, 0x00, 0x00, 0x00);
-    private static readonly Color SoftFillHover = Color.FromArgb(0x1A, 0x00, 0x00, 0x00);
+    // From the theme, read when used, so light and dark mode both work (AppTheme recolors these brushes).
+    private static Color HoverWhite => Res("BeautyTileHoverBrush");
+    private static Color Ink => Res("BeautyTextBrush");            // the current space's icon square
+    private static Color OnInk => Res("BeautyCardBrush");          // the glyph on that square
+    private static Color Card => Res("BeautyCardBrush");           // the current space's card
+    private static Color SoftFill => Res("BeautySubtleFillBrush");
+    private static Color SoftFillHover => Res("BeautySubtleFillHoverBrush");
+
+    private static Color Res(string key) => ((SolidColorBrush)Application.Current.Resources[key]).Color;
 
     private BrowserShell? _shell;
     private Space? _editing;
@@ -40,6 +45,7 @@ public sealed partial class SpacesPanel : UserControl
     public SpacesPanel()
     {
         InitializeComponent();
+        AppTheme.Changed += () => { if (_shell is not null) Refresh(); }; // light ⇄ dark
     }
 
     public void Attach(BrowserShell shell)
@@ -139,7 +145,7 @@ public sealed partial class SpacesPanel : UserControl
                 {
                     Glyph = glyph,
                     FontSize = 16,
-                    Foreground = isSelected ? new SolidColorBrush(Colors.White) : Brush("BeautyTextBrush"),
+                    Foreground = isSelected ? new SolidColorBrush(OnInk) : Brush("BeautyTextBrush"),
                 },
             };
             if (!isSelected) Hover(cell, SoftFill, SoftFillHover);
@@ -180,7 +186,7 @@ public sealed partial class SpacesPanel : UserControl
             {
                 Glyph = space.Icon,
                 FontSize = 17,
-                Foreground = current ? new SolidColorBrush(Colors.White) : Brush("BeautyTextBrush"),
+                Foreground = current ? new SolidColorBrush(OnInk) : Brush("BeautyTextBrush"),
             },
         };
 
@@ -294,12 +300,12 @@ public sealed partial class SpacesPanel : UserControl
         }
 
         // The card: white for the current space; the rest appear on hover.
-        var restColor = current ? Colors.White : Transparent;
+        var restColor = current ? Card : Transparent;
         var card = new Border
         {
             Padding = new Thickness(10),
             CornerRadius = new CornerRadius(12),
-            Background = new SolidColorBrush(picking || editing ? Colors.White : restColor),
+            Background = new SolidColorBrush(picking || editing ? Card : restColor),
             BackgroundTransition = new BrushTransition { Duration = HoverFade },
             BorderBrush = current || picking || editing ? Brush("BeautyInsetBorderBrush") : new SolidColorBrush(Transparent),
             BorderThickness = new Thickness(1),

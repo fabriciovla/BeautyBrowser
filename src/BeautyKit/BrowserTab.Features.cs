@@ -55,6 +55,13 @@ public sealed partial class BrowserTab
         }
     }
 
+    /// <summary>The start page follows dark mode without reloading (it fades; see StartPage).</summary>
+    public void SetStartPageDark(bool dark)
+    {
+        if (StartPage.Is(Url) && _browser.IsBrowserInitialized)
+            _browser.ExecuteScriptAsync($"document.documentElement.classList.toggle('dark', {(dark ? "true" : "false")});");
+    }
+
     public void ExitFullscreen()
     {
         if (_isFullscreen && _browser.IsBrowserInitialized)

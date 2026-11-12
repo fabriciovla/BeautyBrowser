@@ -206,7 +206,25 @@ public sealed partial class MainWindow : Window
         _previewHideTimer.Tick += (_, _) => { if (!_previewHovered) HidePreview(); };
 
         // Glass texture and sidebar options from settings, applied live when they change.
+        ThemeTint.Background = new SolidColorBrush(AppTheme.WindowTint);
+        ThemeTint.BackgroundTransition = new BrushTransition { Duration = AppTheme.SwitchDuration };
+        AppTheme.Changed += PushStartPageMode; // at the switch itself, so the page fades together with the rest
+        AppTheme.TintChanged += color => ThemeTint.Background = new SolidColorBrush(color);
+        AppTheme.Crossfade = CrossfadeTheme;
+        AppTheme.GlassDarkChanged += dark =>
+        {
+            // On the window's children, not the root: the Mica glass follows the root's theme and recreating it flashes
+            // black for a frame. The dark look over the glass comes from the tint (AppTheme.WindowTintBrush).
+            foreach (var child in Root.Children.OfType<FrameworkElement>().Where(c => c != _themeStill))
+                child.RequestedTheme = dark ? ElementTheme.Dark : ElementTheme.Light;
+            ApplyCaptionColors(dark);
+        };
         ReadShellSettings();
+        _shell.CurrentSpaceChanged += (_, _) => ApplyPrivateLook();
+        WindowsColors.ColorValuesChanged += (_, _) => DispatcherQueue.TryEnqueue(() =>
+        {
+            if (_shell.Settings.ColorMode == "system") ApplyPrivateLook();
+        });
         _shell.Settings.SettingsChanged += (_, _) =>
         {
             ReadShellSettings();
@@ -246,7 +264,92 @@ public sealed partial class MainWindow : Window
         _showLoadBar = s.ShowLoadBar;
         Controls.NoiseLayer.Configure(s.GlassTexture, s.GlassGrain / 100.0, s.GlassSoftness / 100.0);
         AppTheme.Apply(s.ThemeKey);
-        ThemeTint.Background = new SolidColorBrush(AppTheme.WindowTint);
+        ApplyPrivateLook();
+    }
+
+    /// <summary>
+    /// Light or dark (Settings → Appearance, or Windows' choice), and always dark in the private space, like other
+    /// browsers' incognito windows. The change fades (see AppTheme).
+    /// </summary>
+    private void ApplyPrivateLook()
+    {
+        var dark = _shell.Settings.ColorMode switch
+        {
+            "dark" => true,
+            "system" => WindowsUsesDarkMode(),
+            _ => false,
+        };
+        StartPage.Dark = dark;
+        AppTheme.SetMode(dark, _shell.CurrentSpace?.IsPrivate == true);
+    }
+
+    private void PushStartPageMode()
+    {
+        foreach (var tab in _shell.Spaces.Where(s => !s.IsPrivate).SelectMany(s => s.Tabs)) tab.SetStartPageDark(StartPage.Dark);
+    }
+
+    private Image? _themeStill;
+
+    /// <summary>
+    /// Light ⇄ dark as one smooth crossfade: a still of the window as it looks now (the page and the glass are not in
+    /// it, so they show through and fade on their own) covers it, everything switches underneath in one go, and the
+    /// still fades out on the compositor, smooth even while the UI thread lays out the new colors.
+    /// </summary>
+    private async Task CrossfadeTheme(Action switchTheme)
+    {
+        if (_themeStill is { } previous) { Root.Children.Remove(previous); _themeStill = null; }
+        if (Root.ActualWidth < 1 || !Root.IsLoaded) { switchTheme(); return; }
+
+        var still = new Microsoft.UI.Xaml.Media.Imaging.RenderTargetBitmap();
+        try { await still.RenderAsync(Root); }
+        catch { switchTheme(); return; }
+
+        // Only over the panels: the page cannot be captured (it would show as a blank card) and fades on its own.
+        var edge = WebView.TransformToVisual(Root).TransformPoint(new Point(0, 0)).X;
+        foreach (var panel in new FrameworkElement[] { Sidebar, LibraryHost })
+        {
+            if (panel.Visibility != Visibility.Visible || panel.Opacity < 0.01 || panel.ActualWidth < 1) continue;
+            edge = Math.Max(edge, panel.TransformToVisual(Root).TransformPoint(new Point(panel.ActualWidth, 0)).X);
+        }
+        var image = new Image
+        {
+            Source = still,
+            Stretch = Stretch.None,
+            Width = Root.ActualWidth,
+            Height = Root.ActualHeight,
+            IsHitTestVisible = false,
+            HorizontalAlignment = HorizontalAlignment.Left,
+            VerticalAlignment = VerticalAlignment.Top,
+            Clip = new RectangleGeometry { Rect = new Rect(0, 0, edge, Root.ActualHeight) },
+        };
+        _themeStill = image;
+        Root.Children.Add(image);
+        switchTheme();
+
+        if (_themeStill != image) return;
+        var visual = Microsoft.UI.Xaml.Hosting.ElementCompositionPreview.GetElementVisual(image);
+        var compositor = visual.Compositor;
+        var fade = compositor.CreateScalarKeyFrameAnimation();
+        fade.InsertKeyFrame(0, 1);
+        // The same curve and length as the page's CSS fade and the tint (AppTheme.SwitchDuration).
+        fade.InsertKeyFrame(1, 0, compositor.CreateCubicBezierEasingFunction(new(0.4f, 0f), new(0.2f, 1f)));
+        fade.Duration = AppTheme.SwitchDuration;
+        var batch = compositor.CreateScopedBatch(Microsoft.UI.Composition.CompositionBatchTypes.Animation);
+        visual.StartAnimation("Opacity", fade);
+        batch.End();
+        batch.Completed += (_, _) => DispatcherQueue.TryEnqueue(() =>
+        {
+            Root.Children.Remove(image);
+            if (_themeStill == image) _themeStill = null;
+        });
+    }
+
+    private static readonly Windows.UI.ViewManagement.UISettings WindowsColors = new();
+
+    private static bool WindowsUsesDarkMode()
+    {
+        var background = WindowsColors.GetColorValue(Windows.UI.ViewManagement.UIColorType.Background);
+        return background.R + background.G + background.B < 384;
     }
 
     /// <summary>Windows glass, without a title bar or system buttons.</summary>
@@ -575,6 +678,19 @@ public sealed partial class MainWindow : Window
         // On the top frame; when maximized (no frame), over the top edge of the page.
         LoadBar.Margin = new Thickness(_pageLeft + _pageShift + (PageArea.ActualWidth - width) / 2, _maximized ? 0 : 2.5, 0, 0);
         LoadBar.Width = width;
+    }
+
+    /// <summary>Windows draws the caption buttons black by default: on dark glass they turn light.</summary>
+    private void ApplyCaptionColors(bool dark)
+    {
+        var titleBar = AppWindow.TitleBar;
+        var glyph = dark ? Windows.UI.Color.FromArgb(255, 0xEC, 0xEC, 0xF1) : Windows.UI.Color.FromArgb(255, 0x1F, 0x1F, 0x24);
+        titleBar.ButtonForegroundColor = glyph;
+        titleBar.ButtonHoverForegroundColor = glyph;
+        titleBar.ButtonPressedForegroundColor = glyph;
+        titleBar.ButtonInactiveForegroundColor = dark ? Windows.UI.Color.FromArgb(255, 0x8E, 0x8E, 0x99) : Windows.UI.Color.FromArgb(255, 0x8A, 0x8A, 0x94);
+        titleBar.ButtonHoverBackgroundColor = dark ? Windows.UI.Color.FromArgb(0x26, 255, 255, 255) : Windows.UI.Color.FromArgb(0x14, 0, 0, 0);
+        titleBar.ButtonPressedBackgroundColor = dark ? Windows.UI.Color.FromArgb(0x3D, 255, 255, 255) : Windows.UI.Color.FromArgb(0x24, 0, 0, 0);
     }
 
     /// <summary>

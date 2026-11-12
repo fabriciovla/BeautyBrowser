@@ -13,7 +13,7 @@ public static class ThemeSwatches
     public static void Fill(Panel host, string selectedKey, Action<string> pick, double size = 26, Color? ring = null)
     {
         host.Children.Clear();
-        var ringColor = ring ?? Color.FromArgb(255, 0x1F, 0x1F, 0x24);
+        var ringColor = ring ?? ((SolidColorBrush)Application.Current.Resources["BeautyTextBrush"]).Color; // follows dark mode
         foreach (var option in AppTheme.Options)
         {
             var selected = option.Key == selectedKey;

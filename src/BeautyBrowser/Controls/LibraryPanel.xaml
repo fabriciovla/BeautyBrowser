@@ -7,7 +7,15 @@
     KeyDown="Library_KeyDown">
 
     <UserControl.Resources>
-        <ResourceDictionary Source="ms-appx:///Theme/BeautySurface.xaml" />
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="ms-appx:///Theme/BeautySurface.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+            <!-- Hover and press text follow the theme (BeautySurface hard-codes the light mode's dark text, so the
+                 rail's icon and title stayed gray in dark mode). -->
+            <StaticResource x:Key="ButtonForegroundPointerOver" ResourceKey="BeautyTextBrush" />
+            <StaticResource x:Key="ButtonForegroundPressed" ResourceKey="BeautyTextBrush" />
+        </ResourceDictionary>
     </UserControl.Resources>
 
     <!-- The library: the section rail and the section's list, on the sidebar glass. The page stays open on the right. -->

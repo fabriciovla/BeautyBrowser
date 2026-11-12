@@ -124,7 +124,7 @@
                 <!-- The X goes on the left: the caption buttons appear on the top right. -->
                 <StackPanel
                     Padding="4,0,12,0"
-                    Background="#F3F3F6"
+                    Background="{StaticResource BeautyThumbBrush}"
                     Orientation="Horizontal"
                     Spacing="6">
                     <Button

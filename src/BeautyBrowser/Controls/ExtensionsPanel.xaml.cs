@@ -363,7 +363,7 @@ public sealed partial class ExtensionsPanel : UserControl
         void Paint()
         {
             var on = isOn();
-            track.Background = on ? Brush("BeautyAccentBrush") : new SolidColorBrush(ColorHelper.FromArgb(0x33, 0, 0, 0));
+            track.Background = on ? Brush("BeautyAccentBrush") : Brush("BeautyFillPressedBrush");
             knob.Translation = new Vector3(on ? 16 : 0, 0, 0);
         }
         Paint();

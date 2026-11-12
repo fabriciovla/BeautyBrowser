@@ -100,6 +100,13 @@ public sealed class SettingsService
         set => Save("theme", value);
     }
 
+    /// <summary>"light", "dark" or "system" (follows Windows).</summary>
+    public string ColorMode
+    {
+        get => _db.GetSetting("color_mode", "light") switch { "dark" => "dark", "system" => "system", _ => "light" };
+        set => Save("color_mode", value);
+    }
+
     /// <summary>Whether onboarding (the first-run setup inside the browser) is done.</summary>
     public bool OnboardingDone
     {
