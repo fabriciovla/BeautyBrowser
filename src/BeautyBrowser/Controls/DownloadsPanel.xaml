@@ -70,10 +70,18 @@
                                         VerticalAlignment="Center"
                                         Background="{StaticResource BeautySubtleFillBrush}"
                                         CornerRadius="8">
-                                        <FontIcon
-                                            FontSize="15"
-                                            Foreground="{StaticResource BeautyTextSecondaryBrush}"
-                                            Glyph="&#xE8A5;" />
+                                        <Grid>
+                                            <Image
+                                                Width="20"
+                                                Height="20"
+                                                Source="{x:Bind Icon}"
+                                                Visibility="{x:Bind local:BindHelpers.VisibleIfNotNull(Icon)}" />
+                                            <FontIcon
+                                                FontSize="15"
+                                                Foreground="{StaticResource BeautyTextSecondaryBrush}"
+                                                Glyph="{x:Bind IconGlyph}"
+                                                Visibility="{x:Bind local:BindHelpers.VisibleIfNull(Icon)}" />
+                                        </Grid>
                                     </Border>
                                     <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
                                         <TextBlock
