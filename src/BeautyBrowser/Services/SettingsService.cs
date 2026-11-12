@@ -224,6 +224,29 @@ public sealed class SettingsService
     }
 
 
+    /// <summary>Position and size of the window when it was last closed (not maximized); null the first time.</summary>
+    public Windows.Graphics.RectInt32? WindowBounds
+    {
+        get => GetInt("window_w", 0) > 0
+            ? new Windows.Graphics.RectInt32(GetInt("window_x", 0), GetInt("window_y", 0), GetInt("window_w", 0), GetInt("window_h", 0))
+            : null;
+        set
+        {
+            if (value is not { } r) return;
+            Save("window_x", r.X.ToString(CultureInfo.InvariantCulture));
+            Save("window_y", r.Y.ToString(CultureInfo.InvariantCulture));
+            Save("window_w", r.Width.ToString(CultureInfo.InvariantCulture));
+            Save("window_h", r.Height.ToString(CultureInfo.InvariantCulture));
+        }
+    }
+
+    /// <summary>The window was maximized when it was last closed.</summary>
+    public bool WindowMaximized
+    {
+        get => GetBool("window_maximized", false);
+        set => Save("window_maximized", value);
+    }
+
     public string PageLanguages
     {
         get => _db.GetSetting("page_languages", AvailablePageLanguages[L.Spanish ? 0 : 2].Languages);
