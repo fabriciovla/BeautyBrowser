@@ -34,6 +34,13 @@ public sealed class UpdateService
     private const string DownloadPrefix = $"https://github.com/{Repository}/releases/download/";
     private const string SetupAsset = "BeautyBrowserSetup.exe";
     private const string ChecksumAsset = SetupAsset + ".sha256";
+    private const string SignatureAsset = SetupAsset + ".sig";
+
+    // Public half of the release signing key (ECDSA P-256). The private half never leaves the machine that publishes
+    // releases (tools\publish-release.ps1), so a release uploaded by anyone else (a stolen GitHub account or token)
+    // carries no valid signature and is not installed. The hash alone does not prove that: it comes from the same place.
+    private const string ReleaseKey =
+        "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAErlHjNbZ6j2FU6gVW8Si0wM5x6x6gd+OSdD/DzBaKKDwHrdPGCsbxTp/09isXrc7sUwoejUkO/NsbnhO+89xvFA==";
 
     private static readonly TimeSpan FirstCheck = TimeSpan.FromSeconds(30); // not while the browser is starting up
     private static readonly TimeSpan CheckEvery = TimeSpan.FromHours(6);
@@ -83,6 +90,12 @@ public sealed class UpdateService
         StateChanged?.Invoke(this, EventArgs.Empty);
     }
 
+    // While an update is Ready, background checks must not take that state away: it still installs on close.
+    private void SetUnlessReady(UpdateState state)
+    {
+        if (_installer is null) SetState(state);
+    }
+
     /// <summary>"Check for updates" in settings: checks right away instead of waiting for the next round.</summary>
     public Task CheckNowAsync() => IsInstalledCopy ? CheckAsync() : Task.CompletedTask;
 
@@ -103,9 +116,9 @@ public sealed class UpdateService
 
     private async Task CheckAsync()
     {
-        if (_checking || _installer is not null) return;
+        if (_checking) return; // a ready update does not stop the checks: a newer release replaces it
         _checking = true;
-        SetState(UpdateState.Checking);
+        SetUnlessReady(UpdateState.Checking);
         try
         {
             using var http = new HttpClient { Timeout = TimeSpan.FromMinutes(20) };
@@ -115,14 +128,15 @@ public sealed class UpdateService
             using var release = JsonDocument.Parse(await http.GetStringAsync(LatestReleaseApi));
             var root = release.RootElement;
             var tag = root.GetProperty("tag_name").GetString() ?? "";
-            if (!IsNewer(tag, CurrentVersion))
+            // With an update already downloaded, only a release newer than that one is worth another download.
+            if (!IsNewer(tag, ReadyVersion ?? CurrentVersion))
             {
-                SetState(UpdateState.UpToDate);
+                SetUnlessReady(UpdateState.UpToDate);
                 return;
             }
             var version = tag.TrimStart('v', 'V');
 
-            string? setupUrl = null, checksumUrl = null, digest = null;
+            string? setupUrl = null, checksumUrl = null, signatureUrl = null, digest = null;
             foreach (var asset in root.GetProperty("assets").EnumerateArray())
             {
                 var name = asset.GetProperty("name").GetString();
@@ -139,10 +153,14 @@ public sealed class UpdateService
                 {
                     checksumUrl = url;
                 }
+                else if (name == SignatureAsset)
+                {
+                    signatureUrl = url;
+                }
             }
             if (setupUrl is null)
             {
-                SetState(UpdateState.UpToDate); // a release without an installer yet
+                SetUnlessReady(UpdateState.UpToDate); // a release without an installer yet
                 return;
             }
 
@@ -152,16 +170,23 @@ public sealed class UpdateService
                 digest = (await http.GetStringAsync(checksumUrl)).Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries).FirstOrDefault();
             if (digest is not { Length: 64 })
             {
-                SetState(UpdateState.Failed);
+                SetUnlessReady(UpdateState.Failed);
                 return;
             }
             digest = digest.ToLowerInvariant();
+
+            // Signed by whoever holds the release key, or nothing is downloaded.
+            if (signatureUrl is null || !IsSigned(digest, (await http.GetStringAsync(signatureUrl)).Trim()))
+            {
+                SetUnlessReady(UpdateState.Failed);
+                return;
+            }
 
             Directory.CreateDirectory(UpdatesFolder);
             var target = Path.Combine(UpdatesFolder, $"BeautyBrowserSetup-{version}.exe");
             if (!File.Exists(target) || await HashOfAsync(target) != digest)
             {
-                SetState(UpdateState.Downloading);
+                SetUnlessReady(UpdateState.Downloading);
                 var partial = target + ".download";
                 using (var response = await http.GetAsync(setupUrl, HttpCompletionOption.ResponseHeadersRead))
                 {
@@ -173,7 +198,7 @@ public sealed class UpdateService
                 if (await HashOfAsync(partial) != digest)
                 {
                     File.Delete(partial);
-                    SetState(UpdateState.Failed);
+                    SetUnlessReady(UpdateState.Failed);
                     return; // corrupted or tampered with: tried again at the next check
                 }
                 File.Move(partial, target, overwrite: true);
@@ -189,7 +214,7 @@ public sealed class UpdateService
         catch
         {
             // Offline, GitHub unavailable, rate limited…: tried again at the next check.
-            SetState(UpdateState.Failed);
+            SetUnlessReady(UpdateState.Failed);
         }
         finally
         {
@@ -218,6 +243,21 @@ public sealed class UpdateService
         catch
         {
             return false;
+        }
+    }
+
+    /// <summary>Whether <paramref name="signature"/> (base64, IEEE P1363) is the release key's signature of the SHA-256.</summary>
+    internal static bool IsSigned(string sha256Hex, string signature)
+    {
+        try
+        {
+            using var key = ECDsa.Create();
+            key.ImportSubjectPublicKeyInfo(Convert.FromBase64String(ReleaseKey), out _);
+            return key.VerifyHash(Convert.FromHexString(sha256Hex), Convert.FromBase64String(signature));
+        }
+        catch
+        {
+            return false; // malformed: not signed
         }
     }
 

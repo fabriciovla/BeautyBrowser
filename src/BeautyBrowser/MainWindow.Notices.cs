@@ -1,4 +1,4 @@
-using BeautyKit;
+﻿using BeautyKit;
 using Microsoft.UI.Xaml;
 
 namespace BeautyBrowser;
@@ -19,7 +19,22 @@ public sealed partial class MainWindow
         _shell.CurrentTabChanged += (_, _) => ShowNextNotice();
 
         _shell.PopupBlocked += (_, blocked) => AddNotice(PopupNotice(blocked.Tab, blocked.Origin, blocked.Url));
+        _shell.TabCrashChanged += (_, e) =>
+        {
+            if (e.Crashed) AddNotice(CrashNotice(e.Tab));
+            else
+            {
+                _notices.RemoveAll(n => n.Key.Equals((e.Tab, "crashed")));
+                ShowNextNotice();
+            }
+        };
         _shell.DownloadApprovalRequested += (_, item) => AddNotice(DangerousDownloadNotice(item.Approval));
+        _shell.ExternalAppRequested += (_, item) =>
+        {
+            // While one is pending the new request is ignored: a page could swap the app right before the click.
+            if (_notices.Any(n => n.Key.Equals((item.Tab, "app")))) return;
+            AddNotice(ExternalAppNotice(item.Tab, item.Request));
+        };
     }
 
     private void AddNotice(Notice notice)
@@ -75,14 +90,22 @@ public sealed partial class MainWindow
             Primary: () =>
             {
                 if (origin.Length == 0) return;
-                _shell.SitePermissions.Remember(origin, PagePermission.Popups, allowed: true);
+                if (!tab.IsPrivate) _shell.SitePermissions.Remember(origin, PagePermission.Popups, allowed: true); // private: this session only
                 BrowserTab.AllowPopupsFrom(origin);
                 // The popup that was blocked opens now, since the user wants it.
-                if (url.Length > 0 && !url.StartsWith("about:", StringComparison.OrdinalIgnoreCase)) _shell.NewTab(url);
+                // Only web addresses: a data: page would show content the site wrote, with no address of its own.
+                if (Uri.TryCreate(url, UriKind.Absolute, out var target) && target.Scheme is "http" or "https") _shell.NewTab(url);
             },
             SecondaryLabel: L.T("Dismiss", "Cerrar"),
             Secondary: () => { });
     }
+
+    private static Notice CrashNotice(BrowserTab tab) => new(
+        Key: (tab, "crashed"), Tab: tab, Glyph: "",
+        Text: L.T("This page ran into a problem.", "Esta página tuvo un problema."),
+        Detail: null,
+        PrimaryLabel: L.T("Reload", "Recargar"), Primary: () => tab.Reload(),
+        SecondaryLabel: L.T("Dismiss", "Cerrar"), Secondary: () => { });
 
     private Notice DangerousDownloadNotice(DownloadApproval approval)
     {
@@ -97,6 +120,18 @@ public sealed partial class MainWindow
             SecondaryLabel: L.T("Discard", "Descartar"), Secondary: () => approval.Decide(false));
     }
 
+    // A link to an app (mailto:, zoommtg:…): Windows opens it only if the user says so, as in Chrome.
+    private static Notice ExternalAppNotice(BrowserTab tab, ExternalAppRequest request)
+    {
+        var site = SiteName(request.Origin);
+        return new Notice(
+            Key: (tab, "app"), Tab: tab, Glyph: "",
+            Text: L.T($"Open {request.App}?", $"¿Abrir {request.App}?"),
+            Detail: site.Length == 0 ? null : L.T($"{site} wants to open this app.", $"{site} quiere abrir esta app."),
+            PrimaryLabel: L.T("Open", "Abrir"), Primary: () => ExternalApps.Open(request.Url),
+            SecondaryLabel: L.T("Cancel", "Cancelar"), Secondary: () => { });
+    }
+
     private static string SiteName(string origin) =>
-        Uri.TryCreate(origin, UriKind.Absolute, out var uri) ? uri.Host.Replace("www.", "") : "";
+        Uri.TryCreate(origin, UriKind.Absolute, out var uri) ? HostName.WithoutWww(uri.Host) : "";
 }

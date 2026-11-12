@@ -133,6 +133,7 @@ public sealed partial class BrowserView : ContentControl
         {
             if (_tab == value) return;
 
+            s_cursorHidden = false; // the new tab has its own cursor state
             if (_tab is not null)
             {
                 _tab.VisualChanged -= RefreshVisual;
@@ -313,6 +314,7 @@ public sealed partial class BrowserView : ContentControl
 
     private void OnPointerExited(object sender, PointerRoutedEventArgs e)
     {
+        s_cursorHidden = false; // the sidebar and toolbar share this window: they must show the cursor
         if (_tab is null || IsTouch(e)) return;
         var point = e.GetCurrentPoint(this);
         _tab.SendMouseMove((int)point.Position.X, (int)point.Position.Y, Flags(point.Properties), leave: true);
@@ -481,6 +483,8 @@ public sealed partial class BrowserView : ContentControl
 
     private void OnCursorChanged(CursorType type)
     {
+        SetCursorHidden(type == CursorType.None);
+        // InputSystemCursorShape has no Copy, Alias, ContextMenu or Zoom shapes: those stay on the arrow.
         var shape = type.ToString() switch
         {
             "Hand" => InputSystemCursorShape.Hand,
@@ -489,12 +493,16 @@ public sealed partial class BrowserView : ContentControl
             "Wait" => InputSystemCursorShape.Wait,
             "Progress" => InputSystemCursorShape.AppStarting,
             "Help" => InputSystemCursorShape.Help,
-            "Move" or "Grab" or "Grabbing" => InputSystemCursorShape.SizeAll,
-            "NotAllowed" or "NoDrop" => InputSystemCursorShape.UniversalNo,
-            "EastResize" or "WestResize" or "EastWestResize" or "ColumnResize" => InputSystemCursorShape.SizeWestEast,
-            "NorthResize" or "SouthResize" or "NorthSouthResize" or "RowResize" => InputSystemCursorShape.SizeNorthSouth,
-            "NortheastResize" or "SouthwestResize" or "NortheastSouthwestResize" => InputSystemCursorShape.SizeNortheastSouthwest,
-            "NorthwestResize" or "SoutheastResize" or "NorthwestSoutheastResize" => InputSystemCursorShape.SizeNorthwestSoutheast,
+            "Move" or "Grab" or "Grabbing" or "MiddlePanning" => InputSystemCursorShape.SizeAll,
+            "NotAllowed" or "NoDrop" or "DndNone" => InputSystemCursorShape.UniversalNo,
+            "EastResize" or "WestResize" or "EastWestResize" or "ColumnResize" or
+                "EastPanning" or "WestPanning" or "MiddlePanningHorizontal" => InputSystemCursorShape.SizeWestEast,
+            "NorthResize" or "SouthResize" or "NorthSouthResize" or "RowResize" or
+                "NorthPanning" or "SouthPanning" or "MiddlePanningVertical" => InputSystemCursorShape.SizeNorthSouth,
+            "NortheastResize" or "SouthwestResize" or "NortheastSouthwestResize" or
+                "NortheastPanning" or "SouthwestPanning" => InputSystemCursorShape.SizeNortheastSouthwest,
+            "NorthwestResize" or "SoutheastResize" or "NorthwestSoutheastResize" or
+                "NorthwestPanning" or "SoutheastPanning" => InputSystemCursorShape.SizeNorthwestSoutheast,
             _ => InputSystemCursorShape.Arrow,
         };
         _cursorIsArrow = shape == InputSystemCursorShape.Arrow;

@@ -22,10 +22,17 @@ public sealed class DownloadEntry : INotifyPropertyChanged
     public string FullPath { get; set; } = "";
     public DateTime Started { get; set; }
 
+    /// <summary>Started from a private tab: never written to downloads.json, and dropped when the private space closes.</summary>
+    [JsonIgnore] public bool IsPrivate { get; init; }
+
     public long TotalBytes { get => _totalBytes; set => Set(ref _totalBytes, value); }
     public long ReceivedBytes { get => _receivedBytes; set => Set(ref _receivedBytes, value); }
     public bool IsComplete { get => _isComplete; set => Set(ref _isComplete, value); }
     public bool IsCancelled { get => _isCancelled; set => Set(ref _isCancelled, value); }
+
+    /// <summary>The icon Windows uses for this file type; null (and <see cref="IconGlyph"/> shown) if the shell has none.</summary>
+    [JsonIgnore] public Microsoft.UI.Xaml.Media.ImageSource? Icon => FileIcons.For(FileName);
+    [JsonIgnore] public string IconGlyph => FileIcons.GlyphFor(FileName);
 
     [JsonIgnore] public bool IsInProgress => !IsComplete && !IsCancelled;
     [JsonIgnore] public double Progress => TotalBytes > 0 ? 100.0 * ReceivedBytes / TotalBytes : 0;
@@ -37,7 +44,7 @@ public sealed class DownloadEntry : INotifyPropertyChanged
     {
         get
         {
-            var host = Uri.TryCreate(Url, UriKind.Absolute, out var uri) ? uri.Host.Replace("www.", "") : "";
+            var host = Uri.TryCreate(Url, UriKind.Absolute, out var uri) ? HostName.WithoutWww(uri.Host) : "";
             var size = IsCancelled ? L.T("Canceled", "Cancelada")
                 : IsComplete ? FormatSize(Math.Max(TotalBytes, ReceivedBytes))
                 : TotalBytes > 0 ? L.T($"{FormatSize(ReceivedBytes)} of {FormatSize(TotalBytes)}", $"{FormatSize(ReceivedBytes)} de {FormatSize(TotalBytes)}")
@@ -93,7 +100,7 @@ public sealed class DownloadsService
     /// <summary>Newest first.</summary>
     public ObservableCollection<DownloadEntry> Items { get; } = [];
 
-    public DownloadEntry Start(BrowserDownload download)
+    public DownloadEntry Start(BrowserDownload download, bool isPrivate = false)
     {
         var entry = new DownloadEntry
         {
@@ -102,6 +109,7 @@ public sealed class DownloadsService
             FileName = download.FileName,
             FullPath = download.FullPath,
             Started = DateTime.Now,
+            IsPrivate = isPrivate,
         };
         entry.Apply(download);
 
@@ -122,5 +130,12 @@ public sealed class DownloadsService
         }
     }
 
-    public void Save() => JsonStore.Save(FileName, Items.Where(e => e.IsComplete).ToList());
+    /// <summary>The private space closed: its downloads leave the list (the files stay on disk).</summary>
+    public void RemovePrivate()
+    {
+        foreach (var entry in Items.Where(e => e.IsPrivate).ToList()) Items.Remove(entry);
+        foreach (var id in _active.Where(kv => kv.Value.IsPrivate).Select(kv => kv.Key).ToList()) _active.Remove(id);
+    }
+
+    public void Save() => JsonStore.Save(FileName, Items.Where(e => e.IsComplete && !e.IsPrivate).ToList());
 }

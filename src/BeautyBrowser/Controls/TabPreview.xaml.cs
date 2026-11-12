@@ -31,12 +31,12 @@ public sealed partial class TabPreview : UserControl
         Tab = tab;
         TitleText.Text = tab.Title;
         SiteText.Text = Uri.TryCreate(tab.Url, UriKind.Absolute, out var uri) && uri.Scheme is "http" or "https"
-            ? uri.Host.Replace("www.", "")
+            ? HostName.WithoutWww(uri.Host)
             : tab.Url;
 
         var scale = XamlRoot?.RasterizationScale ?? 1;
         var thumbnail = tab.CaptureThumbnail((int)Math.Round(CardWidth * scale), (int)Math.Round(ThumbnailHeight * scale));
-        Thumbnail.Source = thumbnail;
+        Thumbnail.ImageSource = thumbnail;
         EmptyIcon.Source = thumbnail is null ? tab.Favicon : null;
 
         var pinned = _shell?.Favorites.Contains(tab.Url) == true;

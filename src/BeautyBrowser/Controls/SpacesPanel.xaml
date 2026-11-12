@@ -47,8 +47,8 @@
                 AutomationProperties.Name="{local:T En='New space', Es='Nuevo space'}"
                 UseSystemFocusVisuals="False">
                 <Button.Resources>
-                    <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#F4F4F6" />
-                    <SolidColorBrush x:Key="ButtonBackgroundPressed" Color="#EAEAEE" />
+                    <StaticResource x:Key="ButtonBackgroundPointerOver" ResourceKey="BeautyPopupHoverBrush" />
+                    <StaticResource x:Key="ButtonBackgroundPressed" ResourceKey="BeautyPopupPressedBrush" />
                 </Button.Resources>
                 <FontIcon FontSize="13" Glyph="&#xE710;" />
             </Button>

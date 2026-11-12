@@ -25,6 +25,8 @@ public static class Favicons
     /// <summary>Cache key: every requested size is its own image, since shrinking an already small image blurs it.</summary>
     private static string Key(string url, int size) => size == Size ? url : $"{url}#{size}";
     private const int MaxCache = 400;
+    /// <summary>No icon is that big; a server answering with a gzip bomb or a huge data: address must not be loaded whole.</summary>
+    private const int MaxIconBytes = 1024 * 1024;
 
     private static readonly HttpClient Http = CreateHttp();
     private static readonly Dictionary<string, Task<byte[]?>> Pixels = [];      // url → premultiplied BGRA, Size×Size
@@ -285,6 +287,7 @@ public static class Favicons
     public static void Remember(string url, string dataUrl)
     {
         var comma = dataUrl.IndexOf(',');
+        if (dataUrl.Length > MaxIconBytes * 4 / 3 + 128) return;
         if (comma < 0 || !dataUrl[..comma].EndsWith(";base64", StringComparison.OrdinalIgnoreCase)) return;
         try
         {
@@ -311,7 +314,7 @@ public static class Favicons
             if (url.StartsWith("data:", StringComparison.OrdinalIgnoreCase))
             {
                 var comma = url.IndexOf(',');
-                if (comma < 0) return null;
+                if (comma < 0 || url.Length > MaxIconBytes * 4 / 3 + 128) return null;
                 var data = url[(comma + 1)..];
                 return url[..comma].EndsWith(";base64", StringComparison.OrdinalIgnoreCase)
                     ? Convert.FromBase64String(data)
@@ -425,6 +428,7 @@ public static class Favicons
         })
         {
             Timeout = TimeSpan.FromSeconds(10),
+            MaxResponseContentBufferSize = MaxIconBytes, // also counts the bytes after decompressing
         };
         // Some servers reject clients without a browser User-Agent.
         http.DefaultRequestHeaders.UserAgent.ParseAdd(

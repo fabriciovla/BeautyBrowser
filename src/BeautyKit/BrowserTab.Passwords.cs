@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using CefSharp;
 
 namespace BeautyKit;
@@ -22,9 +22,10 @@ public sealed partial class BrowserTab
     public string? Origin =>
         Uri.TryCreate(Url, UriKind.Absolute, out var uri) && uri.Scheme is "http" or "https" ? uri.GetLeftPart(UriPartial.Authority) : null;
 
-    private void ReceiveLogin(IDictionary<string, object?> m)
+    // origin: the page that sent it, which may differ from Url when it navigated right after sending.
+    private void ReceiveLogin(IDictionary<string, object?> m, string origin)
     {
-        if (Origin is not { } origin) return;
+        if (OriginOf(Url) != origin) return; // the tab is on another site now
         string Text(string key) => m.TryGetValue(key, out var v) && v is string s ? s : "";
         double Number(string key) => m.TryGetValue(key, out var v) ? v switch { int i => i, double d => d, long l => l, _ => 0 } : 0;
 

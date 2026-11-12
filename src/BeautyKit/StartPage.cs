@@ -7,16 +7,13 @@ namespace BeautyKit;
 public sealed record StartPageSite(string Title, string Url, string? Icon);
 
 /// <summary>
-/// The new tab page (beauty://newtab): logo, greeting, a large search box and the most visited sites. It is served
-/// by the browser itself, so it works offline.
+/// The new tab page (beauty://newtab), laid out like Dia's: the ⌘ mark, a large search box, a greeting and, rising from
+/// the bottom edge, tilted cards that preview our apps. It is served by the browser itself, so it works offline.
 /// </summary>
 public static class StartPage
 {
     public const string Scheme = "beauty";
     public const string Url = "beauty://newtab/";
-
-    /// <summary>Sites shown under the search box. Set on the UI thread, read from Chromium's threads.</summary>
-    public static IReadOnlyList<StartPageSite> Sites { get; set; } = [];
 
     public static bool Is(string? url) => url is not null && url.StartsWith("beauty://newtab", StringComparison.OrdinalIgnoreCase);
 
@@ -32,11 +29,22 @@ public static class StartPage
             SchemeHandlerFactory = new Factory(),
         });
 
-    private sealed class Factory : ISchemeHandlerFactory
+    /// <summary>
+    /// The scheme is registered for the global context only; a private tab has its own context, which needs the
+    /// factory too or beauty://newtab fails with ERR_UNKNOWN_URL_SCHEME.
+    /// </summary>
+    internal static void Register(IRequestContext context) =>
+        context.RegisterSchemeHandlerFactory(Scheme, "newtab", new Factory(isPrivate: true));
+
+    /// <param name="isPrivate">The private space's page: dark, says what is not kept, and has no app cards.</param>
+    private sealed class Factory(bool isPrivate = false) : ISchemeHandlerFactory
     {
         public IResourceHandler Create(IBrowser browser, IFrame frame, string schemeName, IRequest request) =>
-            ResourceHandler.FromString(Html(), Encoding.UTF8, mimeType: "text/html");
+            ResourceHandler.FromString(Html(isPrivate), Encoding.UTF8, mimeType: "text/html");
     }
+
+    /// <summary>The app is in dark mode: new tabs open with the dark page.</summary>
+    public static bool Dark { get; set; }
 
     /// <summary>Name of the search engine the user chose in settings ("Google", "DuckDuckGo"…).</summary>
     public static string SearchEngineName => EngineName(BrowserTab.SearchUrlTemplate);
@@ -47,142 +55,185 @@ public static class StartPage
         : template.Contains("ecosia", StringComparison.OrdinalIgnoreCase) ? "Ecosia"
         : "Google";
 
-    /// <summary>The app logo as a PNG data URI. Without it the page shows a colored sphere.</summary>
-    public static string? LogoDataUri { get; set; }
-
     private static string Json(object value) => JsonSerializer.Serialize(value).Replace("</", "<\\/");
 
-    private static string Html()
+    // The cards at the bottom, left to right: our apps for now (sponsored startups will take these places later).
+    private static readonly (string Name, string Preview, string UrlEnglish, string UrlSpanish)[] Apps =
+    [
+        ("Beauty Screenshot", "screenshot-preview.webp", "https://beauty-shell.vercel.app/en/screenshot/", "https://beauty-shell.vercel.app/screenshot/"),
+        ("Beauty Shell", "shell-preview.webp", "https://beauty-shell.vercel.app/en/shell/", "https://beauty-shell.vercel.app/shell/"),
+        ("Conext", "conext-preview.webp", "https://www.conext.lat/en", "https://www.conext.lat/"),
+    ];
+
+    private static readonly Dictionary<string, string> Assets = [];
+
+    /// <summary>An image embedded in BeautyKit (Assets\StartPage) as a data: address.</summary>
+    private static string Asset(string file)
+    {
+        lock (Assets)
+        {
+            if (Assets.TryGetValue(file, out var cached)) return cached;
+            using var stream = typeof(StartPage).Assembly.GetManifestResourceStream("BeautyKit.StartPage." + file);
+            var uri = "";
+            if (stream is not null)
+            {
+                using var memory = new MemoryStream();
+                stream.CopyTo(memory);
+                uri = "data:image/webp;base64," + Convert.ToBase64String(memory.ToArray());
+            }
+            return Assets[file] = uri;
+        }
+    }
+
+    private static string Html(bool isPrivate)
     {
         var template = BrowserTab.SearchUrlTemplate;
         var engine = EngineName(template);
-        var sites = Sites.Take(8).Select(s => new { title = s.Title, url = s.Url, icon = s.Icon ?? "" }).ToArray();
-        var page = Page;
-        if (LogoDataUri is { Length: > 0 } logo)
-            page = page.Replace("<div class=\"mark in\"></div>", $"<div class=\"in\"><img class=\"logo\" src=\"{logo}\" alt=\"\"></div>");
-        return page
+        var apps = Apps.Where(_ => !isPrivate).Select(a => new { name = a.Name, image = Asset(a.Preview), url = L.T(a.UrlEnglish, a.UrlSpanish) }).ToArray();
+        return Page
             .Replace("__LANG__", L.T("en", "es"))
-            .Replace("__TITLE__", L.T("New tab", "Nueva pestaña"))
+            .Replace("__CLASS__", isPrivate ? "private" : Dark ? "dark" : "")
+            .Replace("__PRIVATE_TITLE__", L.T("You're browsing privately", "Estás navegando en privado"))
+            .Replace("__PRIVATE_NOTE__", L.T(
+                "History, cookies, site data and what you type in forms are not kept. They are erased when you close the last private tab. Downloads stay on your PC.",
+                "No se guardan el historial, las cookies, los datos de los sitios ni lo que escribís en formularios: se borran al cerrar la última pestaña privada. Las descargas sí quedan en tu PC."))
+            .Replace("__TITLE__", isPrivate ? L.T("Private tab", "Pestaña privada") : L.T("New tab", "Nueva pestaña"))
             .Replace("__PLACEHOLDER__", L.T($"Search {engine} or type an address", $"Buscá en {engine} o escribí una dirección"))
             .Replace("__ENTER__", L.T("to search with", "para buscar con"))
             .Replace("__SEARCH_LABEL__", L.T("Search", "Buscar"))
             .Replace("__GREETINGS__", Json(L.Spanish
-                ? new[] { "Buenos días", "Buenas tardes", "Buenas noches", " · ¿qué buscamos?" }
-                : new[] { "Good morning", "Good afternoon", "Good evening", " · what are we looking for?" }))
+                ? new[] { "Buenos días.", "Buenas tardes.", "Buenas noches.", "¿Qué buscamos hoy?" }
+                : new[] { "Good morning.", "Good afternoon.", "Good evening.", "What are we looking for today?" }))
             .Replace("__ENGINE__", engine)
             .Replace("__SEARCH__", Json(template))
-            .Replace("__SITES__", Json(sites));
+            .Replace("__APPS__", Json(apps));
     }
 
     private const string Page = """
         <!doctype html>
-        <html lang="__LANG__">
+        <html lang="__LANG__" class="__CLASS__">
         <head>
         <meta charset="utf-8">
         <title>__TITLE__</title>
         <style>
-          :root { color-scheme: light; --text: #1f1f24; --muted: #8a8a94; --accent: #2f6feb; }
+          :root { color-scheme: light; --text: #1d1d20; --soft: #9b9ba3; }
           * { box-sizing: border-box; }
           html, body { height: 100%; margin: 0; }
           body {
             font-family: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
             color: var(--text);
-            background: radial-gradient(1200px 760px at 50% -12%, #ffffff 0%, #f4f4f7 46%, #e8e9ef 100%);
+            background: radial-gradient(1400px 900px at 50% 0%, #f6f6f7 0%, #efeff1 55%, #e8e8eb 100%);
             display: flex; align-items: center; justify-content: center; overflow: hidden;
             -webkit-font-smoothing: antialiased;
           }
           body::before {
-            content: ""; position: fixed; inset: 0; pointer-events: none; opacity: .045;
+            content: ""; position: fixed; inset: 0; pointer-events: none; opacity: .035;
             background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
           }
-          main { width: min(660px, 88vw); display: flex; flex-direction: column; align-items: center; margin-top: -7vh; }
+          main { position: relative; z-index: 1; width: min(600px, 88vw); display: flex; flex-direction: column; align-items: center; margin-top: -18vh; }
 
-          .mark {
-            width: 66px; height: 66px; border-radius: 50%; position: relative;
-            background: conic-gradient(from 210deg, #2f6feb, #7c5cf6, #e2559b, #f2a33a, #2f6feb);
-            box-shadow: 0 14px 34px rgba(47, 111, 235, .22), inset 0 0 0 1px rgba(255, 255, 255, .45);
-            animation: float 7s ease-in-out infinite;
-          }
-          .logo { width: 78px; height: 78px; display: block; animation: float 7s ease-in-out infinite; filter: drop-shadow(0 12px 22px rgba(70, 50, 160, .25)); }
-          .mark::after {
-            content: ""; position: absolute; inset: 6px; border-radius: 50%;
-            background: radial-gradient(circle at 34% 28%, rgba(255,255,255,.95), rgba(255,255,255,.5) 42%, rgba(255,255,255,0) 72%);
-          }
-
-          h1 { margin: 22px 0 20px; font-size: 27px; font-weight: 600; letter-spacing: -.02em; text-align: center; }
-          h1 span { color: var(--muted); font-weight: 500; }
+          .mark { width: 78px; height: 78px; display: block; margin-bottom: 30px; overflow: visible; animation: float 7s ease-in-out infinite; }
+          .mark path { filter: drop-shadow(0 4px 6px rgba(80, 56, 200, .25)); }
 
           form {
-            width: 100%; background: #fff; border-radius: 18px; padding: 16px 14px 12px 18px;
+            width: 100%; background: #fff; border-radius: 12px; padding: 18px 14px 12px 20px;
             border: 1px solid rgba(0, 0, 0, .06);
-            box-shadow: 0 1px 2px rgba(0, 0, 0, .04), 0 14px 44px rgba(22, 22, 44, .08);
+            box-shadow: 0 1px 2px rgba(0, 0, 0, .04), 0 10px 32px rgba(20, 20, 30, .06);
             transition: box-shadow .25s, border-color .25s;
           }
-          form:focus-within {
-            border-color: rgba(47, 111, 235, .32);
-            box-shadow: 0 1px 2px rgba(0, 0, 0, .04), 0 18px 54px rgba(47, 111, 235, .14);
-          }
-          .row { display: flex; align-items: center; gap: 12px; }
-          .row svg { flex: none; color: #9a9aa3; }
-          input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; font: inherit; font-size: 17px; color: var(--text); }
-          input::placeholder { color: #9a9aa3; }
-          .foot { display: flex; align-items: center; justify-content: space-between; margin-top: 14px; font-size: 12.5px; color: #9a9aa3; }
-          .foot b { color: #6b6b75; font-weight: 600; }
-          kbd { font: inherit; font-size: 11px; padding: 1px 6px; border-radius: 6px; background: #f1f1f4; color: #6b6b75; border: 1px solid rgba(0,0,0,.05); }
+          form:focus-within { border-color: rgba(0, 0, 0, .1); box-shadow: 0 1px 2px rgba(0, 0, 0, .05), 0 14px 40px rgba(20, 20, 30, .09); }
+          .row { display: flex; align-items: center; gap: 10px; }
+          .row svg { flex: none; color: var(--soft); }
+          input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; font: inherit; font-size: 16.5px; color: var(--text); }
+          input::placeholder { color: var(--soft); }
+          .foot { display: flex; align-items: center; justify-content: space-between; margin-top: 34px; font-size: 14px; color: var(--soft); }
+          .foot b { color: #6e6e76; font-weight: 600; }
+          kbd { font: inherit; font-size: 12px; padding: 1px 6px; border-radius: 5px; background: #f2f2f4; color: #6e6e76; border: 1px solid rgba(0,0,0,.05); }
           button {
-            width: 32px; height: 32px; border: 0; border-radius: 10px; background: var(--text); color: #fff;
-            display: grid; place-items: center; cursor: pointer; opacity: .18; transition: opacity .15s, transform .15s;
+            width: 32px; height: 32px; border: 1px solid rgba(0, 0, 0, .06); border-radius: 8px; background: #f2f2f4; color: #a3a3ab;
+            display: grid; place-items: center; cursor: pointer; transition: background .15s, color .15s, transform .15s;
           }
-          button.on { opacity: 1; }
+          button.on { background: var(--text); color: #fff; border-color: transparent; }
           button:active { transform: scale(.94); }
 
-          nav { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; width: 100%; margin-top: 26px; }
-          nav:empty { display: none; }
-          nav a {
-            display: flex; align-items: center; gap: 10px; min-width: 0; padding: 10px 12px; border-radius: 12px;
-            background: rgba(255, 255, 255, .58); border: 1px solid rgba(0, 0, 0, .05);
-            color: var(--text); text-decoration: none; font-size: 13px;
-            transition: background .15s, transform .15s, box-shadow .15s;
+          h1 { margin: 44px 0 0; font-size: 29px; line-height: 1.3; font-weight: 600; letter-spacing: -.015em; text-align: center; }
+
+          /* The app cards rise from the bottom edge, tilted, and lift under the pointer. */
+          .showcase { position: fixed; left: 50%; bottom: 0; width: min(720px, 94vw); height: 200px; transform: translateX(-50%); pointer-events: none; }
+          .card {
+            position: absolute; display: block; padding: 5px; background: #fff; border-radius: 13px; pointer-events: auto;
+            box-shadow: 0 0 0 1px rgba(0, 0, 0, .05), 0 10px 28px rgba(20, 20, 35, .11);
+            transition: transform .45s cubic-bezier(.2, .8, .2, 1), box-shadow .45s;
+            animation: rise .9s cubic-bezier(.2, .8, .2, 1) both;
           }
-          nav a:hover { background: #fff; transform: translateY(-1px); box-shadow: 0 6px 18px rgba(22, 22, 44, .06); }
-          nav img, nav i { width: 20px; height: 20px; border-radius: 5px; flex: none; }
-          nav i { display: grid; place-items: center; background: #e7e7ec; color: #55555e; font-style: normal; font-size: 11px; font-weight: 600; }
-          nav span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+          .card img { display: block; width: 100%; border-radius: 9px; }
+          .card:hover { box-shadow: 0 0 0 1px rgba(0, 0, 0, .05), 0 16px 36px rgba(20, 20, 35, .16); }
+          .c0 { left: 5%; width: 30%; top: 92px; transform: rotate(-7deg); animation-delay: .2s; }
+          .c0:hover { transform: translateY(-10px) rotate(-7deg); }
+          .c1 { left: 34%; width: 32%; top: 62px; transform: rotate(-2deg); z-index: 2; padding: 10px 6px 6px; border-radius: 15px; animation-delay: .1s; }
+          .c1::before { content: ""; position: absolute; top: 3px; left: 50%; width: 4px; height: 4px; margin-left: -2px; border-radius: 50%; background: #1d1d20; }
+          .c1:hover { transform: translateY(-10px) rotate(-2deg); }
+          .c2 { right: 5%; width: 30%; top: 86px; transform: rotate(8deg); animation-delay: .3s; }
+          .c2:hover { transform: translateY(-10px) rotate(8deg); }
+          @keyframes rise { from { opacity: 0; translate: 0 90px; } to { opacity: 1; translate: 0 0; } }
+          @media (max-height: 660px) { .showcase { display: none; } main { margin-top: 0; } }
 
           .in { animation: in .55s cubic-bezier(.2, .8, .2, 1) both; }
           @keyframes in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
           @keyframes float { 50% { transform: translateY(-3px); } }
+
+          /* Dark mode, and the private space (always dark, like other browsers' incognito windows). */
+          .note { display: none; }
+          :is(.private, .dark) { color-scheme: dark; --text: #ececf1; --soft: #8e8e99; }
+          html::after {
+            content: ""; position: fixed; inset: 0; z-index: 0; pointer-events: none; opacity: 0; transition: opacity .3s cubic-bezier(.4, 0, .2, 1);
+            background: radial-gradient(1400px 900px at 50% 0%, #2a2a31 0%, #202026 55%, #1a1a1f 100%);
+          }
+          :is(.private, .dark)::after { opacity: 1; }
+          .showcase { z-index: 1; }
+          body, form, input, kbd, button, .card { transition: color .3s, background-color .3s, border-color .3s, box-shadow .3s; transition-timing-function: cubic-bezier(.4, 0, .2, 1); }
+          :is(.private, .dark) body::before { opacity: .05; }
+          :is(.private, .dark) form { background: #2c2c33; border-color: rgba(255, 255, 255, .08); box-shadow: 0 10px 32px rgba(0, 0, 0, .35); }
+          :is(.private, .dark) form:focus-within { border-color: rgba(255, 255, 255, .16); box-shadow: 0 14px 40px rgba(0, 0, 0, .45); }
+          :is(.private, .dark) :is(.foot b, kbd) { color: #b4b4be; }
+          :is(.private, .dark) :is(kbd, button) { background: #38383f; border-color: rgba(255, 255, 255, .06); color: #8e8e99; }
+          :is(.private, .dark) button.on { background: #ececf1; color: #1d1d20; }
+          .dark .card { background: #2c2c33; box-shadow: 0 0 0 1px rgba(255, 255, 255, .06), 0 10px 28px rgba(0, 0, 0, .4); }
+          .dark .c1::before { background: #ececf1; }
+          .private .note { display: block; max-width: 470px; margin: 12px 0 0; font-size: 14.5px; line-height: 1.55; color: var(--soft); text-align: center; }
         </style>
         </head>
         <body>
         <main>
-          <div class="mark in"></div>
-          <h1 class="in" style="animation-delay:.05s"><span id="hello"></span></h1>
-          <form class="in" style="animation-delay:.1s" autocomplete="off">
+          <svg class="mark in" viewBox="0 0 24 24" fill="none" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#5b3fe0"/><stop offset="1" stop-color="#9b7df5"/></linearGradient></defs>
+            <path stroke="url(#g)" d="M15 6v12a3 3 0 1 0 3-3H6a3 3 0 1 0 3 3V6a3 3 0 1 0-3 3h12a3 3 0 1 0-3-3"/>
+          </svg>
+          <form class="in" style="animation-delay:.05s" autocomplete="off">
             <div class="row">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
               <input id="q" placeholder="__PLACEHOLDER__" spellcheck="false" autofocus>
             </div>
             <div class="foot">
               <div><kbd>Enter</kbd> __ENTER__ <b>__ENGINE__</b></div>
               <button id="go" type="submit" aria-label="__SEARCH_LABEL__">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
               </button>
             </div>
           </form>
-          <nav class="in" style="animation-delay:.15s"></nav>
+          <h1 class="in" style="animation-delay:.1s"></h1>
+          <p class="note in" style="animation-delay:.15s">__PRIVATE_NOTE__</p>
         </main>
+        <div class="showcase"></div>
         <script>
           const SEARCH = __SEARCH__;
-          const SITES = __SITES__;
+          const APPS = __APPS__;
           const TEXT = __GREETINGS__;
 
           const hour = new Date().getHours();
           const hello = hour >= 5 && hour < 12 ? TEXT[0] : hour >= 12 && hour < 20 ? TEXT[1] : TEXT[2];
-          document.getElementById('hello').textContent = hello;
-          const span = document.createElement('span');
-          span.textContent = TEXT[3];
-          document.querySelector('h1').appendChild(span);
+          document.querySelector('h1').textContent = document.documentElement.classList.contains('private')
+            ? '__PRIVATE_TITLE__' : hello + ' ' + TEXT[3];
 
           const q = document.getElementById('q');
           const go = document.getElementById('go');
@@ -203,25 +254,18 @@ public static class StartPage
               : SEARCH.replace('{0}', encodeURIComponent(v));
           });
 
-          const nav = document.querySelector('nav');
-          for (const site of SITES) {
+          const showcase = document.querySelector('.showcase');
+          APPS.forEach((app, i) => {
             const a = document.createElement('a');
-            a.href = site.url;
-            const letter = () => { const i = document.createElement('i'); i.textContent = (site.title[0] || '?').toUpperCase(); return i; };
-            if (site.icon) {
-              const img = document.createElement('img');
-              img.src = site.icon;
-              img.alt = '';
-              img.onerror = () => img.replaceWith(letter());
-              a.appendChild(img);
-            } else {
-              a.appendChild(letter());
-            }
-            const label = document.createElement('span');
-            label.textContent = site.title;
-            a.appendChild(label);
-            nav.appendChild(a);
-          }
+            a.className = 'card c' + i;
+            a.href = app.url;
+            a.title = app.name;
+            const img = document.createElement('img');
+            img.src = app.image;
+            img.alt = app.name;
+            a.appendChild(img);
+            showcase.appendChild(a);
+          });
         </script>
         </body>
         </html>

@@ -69,6 +69,10 @@ public sealed partial class SettingsPanel : UserControl
 
         void FillTheme() => ThemeSwatches.Fill(ThemeRow, s.ThemeKey, key => s.ThemeKey = key);
         FillTheme();
+        Chips(ModeChips,
+            [(L.T("Light", "Claro"), () => s.ColorMode == "light", () => s.ColorMode = "light"),
+             (L.T("Dark", "Oscuro"), () => s.ColorMode == "dark", () => s.ColorMode = "dark"),
+             (L.T("System", "Sistema"), () => s.ColorMode == "system", () => s.ColorMode = "system")]);
         Chips(ZoomChips, SettingsService.ZoomOptions
             .Select(zoom => ($"{zoom} %", (Func<bool>)(() => zoom == s.DefaultZoom),
                 (Action)(() => { s.DefaultZoom = zoom; _shell.ApplyDefaultZoom(); })))
@@ -104,6 +108,14 @@ public sealed partial class SettingsPanel : UserControl
                  () => s.BlockThirdPartyCookies, v => s.BlockThirdPartyCookies = v),
              (L.T("Ask sites not to track you", "Pedir a los sitios que no te rastreen"), L.T("Sends the \"Do Not Track\" signal", "Envía la señal \"No rastrear\""),
                  () => s.DoNotTrack, v => s.DoNotTrack = v)]);
+
+        OptionRows(InterfaceLanguageRows,
+        [
+            (L.T("System", "Sistema"), null, () => s.Language == LanguageChoice.System, () => { s.Language = LanguageChoice.System; UpdateLanguageRestart(); }),
+            ("Español", null, () => s.Language == LanguageChoice.Spanish, () => { s.Language = LanguageChoice.Spanish; UpdateLanguageRestart(); }),
+            ("English", null, () => s.Language == LanguageChoice.English, () => { s.Language = LanguageChoice.English; UpdateLanguageRestart(); }),
+        ]);
+        UpdateLanguageRestart();
 
         OptionRows(LanguageRows, SettingsService.AvailablePageLanguages
             .Select(lang => (lang.Name, (string?)null, (Func<bool>)(() => lang.Languages == s.PageLanguages),
@@ -195,6 +207,9 @@ public sealed partial class SettingsPanel : UserControl
     }
 
     private bool _hardwareAtStart;
+
+    private void UpdateLanguageRestart() =>
+        LanguageRestartRow.Visibility = Settings.Language != L.Choice ? Visibility.Visible : Visibility.Collapsed;
 
     private void UpdateRestartRow() =>
         RestartRow.Visibility = _shell is not null && Settings.HardwareAcceleration != _hardwareAtStart
@@ -333,7 +348,7 @@ public sealed partial class SettingsPanel : UserControl
             var state = on;
             void Paint()
             {
-                track.Background = state ? Brush("BeautyAccentBrush") : new SolidColorBrush(ColorHelper.FromArgb(0x33, 0, 0, 0));
+                track.Background = state ? Brush("BeautyAccentBrush") : Brush("BeautyFillPressedBrush");
                 knob.Translation = new Vector3(state ? 16 : 0, 0, 0);
             }
             Paint();

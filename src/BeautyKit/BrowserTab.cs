@@ -1,4 +1,4 @@
-using System.ComponentModel;
+﻿using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Runtime.InteropServices.WindowsRuntime;
@@ -19,7 +19,7 @@ namespace BeautyKit;
 /// </summary>
 public sealed partial class BrowserTab : INotifyPropertyChanged, IDisposable
 {
-    private readonly ChromiumWebBrowser _browser;
+    private readonly TabBrowser _browser;
     private readonly DispatcherQueue _ui;
     private readonly nint _hostWindow;
     private bool _disposed;
@@ -76,20 +76,29 @@ public sealed partial class BrowserTab : INotifyPropertyChanged, IDisposable
         var browserSettings = CefSharp.Core.ObjectFactory.CreateBrowserSettings(autoDispose: true);
         browserSettings.WindowlessFrameRate = FrameRate;
         browserSettings.BackgroundColor = 0xFFFFFFFF; // opaque (see BrowserEngine)
+        // Chrome's default fonts on Windows (the sizes are the user's, see BrowserEngine.SetFontSizes).
+        browserSettings.StandardFontFamily = "Times New Roman";
+        browserSettings.SerifFontFamily = "Times New Roman";
+        browserSettings.SansSerifFontFamily = "Arial";
+        browserSettings.FixedFontFamily = "Consolas";
+        browserSettings.CursiveFontFamily = "Comic Sans MS";
+        browserSettings.FantasyFontFamily = "Impact";
+        browserSettings.DefaultFixedFontSize = 13;
+        browserSettings.MinimumLogicalFontSize = 6;
+        browserSettings.DefaultEncoding = "windows-1252";
         _zoomLevel = ZoomLevelFor(DefaultZoomPercent);
 
-        _browser = new ChromiumWebBrowser(url, browserSettings, privateContext, automaticallyCreateBrowser: false)
+        _browser = new TabBrowser(url, browserSettings, privateContext, OnPageMessage)
         {
             DisplayHandler = new TabDisplayHandler(this),
             LifeSpanHandler = new TabLifeSpanHandler(this),
             MenuHandler = new TabContextMenuHandler(this),
-            DownloadHandler = new TabDownloadHandler(this),
+            DownloadHandler = _downloads = new TabDownloadHandler(this),
             RequestHandler = new TabRequestHandler(this),
             FindHandler = new TabFindHandler(this),
             KeyboardHandler = new TabKeyboardHandler(this),
             PermissionHandler = new TabPermissionHandler(this),        };
         _browser.RenderHandler = new TabRenderHandler(this);
-        _browser.JavascriptMessageReceived += OnJavascriptMessage; // playing media (BrowserTab.Media)
 
         _browser.TitleChanged += (_, e) => OnUi(() => Title = ReadableTitle(e.Title, Url));
         _browser.AddressChanged += (_, e) => OnUi(() => Url = e.Address);
@@ -115,6 +124,11 @@ public sealed partial class BrowserTab : INotifyPropertyChanged, IDisposable
             if (!e.Frame.IsMain) return;
             OnUi(() =>
             {
+                if (_crashed)
+                {
+                    _crashed = false;
+                    CrashChanged?.Invoke(this, false);
+                }
                 Host()?.SetZoomLevel(_zoomLevel);
                 ResetBlockedCount(); // another page: the blocked counter starts over
                 ClearMedia();        // and whatever played on the previous one stopped
@@ -284,7 +298,23 @@ public sealed partial class BrowserTab : INotifyPropertyChanged, IDisposable
         _hidden = hidden;
         if (!hidden) EnsureCreated();
         if (_browser.IsBrowserInitialized) _browser.GetBrowserHost().WasHidden(hidden);
+        if (!hidden && _crashed) Reload(); // it crashed in the background: reloaded when shown, as in Chrome
     }
+
+    private bool _crashed;
+
+    /// <summary>
+    /// The page's process died. True when the tab is on screen and the user should be told (it can reload it); false
+    /// when it recovered (a new page started loading). A tab that crashed hidden reloads when it is shown instead.
+    /// </summary>
+    public event EventHandler<bool>? CrashChanged;
+
+    private void RendererTerminated() => OnUi(() =>
+    {
+        if (_disposed) return;
+        _crashed = true;
+        if (!_hidden) CrashChanged?.Invoke(this, true);
+    });
 
 
     internal void SendMouseMove(int x, int y, CefEventFlags flags, bool leave)
@@ -365,13 +395,52 @@ public sealed partial class BrowserTab : INotifyPropertyChanged, IDisposable
         if (replaced) VisualChanged?.Invoke();
     }
 
+    private readonly TabDownloadHandler _downloads;
+
+    // Closed tabs whose downloads are still running (see Dispose).
+    private static readonly List<BrowserTab> Lingering = [];
+    private bool _lingering;
+
+    /// <summary>
+    /// Closes the tab. Chromium cancels a browser's downloads when the browser closes, so a tab with downloads still
+    /// running keeps its browser, hidden and muted, until they finish (a link that opened a tab only to download a
+    /// file, a popup that closed itself), as Chrome lets them go on.
+    /// </summary>
     public void Dispose()
+    {
+        if (_disposed || _lingering) return;
+        if (_downloads.HasActive && Host() is { } host)
+        {
+            _lingering = true;
+            Lingering.Add(this);
+            DismissPermissionRequests();
+            _hidden = true;
+            host.WasHidden(true);
+            host.SetAudioMuted(true);
+            return;
+        }
+        DisposeNow();
+    }
+
+    private void DisposeNow()
     {
         if (_disposed) return;
         _disposed = true;
+        Lingering.Remove(this);
         DismissPermissionRequests();
         _browser.Dispose();
         DisposeGpu();
+    }
+
+    /// <summary>The tab's last download finished: a closed tab that waited for it can go now.</summary>
+    private void OnDownloadsFinished() =>
+        // Never from inside Chromium's callback (see DoClose).
+        _ui.TryEnqueue(() => { if (_lingering && !_downloads.HasActive) DisposeNow(); });
+
+    /// <summary>On exit, before Chromium shuts down: closed tabs still downloading go too (Chrome cancels them as well).</summary>
+    internal static void DisposeLingering()
+    {
+        foreach (var tab in Lingering.ToList()) tab.DisposeNow();
     }
 
 
@@ -579,7 +648,7 @@ public sealed partial class BrowserTab : INotifyPropertyChanged, IDisposable
                            title.StartsWith("https://", StringComparison.OrdinalIgnoreCase);
         if (!looksLikeUrl) return title!;
         return Uri.TryCreate(string.IsNullOrWhiteSpace(title) ? url : title, UriKind.Absolute, out var uri) && uri.Host.Length > 0
-            ? uri.Host.Replace("www.", "")
+            ? HostName.WithoutWww(uri.Host)
             : url;
     }
 
@@ -597,6 +666,15 @@ public sealed partial class BrowserTab : INotifyPropertyChanged, IDisposable
             var candidates = urls.ToList();
             tab.OnUi(() => _ = tab.ResolveFaviconAsync(candidates));
         }
+    }
+
+    /// <summary>The schemes a page (or a link menu) may open in a new tab or popup: http, https, blob and about:blank.</summary>
+    internal static bool IsPopupUrlAllowed(string? url)
+    {
+        if (string.IsNullOrEmpty(url)) return true; // window.open() with no URL: about:blank
+        if (url.Equals("about:blank", StringComparison.OrdinalIgnoreCase)) return true;
+        return Uri.TryCreate(url, UriKind.Absolute, out var uri)
+               && uri.Scheme is "http" or "https" or "blob";
     }
 
     private sealed class TabLifeSpanHandler(BrowserTab tab) : CefSharp.Handler.LifeSpanHandler
@@ -618,6 +696,10 @@ public sealed partial class BrowserTab : INotifyPropertyChanged, IDisposable
                     return true;
                 }
             }
+            // A link to an app (target=_blank mailto:…) opens no tab: the app is offered instead.
+            if (tab.TryHandleExternal(targetUrl, browser?.MainFrame?.Url)) return true;
+            // A page may only open web pages: window.open("data:text/html,…") would be a ready-made phishing tab.
+            if (!IsPopupUrlAllowed(targetUrl)) return true;
             // Ads that open "on your click" (popunders on streaming sites) are closed by the blocker.
             if (Blocking.ContentBlocker.IsAdPopup(targetUrl, frame?.Url ?? browser?.MainFrame?.Url))
             {
@@ -660,7 +742,9 @@ public sealed partial class BrowserTab : INotifyPropertyChanged, IDisposable
         protected override bool DoClose(IWebBrowser chromiumWebBrowser, IBrowser browser)
         {
             if (!tab._disposed) tab._ui.TryEnqueue(() => { if (!tab._disposed) tab.CloseRequested?.Invoke(tab, EventArgs.Empty); });
-            return false;
+            // With downloads running the browser stays open: closing it would cancel them. The app still removes the
+            // tab, which then waits for them (see Dispose).
+            return !tab._disposed && tab._downloads.HasActive;
         }
     }
 }

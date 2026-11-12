@@ -44,6 +44,7 @@ public sealed class PaletteResult
 public sealed partial class CommandPalette : UserControl
 {
     private const int MaxResults = 8;
+    private const int MaxTopPages = 5;
     private const int MaxSuggestions = 4;
 
     private static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(3) };
@@ -112,8 +113,12 @@ public sealed partial class CommandPalette : UserControl
         var query = Query.Text.Trim();
         var results = new List<PaletteResult>();
 
+        // The private space neither shows the history nor mixes in the other spaces' tabs, and the other spaces do
+        // not show its tabs.
+        var isPrivate = _shell.CurrentSpace?.IsPrivate == true;
+
         // 1) The best history site whose address starts with what was typed ("you" → youtube.com).
-        var bestSite = query.Length > 0
+        var bestSite = query.Length > 0 && !isPrivate
             ? _shell.History.Search(query, 20).FirstOrDefault(h => HostStartsWith(h.Url, query))
             : null;
         if (bestSite is not null)
@@ -146,7 +151,7 @@ public sealed partial class CommandPalette : UserControl
         }
 
         // 4) Open tabs that match (or, without text, the current space's).
-        var tabs = _shell.Spaces.SelectMany(s => s.Tabs)
+        var tabs = _shell.Spaces.Where(s => s.IsPrivate == isPrivate).SelectMany(s => s.Tabs)
             .Where(t => t != _shell.CurrentTab || _mode == PaletteMode.NewTab)
             .Where(t => query.Length == 0 || Matches(t.Title, t.Url, query))
             .Take(query.Length == 0 ? 3 : 4);
@@ -162,28 +167,28 @@ public sealed partial class CommandPalette : UserControl
             });
         }
 
-        // 5) Without text, the sites visited most often (one per site, as on the start page).
+        // 5) Without text, the 5 exact pages visited most often (twitch.tv/somestreamer), skipping open tabs.
         if (query.Length == 0)
         {
-            foreach (var site in _shell.History.TopSites(MaxResults))
+            var open = _shell.Spaces.SelectMany(s => s.Tabs).Select(t => t.Url).ToHashSet();
+            foreach (var page in isPrivate ? [] : _shell.History.TopPages(MaxTopPages + open.Count).Where(p => !open.Contains(p.Url)).Take(MaxTopPages))
             {
-                if (results.Count >= MaxResults) break;
                 results.Add(new PaletteResult
                 {
                     Kind = PaletteResultKind.Url,
-                    Title = site.Title,
-                    Subtitle = ShortUrl(site.Url),
-                    Icon = IconFor(site.Icon),
-                    Url = site.Url,
+                    Title = string.IsNullOrWhiteSpace(page.Title) ? ShortUrl(page.Url, keepPath: true) : page.Title,
+                    Subtitle = ShortUrl(page.Url, keepPath: true),
+                    Icon = IconFor(page.FaviconUrl),
+                    Url = page.Url,
                 });
             }
-            Show(results.Take(MaxResults).ToList());
+            Show(results.ToList());
             return;
         }
 
         // 6) History, without repeating open tabs or the best site.
         var openUrls = _shell.Spaces.SelectMany(s => s.Tabs).Select(t => t.Url).ToHashSet();
-        var history = _shell.History.Search(query, 12);
+        var history = isPrivate ? [] : _shell.History.Search(query, 12);
         foreach (var entry in history.Where(h => !openUrls.Contains(h.Url) && h != bestSite))
         {
             if (results.Count >= MaxResults) break;
@@ -351,7 +356,7 @@ public sealed partial class CommandPalette : UserControl
     private static bool HostStartsWith(string url, string query) =>
         !query.Contains(' ') &&
         Uri.TryCreate(url, UriKind.Absolute, out var uri) &&
-        uri.Host.Replace("www.", "").StartsWith(query, StringComparison.OrdinalIgnoreCase);
+        HostName.WithoutWww(uri.Host).StartsWith(query, StringComparison.OrdinalIgnoreCase);
 
     private static ImageSource? IconFor(string? faviconUrl) => Favicons.FromUrl(faviconUrl);
 
@@ -362,7 +367,7 @@ public sealed partial class CommandPalette : UserControl
     private static string ShortUrl(string url, bool keepPath = false)
     {
         if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) || uri.Scheme is not ("http" or "https")) return url;
-        var host = uri.Host.Replace("www.", "");
+        var host = HostName.WithoutWww(uri.Host);
         if (!uri.IsDefaultPort) host += ":" + uri.Port;
         return keepPath && uri.AbsolutePath != "/" ? host + uri.AbsolutePath : host;
     }

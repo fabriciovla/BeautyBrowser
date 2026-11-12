@@ -35,7 +35,7 @@ public sealed partial class BeautySlider : UserControl
             Margin = new Thickness(ThumbSize / 2, 0, ThumbSize / 2, 0),
             VerticalAlignment = VerticalAlignment.Center,
             CornerRadius = new CornerRadius(TrackHeight / 2),
-            Background = new SolidColorBrush(ColorHelper.FromArgb(0x1F, 0, 0, 0)),
+            Background = (Brush)Application.Current.Resources["BeautyFillPressedBrush"], // follows dark mode
         };
         _fill = new Border
         {

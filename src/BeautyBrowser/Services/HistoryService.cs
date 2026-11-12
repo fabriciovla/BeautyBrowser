@@ -34,7 +34,7 @@ public sealed class HistoryEntry
     public string Subtitle => $"{DisplayTime} · {Url}";
 
     /// <summary>"https://www.twitch.tv/x" → "twitch.tv".</summary>
-    public string Host => Uri.TryCreate(Url, UriKind.Absolute, out var uri) ? uri.Host.Replace("www.", "") : Url;
+    public string Host => Uri.TryCreate(Url, UriKind.Absolute, out var uri) ? HostName.WithoutWww(uri.Host) : Url;
 
     /// <summary>"https://www.spaceship.com/domain-search/x" → "spaceship.com/domain-search/x".</summary>
     public string DisplayUrl
@@ -42,7 +42,7 @@ public sealed class HistoryEntry
         get
         {
             if (!Uri.TryCreate(Url, UriKind.Absolute, out var uri)) return Url;
-            var host = uri.Host.Replace("www.", "");
+            var host = HostName.WithoutWww(uri.Host);
             if (!uri.IsDefaultPort) host += ":" + uri.Port;
             var rest = uri.PathAndQuery == "/" ? "" : uri.PathAndQuery;
             return host + rest;
@@ -225,6 +225,26 @@ public sealed class HistoryService
             })
             .ToList();
 
+    /// <summary>
+    /// The exact pages visited most often (twitch.tv/somestreamer, not just twitch.tv), without sign-in pages or search
+    /// results.
+    /// </summary>
+    public IReadOnlyList<HistoryEntry> TopPages(int max) =>
+        _cache
+            .Where(e => Uri.TryCreate(e.Url, UriKind.Absolute, out var u) &&
+                        (u.Scheme == Uri.UriSchemeHttps || u.Scheme == Uri.UriSchemeHttp) &&
+                        !IsUtilityHost(u.Host) && !IsSearchResults(u))
+            .OrderByDescending(e => e.VisitCount)
+            .ThenByDescending(e => e.LastVisit)
+            .Take(max)
+            .ToList();
+
+    // google.com/search?q=…, bing.com/search, duckduckgo.com/?q=…: searches, not places to go back to.
+    private static bool IsSearchResults(Uri uri) =>
+        uri.AbsolutePath.Equals("/search", StringComparison.OrdinalIgnoreCase) ||
+        uri.AbsolutePath.Equals("/results", StringComparison.OrdinalIgnoreCase) && uri.Query.Contains("search_query=") ||
+        uri.Query.StartsWith("?q=", StringComparison.Ordinal) || uri.Query.Contains("&q=");
+
     // Sign-in and account subdomains (accounts.google.com, login.microsoftonline.com…).
     private static readonly string[] UtilitySubdomains = ["accounts", "account", "login", "signin", "auth", "sso", "oauth", "myaccount"];
 
@@ -293,7 +313,7 @@ public sealed class HistoryService
 
     private static double Score(HistoryEntry entry, string query)
     {
-        var host = Uri.TryCreate(entry.Url, UriKind.Absolute, out var uri) ? uri.Host.Replace("www.", "") : "";
+        var host = Uri.TryCreate(entry.Url, UriKind.Absolute, out var uri) ? HostName.WithoutWww(uri.Host) : "";
         var hostBonus = host.StartsWith(query, StringComparison.OrdinalIgnoreCase) ? 50 : 0;
         var recency = 20 / (1 + (DateTime.Now - entry.LastVisit).TotalDays);
         return hostBonus + Math.Log(1 + entry.VisitCount) * 10 + recency;

@@ -92,7 +92,22 @@
                     <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="Transparent" />
                     <SolidColorBrush x:Key="ButtonBackgroundPressed" Color="Transparent" />
                 </Button.Resources>
-                <TextBlock x:Name="UrlText" TextTrimming="CharacterEllipsis" />
+                <Grid ColumnSpacing="6">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <!-- Pages over plain http:// (not encrypted). -->
+                    <FontIcon
+                        x:Name="UrlInsecureIcon"
+                        VerticalAlignment="Center"
+                        FontSize="13"
+                        Foreground="#E0A030"
+                        Glyph="&#xE7BA;"
+                        ToolTipService.ToolTip="{local:T En='Not secure: this page is not encrypted (http://)', Es='No seguro: esta página no está cifrada (http://)'}"
+                        Visibility="Collapsed" />
+                    <TextBlock x:Name="UrlText" Grid.Column="1" TextTrimming="CharacterEllipsis" />
+                </Grid>
             </Button>
             <StackPanel Grid.Column="1" Margin="0,0,4,0" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
                 <!-- The page's zoom while it is not the default one, as in Chrome; a click restores it. -->
@@ -105,9 +120,9 @@
                     ToolTipService.ToolTip="{local:T En='Reset zoom', Es='Restablecer zoom'}"
                     Visibility="Collapsed">
                     <Button.Resources>
-                        <SolidColorBrush x:Key="ButtonBackground" Color="#10000000" />
-                        <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#1C000000" />
-                        <SolidColorBrush x:Key="ButtonBackgroundPressed" Color="#26000000" />
+                        <StaticResource x:Key="ButtonBackground" ResourceKey="BeautyFillLowBrush" />
+                        <StaticResource x:Key="ButtonBackgroundPointerOver" ResourceKey="BeautyFillHoverBrush" />
+                        <StaticResource x:Key="ButtonBackgroundPressed" ResourceKey="BeautyFillPressedBrush" />
                     </Button.Resources>
                     <StackPanel Orientation="Horizontal" Spacing="4">
                         <FontIcon FontSize="11" Glyph="&#xE71E;" />
@@ -123,8 +138,8 @@
                     ToolTipService.ToolTip="{local:T En='Copy link', Es='Copiar enlace'}">
                     <Button.Resources>
                         <SolidColorBrush x:Key="ButtonBackground" Color="Transparent" />
-                        <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#14000000" />
-                        <SolidColorBrush x:Key="ButtonBackgroundPressed" Color="#20000000" />
+                        <StaticResource x:Key="ButtonBackgroundPointerOver" ResourceKey="BeautyFillHoverBrush" />
+                        <StaticResource x:Key="ButtonBackgroundPressed" ResourceKey="BeautyFillPressedBrush" />
                     </Button.Resources>
                     <FontIcon x:Name="CopyLinkIcon" FontSize="13" Glyph="&#xE71B;" />
                 </Button>
@@ -137,8 +152,8 @@
                     ToolTipService.ToolTip="{local:T En='Site settings', Es='Ajustes del sitio'}">
                     <Button.Resources>
                         <SolidColorBrush x:Key="ButtonBackground" Color="Transparent" />
-                        <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#14000000" />
-                        <SolidColorBrush x:Key="ButtonBackgroundPressed" Color="#20000000" />
+                        <StaticResource x:Key="ButtonBackgroundPointerOver" ResourceKey="BeautyFillHoverBrush" />
+                        <StaticResource x:Key="ButtonBackgroundPressed" ResourceKey="BeautyFillPressedBrush" />
                     </Button.Resources>
                     <FontIcon FontSize="13" Glyph="&#xE9E9;" />
                     <Button.Flyout>
@@ -269,11 +284,11 @@
                 <!-- The shadow: a slightly darker edge peeking 1px below. -->
                 <Border
                     Margin="0,0,0,-1"
-                    Background="#0D000000"
+                    Background="{StaticResource BeautyFillLowBrush}"
                     CornerRadius="{StaticResource BeautyItemCornerRadius}" />
                 <Border
                     Background="{StaticResource BeautyCardBrush}"
-                    BorderBrush="#0F000000"
+                    BorderBrush="{StaticResource BeautyFillLowBrush}"
                     BorderThickness="1"
                     CornerRadius="{StaticResource BeautyItemCornerRadius}" />
             </Grid>
