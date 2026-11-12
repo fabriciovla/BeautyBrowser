@@ -251,6 +251,16 @@ public sealed partial class MainWindow : Window
             ? new MicaBackdrop { Kind = MicaKind.BaseAlt }
             : new DesktopAcrylicBackdrop();
 
+        ExtendContentIntoTitleBar();
+
+        AppWindow.Resize(new SizeInt32(1400, 900));
+        var icon = Path.Combine(AppContext.BaseDirectory, "BeautyBrowser.ico");
+        if (File.Exists(icon)) AppWindow.SetIcon(icon); // taskbar and Alt+Tab
+    }
+
+    /// <summary>The page reaches the top edge; the title bar is our own strip (AppTitleBar).</summary>
+    private void ExtendContentIntoTitleBar()
+    {
         ExtendsContentIntoTitleBar = true;
         SetTitleBar(AppTitleBar);
 
@@ -259,11 +269,7 @@ public sealed partial class MainWindow : Window
         var titleBar = AppWindow.TitleBar;
         titleBar.ButtonBackgroundColor = Colors.Transparent;
         titleBar.ButtonInactiveBackgroundColor = Colors.Transparent;
-        titleBar.PreferredHeightOption = TitleBarHeightOption.Collapsed;
-
-        AppWindow.Resize(new SizeInt32(1400, 900));
-        var icon = Path.Combine(AppContext.BaseDirectory, "BeautyBrowser.ico");
-        if (File.Exists(icon)) AppWindow.SetIcon(icon); // taskbar and Alt+Tab
+        titleBar.PreferredHeightOption = _captionShown ? TitleBarHeightOption.Standard : TitleBarHeightOption.Collapsed;
     }
 
     /// <summary>
@@ -862,7 +868,12 @@ public sealed partial class MainWindow : Window
         _fullscreenLayoutPending = true;
         _fullscreenLayoutTimer.Stop();
         _fullscreenLayoutTimer.Start(); // in case the window never reports its new size
+        // With the content extended into the title bar, Windows keeps a 1 px frame at the top even in full screen: the
+        // page came out 1 px short, with a white line above videos and black bars at their sides. Full screen has no
+        // title bar, so the window goes back to a plain client area until it leaves.
+        if (fullscreen) ExtendsContentIntoTitleBar = false;
         AppWindow.SetPresenter(fullscreen ? AppWindowPresenterKind.FullScreen : AppWindowPresenterKind.Overlapped);
+        if (!fullscreen) ExtendContentIntoTitleBar();
         if (fullscreen)
         {
             CloseLibrary(returnToSidebar: false);
