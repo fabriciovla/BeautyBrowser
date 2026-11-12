@@ -3,6 +3,40 @@
 What each Beauty Browser release changes, newest first. Every release gets its section here before it is published:
 `tools/publish-release.ps1` uses it as the release notes and refuses to publish without it.
 
+## [0.1.4] - 2026-11-12
+
+### Added
+- Dark mode: Settings → Mode lets you pick Light, Dark or System. The window, panels, start page and the Windows
+  caption buttons all follow it.
+- Private spaces have a dark look, a fade when you enter them, and a start page that explains what is not saved. They
+  no longer suggest your history or searches.
+- The search palette shows the 5 pages you visit most, with the exact address (for example `twitch.tv/somechannel`).
+- Interface language setting: System, Español or English, applied on restart.
+- The window remembers its position, size and maximized state.
+- The start page has a new design with cards for our apps.
+- Plain http pages show a "not secure" icon in the address bar.
+- The zoom indicator has a Reset button.
+- Each download shows the Windows file-type icon.
+
+### Fixed
+- Updates are only installed when they are signed with the Beauty Browser release key.
+- The cursor hides when a page asks for it (YouTube in full screen) and comes back when you leave the page.
+- No 1 px line at the top of full-screen videos.
+- The page shows the right cursor when you drag or pan, and when a drop is not allowed.
+- Pages use Chrome's default fonts on Windows, so sites like Wikipedia look as they do in Chrome.
+- The window can't be shrunk below a phone-like size (400 × 500).
+- The tab preview has rounded corners and is centered on the tab.
+- Scrolling in History, Downloads, Settings and Spaces is smooth.
+- Links to apps (mailto:, Zoom, Teams…) ask to open the app instead of breaking the page.
+- When a tab's page crashes, the browser says so and reloads it when you return to the tab.
+- Downloads keep going when the tab that started them closes, and two downloads with the same name no longer collide.
+- Private tabs: downloads are not saved to the list, site permission choices are not stored, and the new tab page loads.
+- Safer browsing: the browser always asks before screen sharing, more dangerous file types get a warning, pages can
+  only open web addresses in popups, links can't pass Chromium options to the browser, and pages and their frames
+  can't trick the password manager.
+- A corrupted settings file is kept aside instead of being overwritten.
+- No Windows crash dialog when a Chromium helper process stops.
+
 ## [0.1.3] - 2026-11-11
 
 ### Fixed
