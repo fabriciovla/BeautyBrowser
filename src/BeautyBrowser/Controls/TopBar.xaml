@@ -44,7 +44,10 @@
                 AutomationProperties.Name="{local:T En='Favorites', Es='Favoritos'}">
                 <FontIcon FontSize="15" Glyph="&#xE734;" />
             </Button>
-            <StackPanel x:Name="Tabs" Grid.Column="1" Orientation="Horizontal" Spacing="2" />
+            <!-- The tabs run inside a window as wide as the free space; with too many, it slides to keep the current one in view. -->
+            <Grid x:Name="TabsViewport" Grid.Column="1" HorizontalAlignment="Left">
+                <StackPanel x:Name="Tabs" HorizontalAlignment="Left" Orientation="Horizontal" Spacing="2" />
+            </Grid>
             <Button
                 x:Name="NewTabButton"
                 Grid.Column="2"

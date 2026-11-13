@@ -66,10 +66,9 @@ public sealed partial class TabSwitcher : UserControl
             return true;
         }
 
-        // Open favorite tabs first, in their order, then the space's tabs.
+        // Open favorite tabs first, in their order, then the space's tabs (as the strip shows them, with tabs on top).
         _tabs.Clear();
-        _tabs.AddRange(_shell.OpenFavoriteTabs());
-        _tabs.AddRange(_shell.CurrentSpace.Tabs);
+        _tabs.AddRange(_shell.TabsInShownOrder());
         if (_tabs.Count < 2) return false;
 
         var current = _shell.CurrentTab is { } tab ? _tabs.IndexOf(tab) : -1;

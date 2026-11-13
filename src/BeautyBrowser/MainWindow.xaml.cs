@@ -143,7 +143,11 @@ public sealed partial class MainWindow : Window
         Library.Attach(_shell);
         Library.CloseRequested += (_, _) => CloseLibrary(returnToSidebar: true);
         InitSettingsTab();
-        Palette.Closed += (_, _) => WebView.Focus(FocusState.Programmatic);
+        Palette.Closed += (_, _) =>
+        {
+            // With tabs on top the cursor may already be back in the address bar (Ctrl+T while the list was closing).
+            if (!(TabsOnTop && TopBar.AddressHasFocus)) WebView.Focus(FocusState.Programmatic);
+        };
         DevToolsSplitter.Dragged += (_, dx) => ResizeDevTools(_devToolsWidth - dx);
 
         _shell.CurrentTabChanged += (_, _) =>
