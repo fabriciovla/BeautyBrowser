@@ -16,15 +16,32 @@
 
         <Grid x:Name="Strip" Padding="8,6,0,0">
             <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />  <!-- favorites -->
                 <ColumnDefinition Width="Auto" />  <!-- tabs -->
                 <ColumnDefinition Width="Auto" />  <!-- new tab -->
                 <ColumnDefinition Width="*" />     <!-- free: drags the window -->
                 <ColumnDefinition Width="140" />   <!-- minimize, maximize, close -->
             </Grid.ColumnDefinitions>
-            <StackPanel x:Name="Tabs" Orientation="Horizontal" Spacing="2" />
+            <!-- Favorites: the mouse over the star opens them in a panel below. -->
+            <Button
+                x:Name="FavoritesButton"
+                Width="34"
+                Height="32"
+                Margin="0,0,6,0"
+                Padding="0"
+                VerticalAlignment="Center"
+                Click="Favorites_Click"
+                PointerEntered="Favorites_PointerEntered"
+                PointerExited="Favorites_PointerExited"
+                Style="{StaticResource BeautyIconButton}"
+                AutomationProperties.AutomationId="TopFavorites"
+                AutomationProperties.Name="{local:T En='Favorites', Es='Favoritos'}">
+                <FontIcon FontSize="15" Glyph="&#xE734;" />
+            </Button>
+            <StackPanel x:Name="Tabs" Grid.Column="1" Orientation="Horizontal" Spacing="2" />
             <Button
                 x:Name="NewTabButton"
-                Grid.Column="1"
+                Grid.Column="2"
                 Width="30"
                 Height="30"
                 Margin="4,0,0,0"
@@ -36,7 +53,7 @@
                 AutomationProperties.Name="{local:T En='New tab', Es='Nueva pestaña'}">
                 <FontIcon FontSize="13" Glyph="&#xE710;" />
             </Button>
-            <Border x:Name="DragZone" Grid.Column="2" Background="Transparent" />
+            <Border x:Name="DragZone" Grid.Column="3" Background="Transparent" />
         </Grid>
 
         <Grid Grid.Row="1" Padding="8,4,8,6" ColumnSpacing="4">

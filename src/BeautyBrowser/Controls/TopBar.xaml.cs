@@ -9,6 +9,7 @@ using Microsoft.UI.Input;
 using Microsoft.UI.Text;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Windows.ApplicationModel.DataTransfer;
@@ -16,8 +17,9 @@ using Windows.ApplicationModel.DataTransfer;
 namespace BeautyBrowser.Controls;
 
 /// <summary>
-/// The "tabs on top" layout (Settings → Sidebar and tabs): favorites as small pinned tabs, then the space's tabs, which
-/// share the strip's width like Chrome's (narrower as more open), and a toolbar with the address below.
+/// The "tabs on top" layout (Settings → Sidebar and tabs): a star that opens the favorites in a panel, the open
+/// favorites as small icon tabs, then the space's tabs, which share the strip's width like Chrome's, and a toolbar
+/// with the address below. Tabs grow in when they open, shrink away when they close and the rest slide to make room.
 /// </summary>
 public sealed partial class TopBar : UserControl
 {
@@ -25,16 +27,24 @@ public sealed partial class TopBar : UserControl
     private const double MinTabWidth = 64;
     private const double PinnedTabWidth = 40;
     private const double TabGap = 2;
+    private static readonly TimeSpan TabMotion = TimeSpan.FromMilliseconds(220);
 
     private BrowserShell? _shell;
     private BrowserTab? _watchedTab;
-    private readonly List<BrowserTab> _observedTabs = [];
-    private bool _rebuildQueued;
+    private ObservableCollection<BrowserTab>? _space;
+
+    // One element per open tab (key: the BrowserTab) or open favorite (key: the FavoriteSite). Closing ones stay in
+    // the strip, shrinking, until their animation ends.
+    private readonly Dictionary<object, Grid> _items = [];
+    private readonly HashSet<Grid> _closing = [];
+    private Grid? _hovered;
+    private bool _syncQueued;
+    private bool _resetQueued;
 
     public TopBar()
     {
         InitializeComponent();
-        Strip.SizeChanged += (_, _) => SizeTabs();
+        Strip.SizeChanged += (_, _) => Layout(animate: false);
     }
 
     public event EventHandler<PaletteMode>? PaletteRequested;
@@ -51,137 +61,228 @@ public sealed partial class TopBar : UserControl
     public void Attach(BrowserShell shell)
     {
         _shell = shell;
-        shell.CurrentSpaceChanged += (_, _) => Rebuild();
-        shell.CurrentTabChanged += (_, _) => { Rebuild(); WatchCurrentTab(); };
-        shell.Favorites.Items.CollectionChanged += (_, _) => Rebuild();
+        shell.CurrentSpaceChanged += (_, _) => QueueSync(reset: true);
+        shell.CurrentTabChanged += (_, _) => { QueueSync(); WatchCurrentTab(); };
+        shell.Favorites.Items.CollectionChanged += (_, _) => QueueSync();
         shell.SpaceRenamed += (_, _) => RefreshSpace();
-        Rebuild();
+        QueueSync(reset: true);
         WatchCurrentTab();
     }
 
     /// <summary>Bounce of the downloads icon when a download arrives.</summary>
     public void PlayLibraryBounce()
     {
-        DownloadsIcon.Foreground = (Brush)Application.Current.Resources["BeautyAccentBrush"];
+        DownloadsIcon.Foreground = Res("BeautyAccentBrush");
         Motion.Animate("topbar-library-bounce", TimeSpan.FromMilliseconds(420),
             t => DownloadsScale.ScaleX = DownloadsScale.ScaleY = 1 + 0.32 * Math.Sin(Math.PI * t),
             ease: t => t,
             completed: () => DownloadsIcon.ClearValue(FontIcon.ForegroundProperty));
     }
 
-    // ---- tabs ----
+    // ---- the strip ----
 
-    /// <summary>Rebuilds the strip on the next tick, once per burst of changes (a space switch fires several).</summary>
-    private void Rebuild()
+    /// <summary>Once per burst of changes (closing a tab also changes the current one), on the next tick.</summary>
+    private void QueueSync(bool reset = false)
     {
-        if (_rebuildQueued) return;
-        _rebuildQueued = true;
+        _resetQueued |= reset;
+        if (_syncQueued) return;
+        _syncQueued = true;
         DispatcherQueue.TryEnqueue(DispatcherQueuePriority.Normal, () =>
         {
-            _rebuildQueued = false;
-            BuildTabs();
+            _syncQueued = false;
+            var fresh = _resetQueued;
+            _resetQueued = false;
+            Sync(animate: !fresh);
         });
     }
 
-    private ObservableCollection<BrowserTab>? _space;
-
-    private void BuildTabs()
+    /// <summary>Brings the strip in line with the shell: new tabs grow in, closed ones shrink away, order follows.</summary>
+    private void Sync(bool animate)
     {
         if (_shell is null) return;
 
-        if (_space != _shell.CurrentSpace.Tabs)
+        if (!animate || _space != _shell.CurrentSpace.Tabs)
         {
+            // Another space: its tabs are just there, with no animation.
             if (_space is not null) _space.CollectionChanged -= Space_CollectionChanged;
             _space = _shell.CurrentSpace.Tabs;
             _space.CollectionChanged += Space_CollectionChanged;
+            foreach (var key in _items.Keys) Unobserve(key);
+            _items.Clear();
+            _closing.Clear();
+            Motion.Cancel("topbar-tabs");
+            Tabs.Children.Clear();
+            animate = false;
+            RefreshSpace();
         }
-        foreach (var tab in _observedTabs) tab.PropertyChanged -= Tab_PropertyChanged;
-        _observedTabs.Clear();
 
-        Tabs.Children.Clear();
-        foreach (var site in _shell.Favorites.Items) Tabs.Children.Add(FavoriteTab(site));
-        foreach (var tab in _space)
+        var wanted = new List<object>();
+        foreach (var site in _shell.Favorites.Items)
+            if (_shell.FavoriteTabOf(site) is not null) wanted.Add(site);
+        wanted.AddRange(_space);
+
+        // Gone: they shrink away (or leave at once).
+        foreach (var (key, item) in _items.ToList())
         {
-            tab.PropertyChanged += Tab_PropertyChanged;
-            _observedTabs.Add(tab);
-            Tabs.Children.Add(TabItem(tab));
+            if (wanted.Contains(key)) continue;
+            _items.Remove(key);
+            Unobserve(key);
+            item.IsHitTestVisible = false;
+            if (animate) _closing.Add(item);
+            else Tabs.Children.Remove(item);
         }
-        RefreshSpace();
-        SizeTabs();
+
+        // New ones go right after the previous wanted item; existing ones move if the order changed.
+        Grid? previous = null;
+        foreach (var key in wanted)
+        {
+            if (!_items.TryGetValue(key, out var item))
+            {
+                item = key is BrowserTab tab ? TabItem(tab) : FavoriteTab((FavoriteSite)key);
+                _items[key] = item;
+                Observe(key);
+                if (animate) { item.Width = 0; item.Opacity = 0; }
+                Tabs.Children.Insert(previous is null ? 0 : Tabs.Children.IndexOf(previous) + 1, item);
+            }
+            else if (previous is not null)
+            {
+                var at = Tabs.Children.IndexOf(item);
+                var after = Tabs.Children.IndexOf(previous);
+                if (at < after) Tabs.Children.Move((uint)at, (uint)after);
+            }
+            previous = item;
+        }
+
+        foreach (var item in _items.Values) Style(item);
+        Layout(animate);
     }
 
-    private void Space_CollectionChanged(object? sender, NotifyCollectionChangedEventArgs e) => Rebuild();
+    private void Space_CollectionChanged(object? sender, NotifyCollectionChangedEventArgs e) => QueueSync();
+
+    /// <summary>
+    /// Widths: favorites are fixed, tabs share what is left. Animated, every tab glides from its width to the new one
+    /// (closing ones to zero, then out of the strip).
+    /// </summary>
+    private void Layout(bool animate)
+    {
+        if (_shell is null) return;
+        var pinned = _items.Keys.Count(k => k is FavoriteSite);
+        var regular = _items.Count - pinned;
+        var reserved = Strip.Padding.Left + FavoritesButton.Width + FavoritesButton.Margin.Right
+                       + NewTabButton.Width + NewTabButton.Margin.Left + Strip.ColumnDefinitions[4].Width.Value + 24;
+        var available = Strip.ActualWidth - reserved - pinned * (PinnedTabWidth + TabGap);
+        var tabWidth = regular == 0 ? MaxTabWidth : Math.Clamp(available / regular - TabGap, MinTabWidth, MaxTabWidth);
+
+        var plan = Tabs.Children.OfType<Grid>().Select(item =>
+        {
+            var closing = _closing.Contains(item);
+            var from = double.IsNaN(item.Width) ? item.ActualWidth : item.Width;
+            var to = closing ? 0 : item.Tag is FavoriteSite ? PinnedTabWidth : tabWidth;
+            return (Item: item, From: from, To: to, FromOpacity: item.Opacity, ToOpacity: closing ? 0.0 : 1.0);
+        }).ToList();
+
+        if (!animate)
+        {
+            if (_closing.Count > 0) return; // a resize mid-animation: the running one lands on the right widths
+            Motion.Cancel("topbar-tabs");
+            foreach (var step in plan) { step.Item.Width = step.To; step.Item.Opacity = step.ToOpacity; }
+            return;
+        }
+
+        Motion.Animate("topbar-tabs", TabMotion, t =>
+        {
+            foreach (var step in plan)
+            {
+                step.Item.Width = Math.Max(0, Motion.Lerp(step.From, step.To, t));
+                step.Item.Opacity = Motion.Lerp(step.FromOpacity, step.ToOpacity, t);
+            }
+        }, completed: () =>
+        {
+            foreach (var item in _closing) Tabs.Children.Remove(item);
+            _closing.Clear();
+        });
+    }
+
+    private void Observe(object key)
+    {
+        if (key is BrowserTab tab) tab.PropertyChanged += Tab_PropertyChanged;
+    }
+
+    private void Unobserve(object key)
+    {
+        if (key is BrowserTab tab) tab.PropertyChanged -= Tab_PropertyChanged;
+    }
 
     private void Tab_PropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (e.PropertyName is not (nameof(BrowserTab.Title) or nameof(BrowserTab.Favicon) or nameof(BrowserTab.IsLoading))) return;
-        if (sender is not BrowserTab tab) return;
-        foreach (var child in Tabs.Children)
-            if (child is Grid { Tag: BrowserTab owner } item && owner == tab) FillTab(item, tab);
+        if (sender is BrowserTab tab && _items.TryGetValue(tab, out var item)) FillTab(item, tab);
     }
 
-    /// <summary>Tabs share what the strip has left, between a minimum and Chrome's usual maximum.</summary>
-    private void SizeTabs()
+    private bool IsCurrent(Grid item) => _shell?.CurrentTab is { } current && item.Tag switch
     {
-        if (_shell is null) return;
-        var pinned = Tabs.Children.OfType<FrameworkElement>().Count(c => c.Tag is FavoriteSite);
-        var regular = Tabs.Children.Count - pinned;
-        if (regular == 0) return;
-        var reserved = Strip.Padding.Left + Strip.ColumnDefinitions[3].Width.Value + NewTabButton.Width + NewTabButton.Margin.Left + 24;
-        var available = Strip.ActualWidth - reserved - pinned * (PinnedTabWidth + TabGap);
-        var width = Math.Clamp(available / regular - TabGap, MinTabWidth, MaxTabWidth);
-        foreach (var child in Tabs.Children.OfType<FrameworkElement>())
-            if (child.Tag is BrowserTab) child.Width = width;
+        BrowserTab tab => tab == current,
+        FavoriteSite site => _shell.FavoriteTabOf(site) == current,
+        _ => false,
+    };
+
+    /// <summary>The current tab is a white card; the rest are plain, with a light fill under the mouse.</summary>
+    private void Style(Grid item)
+    {
+        var current = IsCurrent(item);
+        item.Background = current ? Res("BeautyCardBrush")
+            : item == _hovered ? Res("BeautySubtleFillBrush")
+            : Res("BeautyTransparentBrush");
+        item.BorderBrush = current ? Res("BeautyFillLowBrush") : Res("BeautyTransparentBrush");
+        if (item.Tag is BrowserTab && item.Children[^1] is Button close) close.Opacity = current || item == _hovered ? 1 : 0;
+    }
+
+    private Grid NewItem(object key, double padLeft)
+    {
+        var item = new Grid
+        {
+            Tag = key,
+            Height = 32,
+            Padding = new Thickness(padLeft, 0, 4, 0),
+            ColumnSpacing = 8,
+            CornerRadius = (CornerRadius)Application.Current.Resources["BeautyItemCornerRadius"],
+            BorderThickness = new Thickness(1),
+            BackgroundTransition = new BrushTransition { Duration = TimeSpan.FromMilliseconds(140) },
+        };
+        item.PointerEntered += (_, _) => { _hovered = item; Style(item); };
+        item.PointerExited += (_, _) => { if (_hovered == item) _hovered = null; Style(item); };
+        return item;
     }
 
     private Grid TabItem(BrowserTab tab)
     {
-        var current = _shell?.CurrentTab == tab;
-        var item = new Grid
-        {
-            Tag = tab,
-            Height = 32,
-            Padding = new Thickness(10, 0, 4, 0),
-            ColumnSpacing = 8,
-            CornerRadius = (CornerRadius)Application.Current.Resources["BeautyItemCornerRadius"],
-            Background = current ? Res("BeautyCardBrush") : new SolidColorBrush(Microsoft.UI.Colors.Transparent),
-            BorderBrush = current ? Res("BeautyFillLowBrush") : null,
-            BorderThickness = new Thickness(current ? 1 : 0),
-        };
+        var item = NewItem(tab, 10);
         item.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(16) });
         item.ColumnDefinitions.Add(new ColumnDefinition());
         item.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
+        var title = new TextBlock { VerticalAlignment = VerticalAlignment.Center, FontSize = 13, TextTrimming = TextTrimming.CharacterEllipsis };
+        Grid.SetColumn(title, 1);
         var close = new Button
         {
             Style = (Style)Application.Current.Resources["BeautyTabCloseButton"],
             VerticalAlignment = VerticalAlignment.Center,
-            Opacity = current ? 1 : 0,
+            Opacity = 0,
             Content = new FontIcon { Glyph = "", FontSize = 8 },
         };
         ToolTipService.SetToolTip(close, L.T("Close tab (Ctrl+W)", "Cerrar pestaña (Ctrl+W)"));
         close.Click += (_, _) => _shell?.CloseTab(tab);
         Grid.SetColumn(close, 2);
-        item.Children.Add(new Grid()); // icon slot (FillTab)
-        item.Children.Add(new TextBlock { VerticalAlignment = VerticalAlignment.Center, FontSize = 13, TextTrimming = TextTrimming.CharacterEllipsis });
-        Grid.SetColumn(item.Children[1] as FrameworkElement, 1);
+        item.Children.Add(new Grid()); // icon (FillTab)
+        item.Children.Add(title);
         item.Children.Add(close);
         FillTab(item, tab);
 
-        item.PointerEntered += (_, _) =>
-        {
-            close.Opacity = 1;
-            if (_shell?.CurrentTab != tab) item.Background = Res("BeautySubtleFillBrush");
-        };
-        item.PointerExited += (_, _) =>
-        {
-            if (_shell?.CurrentTab != tab) { close.Opacity = 0; item.Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent); }
-        };
         item.PointerPressed += (_, e) =>
         {
             var point = e.GetCurrentPoint(item).Properties;
             if (point.IsMiddleButtonPressed) { e.Handled = true; _middlePressed = tab; }
-            else if (point.IsLeftButtonPressed && e.OriginalSource is not Button) _shell?.SelectTab(tab);
+            else if (point.IsLeftButtonPressed) _shell?.SelectTab(tab);
         };
         item.PointerReleased += (_, e) =>
         {
@@ -189,11 +290,10 @@ public sealed partial class TopBar : UserControl
             e.Handled = true;
             var pressed = _middlePressed;
             _middlePressed = null;
-            // Closing after the event: removing the element while WinUI still handles the press crashes (see Sidebar).
+            // After the event: removing the element while WinUI still handles the press crashes (see Sidebar).
             if (pressed == tab && _shell is { } shell) DispatcherQueue.TryEnqueue(DispatcherQueuePriority.Low, () => shell.CloseTab(tab));
         };
         item.RightTapped += (_, e) => ShowTabMenu(tab, item, e);
-        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(item, tab.Title);
         return item;
     }
 
@@ -209,39 +309,44 @@ public sealed partial class TopBar : UserControl
             slot.Children.Add(new Image { Width = 16, Height = 16, Source = icon });
         else
             slot.Children.Add(new FontIcon { Glyph = "", FontSize = 14, Foreground = Res("BeautyTextSecondaryBrush") });
-        ((TextBlock)item.Children[1]).Text = string.IsNullOrEmpty(tab.Title) ? Sidebar.ShortUrl(tab.Url) : tab.Title;
-        ToolTipService.SetToolTip(item, tab.Title);
+        var text = string.IsNullOrEmpty(tab.Title) ? Sidebar.ShortUrl(tab.Url) : tab.Title;
+        ((TextBlock)item.Children[1]).Text = text;
+        ToolTipService.SetToolTip(item, text);
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(item, text);
     }
 
-    /// <summary>A favorite as a small icon-only tab, like Chrome's pinned tabs.</summary>
+    /// <summary>An open favorite: a small icon-only tab, like Chrome's pinned tabs. Middle click closes it.</summary>
     private Grid FavoriteTab(FavoriteSite site)
     {
-        var open = _shell?.FavoriteTabOf(site);
-        var current = open is not null && open == _shell?.CurrentTab;
-        var image = new Image { Width = 16, Height = 16 };
-        var placeholder = new FontIcon { Glyph = "", FontSize = 14, Foreground = Res("BeautyTextSecondaryBrush") };
-        var item = new Grid
-        {
-            Tag = site,
-            Width = PinnedTabWidth,
-            Height = 32,
-            CornerRadius = (CornerRadius)Application.Current.Resources["BeautyItemCornerRadius"],
-            Background = current ? Res("BeautyCardBrush") : new SolidColorBrush(Microsoft.UI.Colors.Transparent),
-            BorderBrush = current ? Res("BeautyFillLowBrush") : null,
-            BorderThickness = new Thickness(current ? 1 : 0),
-            Children = { placeholder, image },
-        };
-        _ = LoadIconAsync(site.FaviconUrl, image, placeholder);
+        var item = NewItem(site, 0);
+        item.Padding = new Thickness(0);
+        item.Children.Add(FavoriteIcon(site, 16));
         var name = string.IsNullOrWhiteSpace(site.Title) ? site.Host : site.Title;
         ToolTipService.SetToolTip(item, name);
         Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(item, name);
-        item.PointerEntered += (_, _) => { if (!current) item.Background = Res("BeautySubtleFillBrush"); };
-        item.PointerExited += (_, _) => { if (!current) item.Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent); };
         item.PointerPressed += (_, e) =>
         {
-            if (e.GetCurrentPoint(item).Properties.IsLeftButtonPressed) _shell?.OpenFavorite(site);
+            var point = e.GetCurrentPoint(item).Properties;
+            if (point.IsMiddleButtonPressed) e.Handled = true;
+            else if (point.IsLeftButtonPressed) _shell?.OpenFavorite(site);
+        };
+        item.PointerReleased += (_, e) =>
+        {
+            if (e.GetCurrentPoint(item).Properties.PointerUpdateKind != PointerUpdateKind.MiddleButtonReleased) return;
+            e.Handled = true;
+            if (_shell is { } shell && shell.FavoriteTabOf(site) is { } open)
+                DispatcherQueue.TryEnqueue(DispatcherQueuePriority.Low, () => shell.CloseTab(open));
         };
         return item;
+    }
+
+    /// <summary>The site's icon, with a globe until it loads.</summary>
+    private static Grid FavoriteIcon(FavoriteSite site, double size)
+    {
+        var image = new Image { Width = size, Height = size };
+        var placeholder = new FontIcon { Glyph = "", FontSize = size - 2, Foreground = Res("BeautyTextSecondaryBrush") };
+        _ = LoadIconAsync(site.FaviconUrl, image, placeholder);
+        return new Grid { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Children = { placeholder, image } };
     }
 
     private static async Task LoadIconAsync(string? url, Image image, FrameworkElement placeholder)
@@ -275,6 +380,120 @@ public sealed partial class TopBar : UserControl
         Add(L.T("Close tab", "Cerrar pestaña"), () => shell.CloseTab(tab));
         menu.ShowAt(target, e.GetPosition(target));
         e.Handled = true;
+    }
+
+    // ---- favorites panel ----
+
+    private Flyout? _favorites;
+    private DispatcherQueueTimer? _favoritesHover;
+
+    // The mouse resting on the star opens the panel; it closes by itself when the mouse moves away from both.
+    private void Favorites_PointerEntered(object sender, PointerRoutedEventArgs e)
+    {
+        _favoritesHover ??= CreateHoverTimer();
+        _favoritesHover.Start();
+    }
+
+    private void Favorites_PointerExited(object sender, PointerRoutedEventArgs e) => _favoritesHover?.Stop();
+
+    private void Favorites_Click(object sender, RoutedEventArgs e) => ShowFavorites(FlyoutShowMode.Standard);
+
+    private DispatcherQueueTimer CreateHoverTimer()
+    {
+        var timer = DispatcherQueue.CreateTimer();
+        timer.IsRepeating = false;
+        timer.Interval = TimeSpan.FromMilliseconds(160);
+        timer.Tick += (_, _) => ShowFavorites(FlyoutShowMode.TransientWithDismissOnPointerMoveAway);
+        return timer;
+    }
+
+    private void ShowFavorites(FlyoutShowMode mode)
+    {
+        if (_shell is not { } shell) return;
+        if (_favorites?.IsOpen == true) return;
+
+        const int columns = 4;
+        var grid = new Grid { ColumnSpacing = 6, RowSpacing = 6 };
+        for (var c = 0; c < columns; c++) grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(78) });
+        var sites = shell.Favorites.Items.ToList();
+        for (var i = 0; i < sites.Count; i++)
+        {
+            if (i % columns == 0) grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            var tile = FavoriteTile(sites[i]);
+            Grid.SetRow(tile, i / columns);
+            Grid.SetColumn(tile, i % columns);
+            grid.Children.Add(tile);
+        }
+
+        var panel = new StackPanel { Spacing = 10 };
+        panel.Children.Add(new TextBlock { Text = L.T("Favorites", "Favoritos"), FontSize = 14, FontWeight = FontWeights.SemiBold, Margin = new Thickness(4, 0, 0, 0) });
+        panel.Children.Add(sites.Count > 0
+            ? grid
+            : new TextBlock
+            {
+                Width = 260,
+                Margin = new Thickness(4, 0, 4, 4),
+                TextWrapping = TextWrapping.Wrap,
+                FontSize = 13,
+                Foreground = Res("BeautyTextSecondaryBrush"),
+                Text = L.T("Right-click a tab and choose \"Add to favorites\".", "Hacé clic derecho en una pestaña y elegí \"Agregar a favoritos\"."),
+            });
+
+        _favorites = new Flyout { Content = panel, Placement = FlyoutPlacementMode.BottomEdgeAlignedLeft };
+        _favorites.ShowAt(FavoritesButton, new FlyoutShowOptions { ShowMode = mode, Placement = FlyoutPlacementMode.BottomEdgeAlignedLeft });
+    }
+
+    private Button FavoriteTile(FavoriteSite site)
+    {
+        var name = string.IsNullOrWhiteSpace(site.Title) ? site.Host : site.Title;
+        var open = _shell?.FavoriteTabOf(site) is not null;
+        var content = new StackPanel { Spacing = 6, HorizontalAlignment = HorizontalAlignment.Center };
+        var icon = new Border
+        {
+            Width = 44,
+            Height = 44,
+            CornerRadius = new CornerRadius(10),
+            Background = Res("BeautyTileBrush"),
+            BorderBrush = Res(open ? "BeautyAccentBrush" : "BeautyTileBorderBrush"),
+            BorderThickness = new Thickness(open ? 1.5 : 1),
+            Child = FavoriteIcon(site, 20),
+            HorizontalAlignment = HorizontalAlignment.Center,
+        };
+        content.Children.Add(icon);
+        content.Children.Add(new TextBlock
+        {
+            Text = name,
+            FontSize = 12,
+            MaxWidth = 74,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            HorizontalAlignment = HorizontalAlignment.Center,
+        });
+        var tile = new Button
+        {
+            Style = (Style)Application.Current.Resources["BeautyListRowButton"],
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            HorizontalContentAlignment = HorizontalAlignment.Center,
+            Padding = new Thickness(2, 8, 2, 6),
+            CornerRadius = new CornerRadius(10),
+            Content = content,
+        };
+        ToolTipService.SetToolTip(tile, name);
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(tile, name);
+        tile.Click += (_, _) =>
+        {
+            _favorites?.Hide();
+            _shell?.OpenFavorite(site);
+        };
+        tile.RightTapped += (_, e) =>
+        {
+            var menu = new MenuFlyout();
+            var remove = new MenuFlyoutItem { Text = L.T("Remove from favorites", "Quitar de favoritos") };
+            remove.Click += (_, _) => { _favorites?.Hide(); _shell?.Unpin(site.Url); };
+            menu.Items.Add(remove);
+            menu.ShowAt(tile, e.GetPosition(tile));
+            e.Handled = true;
+        };
+        return tile;
     }
 
     // ---- toolbar ----
@@ -337,5 +556,6 @@ public sealed partial class TopBar : UserControl
     private void Downloads_Click(object sender, RoutedEventArgs e) => LibraryRequested?.Invoke(this, LibrarySection.Downloads);
     private void Settings_Click(object sender, RoutedEventArgs e) => SettingsRequested?.Invoke(this, EventArgs.Empty);
 
-    private static Brush Res(string key) => (Brush)Application.Current.Resources[key];
+    private static Brush Res(string key) =>
+        key == "BeautyTransparentBrush" ? new SolidColorBrush(Microsoft.UI.Colors.Transparent) : (Brush)Application.Current.Resources[key];
 }
