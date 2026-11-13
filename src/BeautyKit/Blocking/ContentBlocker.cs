@@ -4,6 +4,12 @@ using Microsoft.UI.Dispatching;
 
 namespace BeautyKit.Blocking;
 
+/// <summary>The blocker's lifetime total. Bytes and time are estimates.</summary>
+public readonly record struct BlockerTotals(long Ads, long Trackers, long Bytes, TimeSpan TimeSaved, DateTime Since)
+{
+    public long Total => Ads + Trackers;
+}
+
 /// <summary>
 /// Built-in ad and tracker blocker, like Brave's, using uBlock Origin's lists and scriptlets. It has three parts: the
 /// network engine, which decides every request of every tab (queried by <see cref="BrowserTab"/> on the network
@@ -23,6 +29,13 @@ public static class ContentBlocker
     private static DispatcherQueue? _ui;
     private static long _blockedTotal;
     private static bool _updating;
+
+    // The lifetime total (it survives restarts). Saved a few seconds after it changes, and when the app closes.
+    private static long _ads, _trackers, _bytes, _milliseconds;
+    private static DateTime _statsSince = DateTime.UtcNow;
+    private static int _statsDirty;
+    private static Timer? _statsTimer;
+    private static readonly object StatsLock = new();
 
     /// <summary>State changed (enabled, updating, lists…). Raised on the UI thread.</summary>
     public static event EventHandler? StatusChanged;
@@ -47,6 +60,10 @@ public static class ContentBlocker
     public static bool IsReady => _engine is not null;
     public static bool IsUpdating => _updating;
     public static long BlockedTotal => Interlocked.Read(ref _blockedTotal);
+    /// <summary>The total since the blocker started counting: ads, trackers, estimated bytes and estimated time.</summary>
+    public static BlockerTotals Totals => new(Interlocked.Read(ref _ads), Interlocked.Read(ref _trackers),
+        Interlocked.Read(ref _bytes), TimeSpan.FromMilliseconds(Interlocked.Read(ref _milliseconds)), _statsSince);
+
     public static int FilterCount { get; private set; }
     public static int CosmeticCount { get; private set; }
     public static int ScriptletCount { get; private set; }
@@ -59,6 +76,7 @@ public static class ContentBlocker
     {
         _ui = ui;
         LoadState();
+        LoadStats();
         _ = Task.Run(async () =>
         {
             await CompileAsync();
@@ -112,7 +130,11 @@ public static class ContentBlocker
         var ctx = RequestContext.Create(url, string.IsNullOrEmpty(docUrl) ? topUrl : docUrl, type, method, engine.Psl);
         if (ctx is null) return BlockDecision.Allow;
         var decision = engine.Evaluate(ctx);
-        if (decision.Block) Interlocked.Increment(ref _blockedTotal);
+        if (decision.Block)
+        {
+            Interlocked.Increment(ref _blockedTotal);
+            Record(type, decision.Tracker);
+        }
         return decision;
     }
 
@@ -123,6 +145,7 @@ public static class ContentBlocker
         var ctx = RequestContext.Create(targetUrl, openerUrl, RequestType.Popup, "get", engine.Psl);
         if (ctx is null || !engine.BlockPopup(ctx)) return false;
         Interlocked.Increment(ref _blockedTotal);
+        Record(RequestType.Popup, tracker: false);
         return true;
     }
 
@@ -264,6 +287,71 @@ public static class ContentBlocker
         _ => "text/plain",
     };
 
+
+    // What a blocked request would have cost, on average (an estimate, like Brave's): the size by kind of request,
+    // and the time at a typical connection plus what each request takes to start.
+    private static long EstimatedBytes(RequestType type) => type switch
+    {
+        RequestType.Script => 60_000,
+        RequestType.Image => 40_000,
+        RequestType.Media => 400_000,
+        RequestType.Subdocument => 80_000,
+        RequestType.Document => 80_000,
+        RequestType.Stylesheet => 20_000,
+        RequestType.Font => 30_000,
+        RequestType.Object => 100_000,
+        RequestType.Popup => 0,
+        _ => 1_500, // xhr, beacons, pings…
+    };
+
+    private static void Record(RequestType type, bool tracker)
+    {
+        var bytes = EstimatedBytes(type);
+        Interlocked.Increment(ref tracker ? ref _trackers : ref _ads);
+        Interlocked.Add(ref _bytes, bytes);
+        Interlocked.Add(ref _milliseconds, 25 + bytes / 1_500); // ~1.5 MB/s effective + 25 ms of connection per request
+        if (Interlocked.Exchange(ref _statsDirty, 1) == 0)
+            _statsTimer ??= new Timer(_ => FlushStats(), null, TimeSpan.FromSeconds(20), TimeSpan.FromSeconds(20));
+    }
+
+    private static void LoadStats()
+    {
+        try
+        {
+            if (!File.Exists(BlockerAssets.StatsPath)) return;
+            var stats = JsonSerializer.Deserialize(File.ReadAllText(BlockerAssets.StatsPath), BlockingJson.Default.BlockerStats);
+            if (stats is null) return;
+            Interlocked.Exchange(ref _ads, stats.Ads);
+            Interlocked.Exchange(ref _trackers, stats.Trackers);
+            Interlocked.Exchange(ref _bytes, stats.Bytes);
+            Interlocked.Exchange(ref _milliseconds, stats.Milliseconds);
+            _statsSince = stats.Since;
+        }
+        catch { }
+    }
+
+    /// <summary>Writes the lifetime total if it changed. Also called when the app closes.</summary>
+    public static void FlushStats()
+    {
+        if (Interlocked.Exchange(ref _statsDirty, 0) == 0) return;
+        lock (StatsLock)
+        {
+            try
+            {
+                Directory.CreateDirectory(BlockerAssets.Folder);
+                var stats = new BlockerStats
+                {
+                    Ads = Interlocked.Read(ref _ads), Trackers = Interlocked.Read(ref _trackers),
+                    Bytes = Interlocked.Read(ref _bytes), Milliseconds = Interlocked.Read(ref _milliseconds),
+                    Since = _statsSince,
+                };
+                var temp = BlockerAssets.StatsPath + ".tmp";
+                File.WriteAllText(temp, JsonSerializer.Serialize(stats, BlockingJson.Default.BlockerStats));
+                File.Move(temp, BlockerAssets.StatsPath, overwrite: true);
+            }
+            catch { Interlocked.Exchange(ref _statsDirty, 1); }
+        }
+    }
 
     private static void LoadState()
     {

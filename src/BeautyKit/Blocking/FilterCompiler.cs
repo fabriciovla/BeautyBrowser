@@ -30,6 +30,7 @@ internal sealed class FilterCompiler
 
     public void AddList(FilterListText list, Func<string, string?> include)
     {
+        _network.AddingTrackers = list.Name is "ublock-privacy" or "easyprivacy";
         var stack = new Stack<(bool ParentActive, bool Condition)>();
         var active = true;
         foreach (var rawLine in list.Text.Split('\n'))

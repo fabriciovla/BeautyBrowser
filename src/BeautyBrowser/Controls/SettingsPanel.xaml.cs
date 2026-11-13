@@ -23,10 +23,34 @@ public sealed partial class SettingsPanel : UserControl
 
     private BrowserShell? _shell;
 
+    private readonly DispatcherTimer _statsTimer = new() { Interval = TimeSpan.FromSeconds(2) };
+
     public SettingsPanel()
     {
         InitializeComponent();
         BuildNavigation();
+        // The blocker's total moves while the page is open, so it is read again every couple of seconds.
+        _statsTimer.Tick += (_, _) => RefreshBlockerStats();
+        Loaded += (_, _) => { RefreshBlockerStats(); _statsTimer.Start(); };
+        Unloaded += (_, _) => _statsTimer.Stop();
+    }
+
+    private void RefreshBlockerStats()
+    {
+        var totals = BeautyKit.Blocking.ContentBlocker.Totals;
+        StatAds.Text = totals.Ads.ToString("#,0");
+        StatTrackers.Text = totals.Trackers.ToString("#,0");
+        StatData.Text = totals.Bytes switch
+        {
+            >= 1_000_000_000 => $"{totals.Bytes / 1e9:0.0} GB",
+            >= 1_000_000 => $"{totals.Bytes / 1e6:0.#} MB",
+            _ => $"{totals.Bytes / 1e3:0} KB",
+        };
+        StatTime.Text = totals.TimeSaved.TotalHours >= 1 ? $"{(int)totals.TimeSaved.TotalHours} h {totals.TimeSaved.Minutes} min"
+            : totals.TimeSaved.TotalMinutes >= 1 ? $"{(int)totals.TimeSaved.TotalMinutes} min {totals.TimeSaved.Seconds} s"
+            : $"{totals.TimeSaved.Seconds} s";
+        StatsHint.Text = L.T($"Since {totals.Since.ToLocalTime():d}. Data and time are estimates.",
+            $"Desde el {totals.Since.ToLocalTime():d}. Los datos y el tiempo son estimados.");
     }
 
     private SettingsService Settings => _shell!.Settings;

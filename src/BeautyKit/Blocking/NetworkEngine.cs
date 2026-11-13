@@ -3,7 +3,8 @@ using System.Text.RegularExpressions;
 
 namespace BeautyKit.Blocking;
 
-public readonly record struct BlockDecision(bool Block, string? Redirect)
+/// <param name="Tracker">The filter that blocked it comes from a privacy list (trackers), not from the ad lists.</param>
+public readonly record struct BlockDecision(bool Block, string? Redirect, bool Tracker = false)
 {
     public static readonly BlockDecision Allow = new(false, null);
 }
@@ -33,6 +34,9 @@ internal sealed class NetworkEngine
     public readonly HashSet<string> NoScriptlets = new(StringComparer.Ordinal);
 
     public int FilterCount { get; private set; }
+
+    /// <summary>The compiler is adding lines of a privacy list: its filters block trackers, not ads.</summary>
+    public bool AddingTrackers { get; set; }
 
     public NetworkEngine(PublicSuffix psl) => _psl = psl;
 
@@ -91,7 +95,7 @@ internal sealed class NetworkEngine
             }
         }
 
-        var filter = new NetworkFilter { Raw = raw, Exception = exception };
+        var filter = new NetworkFilter { Raw = raw, Exception = exception, Tracker = AddingTrackers };
 
         RequestType include = RequestType.None, exclude = RequestType.None;
         var badfilter = false;
@@ -353,17 +357,15 @@ internal sealed class NetworkEngine
     /// <summary>Whether to block (or redirect) this request.</summary>
     public BlockDecision Evaluate(RequestContext ctx)
     {
-        if (_important.FindMatch(ctx) is not null) return Decide(ctx, blocked: true, important: true);
+        if (_important.FindMatch(ctx) is { } important) return Decide(ctx, important.Tracker);
         var block = _block.FindMatch(ctx);
         if (block is null) return BlockDecision.Allow;
         if (_exceptions.FindMatch(ctx) is not null) return BlockDecision.Allow;
-        return Decide(ctx, blocked: true, important: false);
+        return Decide(ctx, block.Tracker);
     }
 
-    private BlockDecision Decide(RequestContext ctx, bool blocked, bool important)
+    private BlockDecision Decide(RequestContext ctx, bool tracker)
     {
-        if (!blocked) return BlockDecision.Allow;
-
         // Redirect: the highest priority one without an exception.
         string? best = null;
         var bestPriority = int.MinValue;
@@ -379,7 +381,7 @@ internal sealed class NetworkEngine
             best = filter.Redirect;
             bestPriority = filter.RedirectPriority;
         }
-        return new BlockDecision(true, best);
+        return new BlockDecision(true, best, tracker);
     }
 
     /// <summary>Whether this popup (popunder) should be closed.</summary>
