@@ -668,6 +668,12 @@ public sealed partial class TopBar : UserControl
         if (shell.Favorites.Contains(tab.Url)) Add(L.T("Remove from favorites", "Quitar de favoritos"), () => shell.Unpin(tab.Url));
         else Add(L.T("Add to favorites", "Agregar a favoritos"), () => shell.Pin(tab));
         Add(L.T("Duplicate tab", "Duplicar pestaña"), () => shell.DuplicateTab(tab));
+        // Installing a site as an app (its own window and taskbar icon); a page that already is one opens there.
+        if (!tab.IsPrivate && tab.Url.StartsWith("http", StringComparison.OrdinalIgnoreCase))
+            Add(shell.WebApps.ForUrl(tab.Url) is { } installed
+                    ? L.T($"Open in {installed.Name} app", $"Abrir en la app {installed.Name}")
+                    : L.T("Install as app", "Instalar como app"),
+                () => shell.RequestInstallApp(tab));
         Add(L.T("Copy link", "Copiar enlace"), () =>
         {
             var package = new DataPackage();

@@ -29,6 +29,7 @@ public sealed partial class SiteSettingsPanel : UserControl
         Watch(_shell?.CurrentTab); // the counter keeps going up while the flyout is open
         RefreshZoom();
         RefreshSiteBlocker();
+        RefreshInstallApp();
     }
 
     private void Watch(BrowserTab? tab)
@@ -78,6 +79,23 @@ public sealed partial class SiteSettingsPanel : UserControl
         BeautyKit.Blocking.ContentBlocker.SetSiteAllowed(tab.Url, !allowed);
         RefreshSiteBlocker();
         tab.Reload(); // the change shows right away
+    }
+
+    private void RefreshInstallApp()
+    {
+        var tab = _shell?.CurrentTab;
+        var web = tab is { IsPrivate: false } && Uri.TryCreate(tab.Url, UriKind.Absolute, out var uri) && uri.Scheme is "http" or "https";
+        InstallAppRow.Visibility = web ? Visibility.Visible : Visibility.Collapsed;
+        if (!web) return;
+        InstallAppText.Text = _shell!.WebApps.ForUrl(tab!.Url) is { } installed
+            ? L.T($"Open in the {installed.Name} app", $"Abrir en la app {installed.Name}")
+            : L.T("Install as app", "Instalar como app");
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(InstallAppRow, InstallAppText.Text);
+    }
+
+    private void InstallApp_Click(object sender, RoutedEventArgs e)
+    {
+        if (_shell?.CurrentTab is { } tab) _shell.RequestInstallApp(tab);
     }
 
     private void ZoomIn_Click(object sender, RoutedEventArgs e) { _shell?.CurrentTab?.ZoomIn(); RefreshZoom(); }

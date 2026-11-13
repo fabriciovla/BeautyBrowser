@@ -56,7 +56,7 @@ public sealed partial class MainWindow
     private void PermissionAllow_Click(object sender, RoutedEventArgs e) => AnswerPermission(allow: true);
     private void PermissionBlock_Click(object sender, RoutedEventArgs e) => AnswerPermission(allow: false);
 
-    private static string PermissionMessage(PermissionRequest request)
+    internal static string PermissionMessage(PermissionRequest request)
     {
         var site = Uri.TryCreate(request.Origin, UriKind.Absolute, out var uri) ? HostName.WithoutWww(uri.Host) : request.Origin;
         var what = request.Permissions

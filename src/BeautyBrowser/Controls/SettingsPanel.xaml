@@ -382,6 +382,28 @@
                             </Border>
                         </StackPanel>
 
+                        <!-- Installed apps -->
+                        <StackPanel x:Name="SectionApps">
+                            <StackPanel Style="{StaticResource SettingsSectionHeader}">
+                                <FontIcon VerticalAlignment="Center" FontSize="20" Glyph="&#xE71D;" />
+                                <TextBlock VerticalAlignment="Center" FontSize="24" FontWeight="SemiBold" Text="{app:T En='Installed apps', Es='Apps instaladas'}" />
+                            </StackPanel>
+                            <Border Style="{StaticResource SettingsCard}">
+                                <StackPanel Spacing="22">
+                                    <StackPanel Spacing="10">
+                                        <StackPanel Spacing="2">
+                                            <TextBlock Style="{StaticResource SettingsGroupTitle}" Text="{app:T En='Sites installed as apps', Es='Sitios instalados como apps'}" />
+                                            <TextBlock Style="{StaticResource SettingsHint}" Text="{app:T En='They open in their own window, with their icon on the taskbar and in the Start menu. To install one: right-click a tab and choose Install as app.', Es='Se abren en su propia ventana, con su ícono en la barra de tareas y en Inicio. Para instalar uno: clic derecho en la pestaña y elegí Instalar como app.'}" />
+                                        </StackPanel>
+                                        <Border x:Name="AppsBox" Style="{StaticResource SettingsBox}">
+                                            <StackPanel x:Name="AppRows" />
+                                        </Border>
+                                        <TextBlock x:Name="AppsEmpty" Style="{StaticResource SettingsHint}" Text="{app:T En='No apps installed yet.', Es='Todavía no instalaste ninguna app.'}" />
+                                    </StackPanel>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+
                         <!-- Downloads -->
                         <StackPanel x:Name="SectionDownloads">
                             <StackPanel Style="{StaticResource SettingsSectionHeader}">

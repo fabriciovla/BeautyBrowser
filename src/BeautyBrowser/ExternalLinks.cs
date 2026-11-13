@@ -62,8 +62,12 @@ internal static class ExternalLinks
         }
     }
 
-    /// <summary>Listens in the background for links sent by other instances.</summary>
-    public static void Listen(Action<string> open)
+    /// <summary>Messages that are not links: open an installed app, or just show the browser.</summary>
+    public const string AppMessage = "app:";
+    public const string ShowMessage = "show:";
+
+    /// <summary>Listens in the background for links (and app or show requests) sent by other instances.</summary>
+    public static void Listen(Action<string> open, Action<string>? command = null)
     {
         var thread = new Thread(() =>
         {
@@ -75,7 +79,10 @@ internal static class ExternalLinks
                         PipeTransmissionMode.Byte, PipeOptions.CurrentUserOnly);
                     pipe.WaitForConnection();
                     using var reader = new StreamReader(pipe, Encoding.UTF8);
-                    if (Normalize(reader.ReadToEnd()) is { } url) open(url);
+                    var message = reader.ReadToEnd();
+                    if (message.StartsWith(AppMessage, StringComparison.Ordinal) || message.StartsWith(ShowMessage, StringComparison.Ordinal))
+                        command?.Invoke(message);
+                    else if (Normalize(message) is { } url) open(url);
                 }
                 catch
                 {
