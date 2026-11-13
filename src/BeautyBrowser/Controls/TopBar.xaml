@@ -2,6 +2,7 @@
     x:Class="BeautyBrowser.Controls.TopBar"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:controls="using:BeautyBrowser.Controls"
     xmlns:local="using:BeautyBrowser">
 
     <!--
@@ -100,6 +101,7 @@
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
                 <Grid VerticalAlignment="Center">
                     <FontIcon
@@ -141,6 +143,64 @@
                         <SolidColorBrush x:Key="TextControlBorderBrushPointerOver" Color="Transparent" />
                     </TextBox.Resources>
                 </TextBox>
+
+                <!-- As in the sidebar: the zoom while it is not the default one, the site's settings and, as in Chrome, the favorite star. -->
+                <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
+                    <Button
+                        x:Name="ZoomBadge"
+                        Height="24"
+                        Padding="6,0"
+                        AutomationProperties.AutomationId="TopZoomBadge"
+                        Click="ZoomReset_Click"
+                        Style="{StaticResource BeautyIconButton}"
+                        ToolTipService.ToolTip="{local:T En='Reset zoom', Es='Restablecer zoom'}"
+                        Visibility="Collapsed">
+                        <Button.Resources>
+                            <StaticResource x:Key="ButtonBackground" ResourceKey="BeautyFillLowBrush" />
+                            <StaticResource x:Key="ButtonBackgroundPointerOver" ResourceKey="BeautyFillHoverBrush" />
+                            <StaticResource x:Key="ButtonBackgroundPressed" ResourceKey="BeautyFillPressedBrush" />
+                        </Button.Resources>
+                        <StackPanel Orientation="Horizontal" Spacing="4">
+                            <FontIcon FontSize="11" Glyph="&#xE71E;" />
+                            <TextBlock x:Name="ZoomBadgeText" FontSize="11" />
+                        </StackPanel>
+                    </Button>
+                    <Button
+                        x:Name="SiteSettingsButton"
+                        Width="28"
+                        Height="28"
+                        Padding="0"
+                        AutomationProperties.AutomationId="TopSiteSettings"
+                        Style="{StaticResource BeautyIconButton}"
+                        ToolTipService.ToolTip="{local:T En='Site settings', Es='Ajustes del sitio'}">
+                        <Button.Resources>
+                            <SolidColorBrush x:Key="ButtonBackground" Color="Transparent" />
+                            <StaticResource x:Key="ButtonBackgroundPointerOver" ResourceKey="BeautyFillHoverBrush" />
+                            <StaticResource x:Key="ButtonBackgroundPressed" ResourceKey="BeautyFillPressedBrush" />
+                        </Button.Resources>
+                        <FontIcon FontSize="13" Glyph="&#xE9E9;" />
+                        <Button.Flyout>
+                            <Flyout x:Name="SiteFlyout" Opening="SiteFlyout_Opening" Placement="BottomEdgeAlignedRight">
+                                <controls:SiteSettingsPanel x:Name="SitePanel" />
+                            </Flyout>
+                        </Button.Flyout>
+                    </Button>
+                    <Button
+                        x:Name="FavoriteButton"
+                        Width="28"
+                        Height="28"
+                        Padding="0"
+                        AutomationProperties.AutomationId="TopFavoriteStar"
+                        Click="Favorite_Click"
+                        Style="{StaticResource BeautyIconButton}">
+                        <Button.Resources>
+                            <SolidColorBrush x:Key="ButtonBackground" Color="Transparent" />
+                            <StaticResource x:Key="ButtonBackgroundPointerOver" ResourceKey="BeautyFillHoverBrush" />
+                            <StaticResource x:Key="ButtonBackgroundPressed" ResourceKey="BeautyFillPressedBrush" />
+                        </Button.Resources>
+                        <FontIcon x:Name="FavoriteStarIcon" FontSize="14" Glyph="&#xE734;" />
+                    </Button>
+                </StackPanel>
             </Grid>
 
             <!-- Ours, on the right: space, library, downloads and settings. -->

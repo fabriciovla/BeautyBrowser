@@ -24,6 +24,12 @@ public sealed partial class MainWindow
 
     private void ShowNewTabToast(BrowserTab tab)
     {
+        // Tabs on top: the new tab is seen appearing in the strip, so it just glows for a moment.
+        if (TabsOnTop && TopBar.Visibility == Visibility.Visible)
+        {
+            TopBar.FlashTab(tab);
+            return;
+        }
         if (_fullscreen) return;
         // Several in a row: one notice that counts them, and a tap goes to the last.
         _toastCount = NewTabToast.Opacity > 0 ? _toastCount + 1 : 1;

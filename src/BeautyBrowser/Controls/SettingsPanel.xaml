@@ -261,7 +261,7 @@
                                         <TextBlock Style="{StaticResource SettingsGroupTitle}" Text="{app:T En='Sidebar', Es='Barra lateral'}" />
                                         <StackPanel x:Name="SidebarToggles" />
                                     </StackPanel>
-                                    <StackPanel Spacing="10">
+                                    <StackPanel x:Name="IdleGroup" Spacing="10">
                                         <StackPanel Spacing="2">
                                             <TextBlock Style="{StaticResource SettingsGroupTitle}" Text="{app:T En='Hide the sidebar automatically', Es='Esconder la barra sola'}" />
                                             <TextBlock Style="{StaticResource SettingsHint}" Text="{app:T En='When the mouse rests and it is not pinned', Es='Con el mouse quieto, cuando no está fija'}" />

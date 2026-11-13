@@ -132,9 +132,10 @@ public sealed partial class TopBar : UserControl
     public void Attach(BrowserShell shell)
     {
         _shell = shell;
+        SitePanel.Attach(shell);
         shell.CurrentSpaceChanged += (_, _) => QueueSync(reset: true);
         shell.CurrentTabChanged += (_, _) => { QueueSync(); WatchCurrentTab(); };
-        shell.Favorites.Items.CollectionChanged += (_, _) => QueueSync();
+        shell.Favorites.Items.CollectionChanged += (_, _) => { QueueSync(); RefreshFavorite(); };
         shell.SpaceRenamed += (_, _) => RefreshSpace();
         QueueSync(reset: true);
         WatchCurrentTab();
@@ -228,6 +229,11 @@ public sealed partial class TopBar : UserControl
 
         foreach (var item in _items.Values) Style(item);
         Layout(animate);
+        if (_flash is { } flash && _items.TryGetValue(flash, out var flashed))
+        {
+            _flash = null;
+            Flash(flashed);
+        }
     }
 
     private void Space_CollectionChanged(object? sender, NotifyCollectionChangedEventArgs e) => QueueSync();
@@ -310,15 +316,54 @@ public sealed partial class TopBar : UserControl
     }
 
     /// <summary>Narrow tabs (many open) show only the icon, centered; the close button waits for a wider tab.</summary>
-    private static void SetCompact(Grid item, bool compact)
+    private BrowserTab? _flash;
+
+    /// <summary>A tab opened in the background: it glows for a moment once it is in the strip.</summary>
+    public void FlashTab(BrowserTab tab)
     {
-        if (item.Tag is not BrowserTab) return;
+        _flash = tab;
+        QueueSync();
+    }
+
+    private void Flash(Grid item)
+    {
+        var card = CardOf(item);
+        var accent = Res("BeautyAccentBrush") is SolidColorBrush brush ? brush.Color : Windows.UI.Color.FromArgb(255, 60, 120, 240);
+        var transition = card.BackgroundTransition;
+        card.BackgroundTransition = null; // the glow is drawn frame by frame
+        Motion.Animate("topbar-flash-" + item.GetHashCode(), TimeSpan.FromMilliseconds(1200),
+            t => card.Background = new SolidColorBrush(Windows.UI.Color.FromArgb((byte)(120 * Math.Abs(Math.Sin(2 * Math.PI * t))), accent.R, accent.G, accent.B)),
+            ease: t => t,
+            completed: () =>
+            {
+                card.BackgroundTransition = transition;
+                Style(item);
+            });
+    }
+
+    private readonly HashSet<Grid> _compact = [];
+
+    private void UpdateAudio(Grid item, BrowserTab tab)
+    {
+        var content = ContentOf(item);
+        if (content.Children.Count < 4 || content.Children[2] is not Button speaker) return;
+        var show = tab.Media?.IsPlaying == true || tab.IsAudioMuted;
+        speaker.Visibility = show && !_compact.Contains(item) ? Visibility.Visible : Visibility.Collapsed;
+        ((FontIcon)speaker.Content).Glyph = tab.IsAudioMuted ? "\uE74F" : "\uE767";
+        ToolTipService.SetToolTip(speaker, tab.IsAudioMuted ? L.T("Unmute", "Activar sonido") : L.T("Mute tab", "Silenciar pestaña"));
+    }
+
+    private void SetCompact(Grid item, bool compact)
+    {
+        if (item.Tag is not BrowserTab tab) return;
+        if (compact) _compact.Add(item); else _compact.Remove(item);
         var content = ContentOf(item);
         content.ColumnSpacing = compact ? 0 : 8;
         content.HorizontalAlignment = compact ? HorizontalAlignment.Center : HorizontalAlignment.Stretch;
         CardOf(item).Padding = compact ? new Thickness(0) : new Thickness(10, 0, 4, 0);
         content.Children[1].Visibility = compact ? Visibility.Collapsed : Visibility.Visible;
         content.Children[^1].Visibility = compact ? Visibility.Collapsed : Visibility.Visible;
+        UpdateAudio(item, tab);
     }
 
     private void Observe(object key)
@@ -333,6 +378,11 @@ public sealed partial class TopBar : UserControl
 
     private void Tab_PropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
+        if (e.PropertyName is nameof(BrowserTab.Media) or nameof(BrowserTab.IsAudioMuted))
+        {
+            if (sender is BrowserTab playing && _items.TryGetValue(playing, out var tabItem)) UpdateAudio(tabItem, playing);
+            return;
+        }
         if (e.PropertyName is not (nameof(BrowserTab.Title) or nameof(BrowserTab.Favicon) or nameof(BrowserTab.IsLoading))) return;
         if (sender is BrowserTab tab && _items.TryGetValue(tab, out var item)) FillTab(item, tab);
     }
@@ -393,7 +443,8 @@ public sealed partial class TopBar : UserControl
         var content = ContentOf(item);
         content.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(16) });
         content.ColumnDefinitions.Add(new ColumnDefinition());
-        content.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        content.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); // sound
+        content.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); // close
 
         var title = new TextBlock { VerticalAlignment = VerticalAlignment.Center, FontSize = 13, TextTrimming = TextTrimming.CharacterEllipsis };
         Grid.SetColumn(title, 1);
@@ -406,11 +457,23 @@ public sealed partial class TopBar : UserControl
         };
         ToolTipService.SetToolTip(close, L.T("Close tab (Ctrl+W)", "Cerrar pestaña (Ctrl+W)"));
         close.Click += (_, _) => _shell?.CloseTab(tab);
-        Grid.SetColumn(close, 2);
+        Grid.SetColumn(close, 3);
+        // Sound: a small speaker next to the title while the tab plays (or is muted); a tap mutes or unmutes it.
+        var speaker = new Button
+        {
+            Style = (Style)Application.Current.Resources["BeautyTabCloseButton"],
+            VerticalAlignment = VerticalAlignment.Center,
+            Visibility = Visibility.Collapsed,
+            Content = new FontIcon { Glyph = "\uE767", FontSize = 11 },
+        };
+        speaker.Click += (_, _) => tab.SetAudioMuted(!tab.IsAudioMuted);
+        Grid.SetColumn(speaker, 2);
         content.Children.Add(new Grid { VerticalAlignment = VerticalAlignment.Center }); // icon (FillTab)
         content.Children.Add(title);
+        content.Children.Add(speaker);
         content.Children.Add(close);
         FillTab(item, tab);
+        UpdateAudio(item, tab);
 
         item.PointerPressed += (_, e) =>
         {
@@ -611,8 +674,16 @@ public sealed partial class TopBar : UserControl
             package.SetText(tab.Url);
             Clipboard.SetContent(package);
         });
+        Add(L.T("Reload", "Volver a cargar"), () => tab.Reload());
+        Add(tab.IsAudioMuted ? L.T("Unmute tab", "Activar sonido") : L.T("Mute tab", "Silenciar pestaña"), () => tab.SetAudioMuted(!tab.IsAudioMuted));
         menu.Items.Add(new MenuFlyoutSeparator());
         Add(L.T("Close tab", "Cerrar pestaña"), () => shell.CloseTab(tab));
+        // "Right" is the strip's right (the visual order), not the space's.
+        var shown = Tabs.Children.OfType<Grid>().Where(c => c.Tag is BrowserTab && !_closing.Contains(c)).Select(c => (BrowserTab)c.Tag).ToList();
+        var others = shown.Where(t => t != tab).ToList();
+        var toTheRight = shown.Skip(shown.IndexOf(tab) + 1).ToList();
+        if (others.Count > 0) Add(L.T("Close other tabs", "Cerrar las demás pestañas"), () => others.ForEach(shell.CloseTab));
+        if (toTheRight.Count > 0) Add(L.T("Close tabs to the right", "Cerrar las pestañas de la derecha"), () => toTheRight.ForEach(shell.CloseTab));
         menu.ShowAt(target, e.GetPosition(target));
         e.Handled = true;
     }
@@ -748,6 +819,8 @@ public sealed partial class TopBar : UserControl
         var tab = _watchedTab;
         BackButton.IsEnabled = tab?.CanGoBack ?? false;
         ForwardButton.IsEnabled = tab?.CanGoForward ?? false;
+        RefreshZoomBadge();
+        RefreshFavorite();
         if (_editing) return; // the user is typing: the box is theirs
         var url = tab?.Url;
         AddressBox.Text = StartPage.Is(url) ? "" : Sidebar.ShortUrl(url);
@@ -784,6 +857,39 @@ public sealed partial class TopBar : UserControl
         add.Click += (_, _) => NewSpaceRequested?.Invoke(this, EventArgs.Empty);
         SpaceMenu.Items.Add(add);
     }
+
+    private void RefreshZoomBadge()
+    {
+        var percent = _watchedTab?.ZoomPercent ?? BrowserTab.DefaultZoomPercent;
+        ZoomBadgeText.Text = $"{percent} %";
+        ZoomBadge.Visibility = percent == BrowserTab.DefaultZoomPercent ? Visibility.Collapsed : Visibility.Visible;
+    }
+
+    /// <summary>The star: filled when the page is a favorite; hidden on internal pages, which are not worth keeping.</summary>
+    private void RefreshFavorite()
+    {
+        var url = _watchedTab?.Url;
+        var usable = !string.IsNullOrEmpty(url) && !StartPage.Is(url) && !StartPage.IsSettings(url);
+        FavoriteButton.Visibility = usable ? Visibility.Visible : Visibility.Collapsed;
+        var favorite = usable && _shell?.Favorites.Contains(url!) == true;
+        FavoriteStarIcon.Glyph = favorite ? "\uE735" : "\uE734";
+        FavoriteStarIcon.Foreground = favorite ? Res("BeautyAccentBrush") : Res("BeautyTextBrush");
+        ToolTipService.SetToolTip(FavoriteButton, favorite
+            ? L.T("Remove from favorites", "Quitar de favoritos")
+            : L.T("Add to favorites", "Agregar a favoritos"));
+    }
+
+    private void Favorite_Click(object sender, RoutedEventArgs e)
+    {
+        if (_shell is not { } shell || shell.CurrentTab is not { } tab) return;
+        if (shell.Favorites.Contains(tab.Url)) shell.Unpin(tab.Url);
+        else shell.Pin(tab);
+        RefreshFavorite();
+    }
+
+    private void ZoomReset_Click(object sender, RoutedEventArgs e) => _shell?.CurrentTab?.ResetZoom();
+
+    private void SiteFlyout_Opening(object sender, object e) => SitePanel.Refresh();
 
     private void Back_Click(object sender, RoutedEventArgs e) => _shell?.CurrentTab?.GoBack();
     private void Forward_Click(object sender, RoutedEventArgs e) => _shell?.CurrentTab?.GoForward();
