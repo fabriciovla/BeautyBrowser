@@ -211,6 +211,7 @@ public sealed partial class Sidebar : UserControl
     /// <summary>"https://www.google.com/search?q=x" → "google.com".</summary>
     private static string ShortUrl(string? url) =>
         StartPage.Is(url) ? L.T("New tab", "Nueva pestaña")
+        : StartPage.IsSettings(url) ? L.T("Settings", "Ajustes")
         : Uri.TryCreate(url, UriKind.Absolute, out var uri) && uri.Scheme is "http" or "https"
             ? HostName.WithoutWww(uri.Host)
             : url ?? "";

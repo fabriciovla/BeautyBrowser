@@ -17,12 +17,20 @@ public static class StartPage
 
     public static bool Is(string? url) => url is not null && url.StartsWith("beauty://newtab", StringComparison.OrdinalIgnoreCase);
 
+    /// <summary>
+    /// The settings tab. Chromium shows an empty page with the title and the gear icon; the app draws its own settings
+    /// over it, so it behaves like any tab (sidebar, close, session restore).
+    /// </summary>
+    public const string SettingsUrl = "beauty://settings/";
+
+    public static bool IsSettings(string? url) => url is not null && url.StartsWith("beauty://settings", StringComparison.OrdinalIgnoreCase);
+
     /// <summary>Registers beauty:// with Chromium. Must run before the engine starts.</summary>
     internal static void Register(CefSettingsBase settings) =>
         settings.RegisterScheme(new CefCustomScheme
         {
             SchemeName = Scheme,
-            DomainName = "newtab",
+            DomainName = "", // every page of ours: newtab and settings (see Factory)
             IsStandard = true,
             IsSecure = true,
             IsLocal = false,
@@ -34,13 +42,13 @@ public static class StartPage
     /// factory too or beauty://newtab fails with ERR_UNKNOWN_URL_SCHEME.
     /// </summary>
     internal static void Register(IRequestContext context) =>
-        context.RegisterSchemeHandlerFactory(Scheme, "newtab", new Factory(isPrivate: true));
+        context.RegisterSchemeHandlerFactory(Scheme, "", new Factory(isPrivate: true));
 
     /// <param name="isPrivate">The private space's page: dark and says what is not kept.</param>
     private sealed class Factory(bool isPrivate = false) : ISchemeHandlerFactory
     {
         public IResourceHandler Create(IBrowser browser, IFrame frame, string schemeName, IRequest request) =>
-            ResourceHandler.FromString(Html(isPrivate), Encoding.UTF8, mimeType: "text/html");
+            ResourceHandler.FromString(IsSettings(request.Url) ? SettingsHtml(isPrivate || Dark) : Html(isPrivate), Encoding.UTF8, mimeType: "text/html");
     }
 
     /// <summary>The app is in dark mode: new tabs open with the dark page.</summary>
@@ -92,6 +100,24 @@ public static class StartPage
             .Replace("__ENGINE_ICON__", EngineIcon(engine))
             .Replace("__SEARCH__", Json(template));
     }
+
+    private static string SettingsHtml(bool dark) =>
+        $$"""
+        <!doctype html>
+        <html lang="{{L.T("en", "es")}}">
+        <head>
+        <meta charset="utf-8">
+        <title>{{L.T("Settings", "Ajustes")}}</title>
+        <link rel="icon" href="data:image/svg+xml,{{Uri.EscapeDataString(GearIcon)}}">
+        <style>html, body { height: 100%; margin: 0; background: {{(dark ? "#202026" : "#f3f3f5")}}; }</style>
+        </head>
+        <body></body>
+        </html>
+        """;
+
+    // Fluent's gear (Settings), drawn as a path so it renders the same everywhere.
+    private const string GearIcon =
+        "<svg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 24 24' fill='none' stroke='#6b6b76' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='12' r='3'/><path d='M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z'/></svg>";
 
     private const string Page = """
         <!doctype html>

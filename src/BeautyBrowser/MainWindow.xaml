@@ -77,6 +77,9 @@
 
             <kit:BrowserView x:Name="WebView" CornerRadius="{StaticResource BeautyContentCornerRadius}" />
 
+            <!-- The settings tab: drawn over its empty page while it is the current tab (MainWindow.Settings). -->
+            <controls:SettingsPanel x:Name="SettingsPage" Visibility="Collapsed" />
+
             <!-- The zoom, for a moment, whenever it changes (Ctrl+wheel, Ctrl+plus/minus), with a button to reset it. -->
             <Border
                 x:Name="ZoomToast"

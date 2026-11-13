@@ -1,4 +1,3 @@
-using System.Numerics;
 using BeautyBrowser.Services;
 using BeautyBrowser.Shell;
 using BeautyKit;
@@ -14,7 +13,10 @@ using Windows.System;
 
 namespace BeautyBrowser.Controls;
 
-/// <summary>Settings, a library section built from custom controls (options with a check mark, chips and switches).</summary>
+/// <summary>
+/// The settings tab: categories on the left, search and content on the right. Built from custom controls (options with
+/// a check mark, chips and switches).
+/// </summary>
 public sealed partial class SettingsPanel : UserControl
 {
     private const int ConfirmMs = 4000;
@@ -24,6 +26,7 @@ public sealed partial class SettingsPanel : UserControl
     public SettingsPanel()
     {
         InitializeComponent();
+        BuildNavigation();
     }
 
     private SettingsService Settings => _shell!.Settings;
@@ -167,7 +170,7 @@ public sealed partial class SettingsPanel : UserControl
                         Column(new TextBlock
                         {
                             Text = name,
-                            FontSize = 13,
+                            FontSize = 14,
                             FontWeight = key == s.GlassTexture ? FontWeights.SemiBold : FontWeights.Normal,
                         }, 1),
                     },
@@ -219,7 +222,7 @@ public sealed partial class SettingsPanel : UserControl
     private void Restart_Click(object sender, RoutedEventArgs e) => App.Restart();
 
 
-    /// <summary>Exclusive options: one row per option, the selected one bold with a check mark.</summary>
+    /// <summary>Exclusive options inside a bordered box: one row per option, split by lines, the selected one bold with a check mark.</summary>
     private static void OptionRows(StackPanel host,
         IReadOnlyList<(string Title, string? Hint, Func<bool> IsSelected, Action Choose)> options)
     {
@@ -250,11 +253,12 @@ public sealed partial class SettingsPanel : UserControl
                 titleBlock.FontWeight = selected ? FontWeights.SemiBold : FontWeights.Normal;
             });
 
+            if (host.Children.Count > 0) host.Children.Add(new Rectangle { Height = 1, Fill = Brush("BeautyDividerBrush") });
             var row = new Button
             {
                 Style = (Style)Application.Current.Resources["BeautyListRowButton"],
-                MinHeight = hint is null ? 36 : 48,
-                Padding = new Thickness(12, 6, 12, 6),
+                MinHeight = hint is null ? 44 : 56,
+                Padding = new Thickness(14, 6, 14, 6),
                 Content = new Grid
                 {
                     ColumnSpacing = 10,
@@ -272,7 +276,7 @@ public sealed partial class SettingsPanel : UserControl
         RefreshGroup();
     }
 
-    /// <summary>Chips in a row; the selected one is a white card.</summary>
+    /// <summary>Chips in a row; the selected one is filled with the text color (dark in light mode, light in dark mode).</summary>
     private static void Chips(Grid host, IReadOnlyList<(string Text, Func<bool> IsSelected, Action Choose)> chips)
     {
         host.Children.Clear();
@@ -283,8 +287,8 @@ public sealed partial class SettingsPanel : UserControl
             foreach (var (chip, isSelected) in buttons)
             {
                 var selected = isSelected();
-                chip.Background = Brush(selected ? "BeautyCardBrush" : "BeautySubtleFillBrush");
-                chip.Foreground = Brush(selected ? "BeautyTextBrush" : "BeautyTextSecondaryBrush");
+                chip.Background = Brush(selected ? "BeautyTextBrush" : "BeautySubtleFillBrush");
+                chip.Foreground = Brush(selected ? "BeautyCardBrush" : "BeautyTextBrush");
             }
         }
 
@@ -296,7 +300,7 @@ public sealed partial class SettingsPanel : UserControl
             {
                 Style = (Style)Application.Current.Resources["BeautyChipButton"],
                 Content = text,
-                FontSize = 12,
+                FontSize = 14,
                 Padding = new Thickness(4, 0, 4, 0),
             };
             Grid.SetColumn(chip, i);
@@ -315,41 +319,31 @@ public sealed partial class SettingsPanel : UserControl
     // button, for instance).
     private readonly List<Action> _toggleRefreshers = [];
 
-    /// <summary>Rows with a custom switch: a pill with a sliding knob.</summary>
+    /// <summary>Rows with our own check box on the left: a rounded square that fills with the accent and a check mark.</summary>
     private void ToggleRows(StackPanel host, IReadOnlyList<(string Title, string? Hint, Func<bool> Get, Action<bool> Set)> toggles)
     {
         host.Children.Clear();
-        for (var i = 0; i < toggles.Count; i++)
+        foreach (var (title, hint, get, set) in toggles)
         {
-            var (title, hint, get, set) = toggles[i];
-            var on = get();
-            if (i > 0) host.Children.Add(new Rectangle { Height = 1, Margin = new Thickness(12, 0, 10, 0), Fill = Brush("BeautyDividerBrush") });
-
-            var knob = new Ellipse
+            var mark = new FontIcon { Glyph = "", FontSize = 11, Foreground = new SolidColorBrush(Colors.White) };
+            var box = new Border
             {
-                Width = 14,
-                Height = 14,
-                Fill = new SolidColorBrush(Colors.White),
-                HorizontalAlignment = HorizontalAlignment.Left,
-                Margin = new Thickness(3, 0, 0, 0),
-                TranslationTransition = new Vector3Transition { Duration = TimeSpan.FromMilliseconds(150) },
+                Width = 18,
+                Height = 18,
+                CornerRadius = new CornerRadius(4),
+                VerticalAlignment = hint is null ? VerticalAlignment.Center : VerticalAlignment.Top,
+                Margin = new Thickness(0, hint is null ? 0 : 1, 0, 0),
+                BackgroundTransition = new BrushTransition { Duration = TimeSpan.FromMilliseconds(120) },
+                Child = mark,
             };
-            var track = new Border
-            {
-                Width = 36,
-                Height = 20,
-                CornerRadius = new CornerRadius(10),
-                VerticalAlignment = VerticalAlignment.Center,
-                BackgroundTransition = new BrushTransition { Duration = TimeSpan.FromMilliseconds(150) },
-                Child = knob,
-            };
-            Grid.SetColumn(track, 1);
 
-            var state = on;
+            var state = get();
             void Paint()
             {
-                track.Background = state ? Brush("BeautyAccentBrush") : Brush("BeautyFillPressedBrush");
-                knob.Translation = new Vector3(state ? 16 : 0, 0, 0);
+                box.Background = state ? Brush("BeautyAccentBrush") : null;
+                box.BorderBrush = state ? null : Brush("BeautyTextSecondaryBrush");
+                box.BorderThickness = new Thickness(state ? 0 : 1.5);
+                mark.Opacity = state ? 1 : 0;
             }
             Paint();
             _toggleRefreshers.Add(() =>
@@ -362,13 +356,14 @@ public sealed partial class SettingsPanel : UserControl
             var row = new Button
             {
                 Style = (Style)Application.Current.Resources["BeautyListRowButton"],
-                MinHeight = hint is null ? 40 : 50,
-                Padding = new Thickness(12, 7, 12, 7),
+                MinHeight = 36,
+                Margin = new Thickness(-8, 0, -8, 0), // the hover fill reaches past the text, the box lines up with the titles
+                Padding = new Thickness(8, 6, 8, 6),
                 Content = new Grid
                 {
                     ColumnSpacing = 12,
-                    ColumnDefinitions = { new ColumnDefinition(), new ColumnDefinition { Width = GridLength.Auto } },
-                    Children = { Texts(title, hint, bold: false), track },
+                    ColumnDefinitions = { new ColumnDefinition { Width = GridLength.Auto }, new ColumnDefinition() },
+                    Children = { box, Column(Texts(title, hint, bold: false), 1) },
                 },
             };
             row.Click += (_, _) =>
@@ -387,7 +382,7 @@ public sealed partial class SettingsPanel : UserControl
         panel.Children.Add(new TextBlock
         {
             Text = title,
-            FontSize = 13,
+            FontSize = 15,
             FontWeight = bold ? FontWeights.SemiBold : FontWeights.Normal,
             TextWrapping = TextWrapping.Wrap,
         });
@@ -396,7 +391,7 @@ public sealed partial class SettingsPanel : UserControl
             panel.Children.Add(new TextBlock
             {
                 Text = hint,
-                FontSize = 11,
+                FontSize = 13,
                 Foreground = Brush("BeautyTextSecondaryBrush"),
                 TextWrapping = TextWrapping.Wrap,
             });
@@ -441,10 +436,145 @@ public sealed partial class SettingsPanel : UserControl
     }
 
     /// <summary>Brings the "clear history" and "clear cookies" rows into view (Ctrl+Shift+Delete).</summary>
-    public void RevealClearData() =>
-        // After the section is laid out: the library may have just opened.
+    public void RevealClearData()
+    {
+        SearchBox.Text = "";
+        ShowPage(SectionPrivacy);
+        // After the page is laid out: the tab may have just opened.
         DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, () =>
             ClearHistoryRow.StartBringIntoView(new BringIntoViewOptions { AnimationDesired = true, VerticalAlignmentRatio = 0.3 }));
+    }
+
+
+    // Navigation: each category is its own page; the row of the one showing is marked.
+
+    private readonly List<(StackPanel Section, Button Row, TextBlock Text, FontIcon Icon)> _nav = [];
+    private StackPanel? _page;
+
+    private static StackPanel Header(StackPanel section) => (StackPanel)section.Children[0];
+    private static string TitleOf(StackPanel section) => Header(section).Children.OfType<TextBlock>().First().Text;
+    private static UIElementCollection GroupsOf(StackPanel section) => ((StackPanel)((Border)section.Children[1]).Child).Children;
+
+    private void BuildNavigation()
+    {
+        foreach (var section in Sections.Children.OfType<StackPanel>())
+        {
+            var icon = new FontIcon { Glyph = Header(section).Children.OfType<FontIcon>().First().Glyph, FontSize = 15, VerticalAlignment = VerticalAlignment.Center };
+            var text = new TextBlock { Text = TitleOf(section), FontSize = 15, VerticalAlignment = VerticalAlignment.Center };
+            var row = new Button
+            {
+                Style = (Style)Application.Current.Resources["BeautyListRowButton"],
+                MinHeight = 40,
+                Padding = new Thickness(12, 0, 12, 0),
+                CornerRadius = new CornerRadius(8),
+                Content = new Grid
+                {
+                    ColumnSpacing = 12,
+                    ColumnDefinitions = { new ColumnDefinition { Width = GridLength.Auto }, new ColumnDefinition() },
+                    Children = { icon, Column(text, 1) },
+                },
+            };
+            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(row, text.Text);
+            Microsoft.UI.Xaml.Automation.AutomationProperties.SetAutomationId(row, "Nav" + section.Name);
+            row.Click += (_, _) =>
+            {
+                SearchBox.Text = "";
+                ShowPage(section);
+            };
+            _nav.Add((section, row, text, icon));
+            NavRows.Children.Add(row);
+        }
+        ShowPage(SectionGeneral);
+    }
+
+    /// <summary>Shows one category alone, from the top.</summary>
+    private void ShowPage(StackPanel page)
+    {
+        _page = page;
+        foreach (var (section, row, text, icon) in _nav)
+        {
+            var on = section == page;
+            section.Visibility = on ? Visibility.Visible : Visibility.Collapsed;
+            foreach (var group in GroupsOf(section)) group.Visibility = Visibility.Visible;
+            row.Visibility = Visibility.Visible;
+            row.Background = on ? Brush("BeautyFillHoverBrush") : null;
+            text.FontWeight = on ? FontWeights.SemiBold : FontWeights.Normal;
+            text.Foreground = icon.Foreground = Brush(on ? "BeautyTextBrush" : "BeautyTextSecondaryBrush");
+        }
+        NoResults.Visibility = Visibility.Collapsed;
+        Scroller.ScrollTo(0, 0, new ScrollingScrollOptions(ScrollingAnimationMode.Disabled));
+    }
+
+
+    // Search: across every category. A group stays when its texts (titles, options, hints) contain what is typed; a
+    // category whose name matches keeps all its groups. Clearing it goes back to the page that was open.
+
+    private void SearchBox_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        var query = Fold(SearchBox.Text.Trim());
+        if (query.Length == 0)
+        {
+            ShowPage(_page ?? SectionGeneral);
+            return;
+        }
+
+        var any = false;
+        foreach (var (section, row, text, icon) in _nav)
+        {
+            var all = Fold(TitleOf(section)).Contains(query, StringComparison.Ordinal);
+            var shown = false;
+            foreach (var group in GroupsOf(section))
+            {
+                var match = all || TextsOf(group).Any(t => Fold(t).Contains(query, StringComparison.Ordinal));
+                group.Visibility = match ? Visibility.Visible : Visibility.Collapsed;
+                shown |= match;
+            }
+            section.Visibility = shown ? Visibility.Visible : Visibility.Collapsed;
+            row.Background = null;
+            text.FontWeight = FontWeights.Normal;
+            text.Foreground = icon.Foreground = Brush(shown ? "BeautyTextBrush" : "BeautyTextSecondaryBrush");
+            any |= shown;
+        }
+        NoResults.Visibility = any ? Visibility.Collapsed : Visibility.Visible;
+        Scroller.ScrollTo(0, 0, new ScrollingScrollOptions(ScrollingAnimationMode.Disabled));
+    }
+
+    /// <summary>
+    /// The texts inside an element, walking its content rather than the visual tree: the other pages were never laid
+    /// out, so their buttons have no template yet.
+    /// </summary>
+    private static IEnumerable<string> TextsOf(object? element)
+    {
+        switch (element)
+        {
+            case TextBlock { Text.Length: > 0 } block:
+                yield return block.Text;
+                break;
+            case string { Length: > 0 } text:
+                yield return text;
+                break;
+            case Panel panel:
+                foreach (var child in panel.Children)
+                    foreach (var text in TextsOf(child)) yield return text;
+                break;
+            case Border border:
+                foreach (var text in TextsOf(border.Child)) yield return text;
+                break;
+            case ContentControl control:
+                foreach (var text in TextsOf(control.Content)) yield return text;
+                break;
+        }
+    }
+
+    /// <summary>Lowercase without accents: "busqueda" finds "Búsqueda".</summary>
+    private static string Fold(string text)
+    {
+        var decomposed = text.ToLowerInvariant().Normalize(System.Text.NormalizationForm.FormD);
+        var sb = new System.Text.StringBuilder(decomposed.Length);
+        foreach (var c in decomposed)
+            if (System.Globalization.CharUnicodeInfo.GetUnicodeCategory(c) != System.Globalization.UnicodeCategory.NonSpacingMark) sb.Append(c);
+        return sb.ToString();
+    }
 
     // Clear and reset: the first tap asks, the second one acts.
 
@@ -465,8 +595,8 @@ public sealed partial class SettingsPanel : UserControl
         {
             PasswordRows.Children.Add(new TextBlock
             {
-                Margin = new Thickness(12, 10, 12, 10),
-                FontSize = 12,
+                Margin = new Thickness(14, 12, 14, 12),
+                FontSize = 14,
                 Foreground = Brush("BeautyTextSecondaryBrush"),
                 Text = L.T("When you sign in to a site, Beauty Browser offers to save the password here.",
                     "Cuando inicies sesión en un sitio, Beauty Browser te ofrece guardar la contraseña acá."),
@@ -476,16 +606,17 @@ public sealed partial class SettingsPanel : UserControl
         }
         foreach (var login in logins)
         {
-            var row = new Grid { ColumnSpacing = 12, Padding = new Thickness(12, 6, 6, 6) };
+            if (PasswordRows.Children.Count > 0) PasswordRows.Children.Add(new Rectangle { Height = 1, Fill = Brush("BeautyDividerBrush") });
+            var row = new Grid { ColumnSpacing = 14, Padding = new Thickness(14, 8, 8, 8) };
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             row.ColumnDefinitions.Add(new ColumnDefinition());
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             row.Children.Add(new FontIcon { FontSize = 15, Glyph = "", VerticalAlignment = VerticalAlignment.Center });
             var text = new StackPanel { Spacing = 1, VerticalAlignment = VerticalAlignment.Center };
-            text.Children.Add(new TextBlock { FontSize = 13, Text = login.Site, TextTrimming = TextTrimming.CharacterEllipsis });
+            text.Children.Add(new TextBlock { FontSize = 15, Text = login.Site, TextTrimming = TextTrimming.CharacterEllipsis });
             text.Children.Add(new TextBlock
             {
-                FontSize = 11,
+                FontSize = 13,
                 Foreground = Brush("BeautyTextSecondaryBrush"),
                 Text = login.User.Length > 0 ? login.User : L.T("(no user name)", "(sin usuario)"),
                 TextTrimming = TextTrimming.CharacterEllipsis,

@@ -87,6 +87,7 @@ public static class AppTheme
         ("BeautyThumbBrush", 0xFF2C2C33),
         ("BeautySurfaceBrush", 0xF22C2C33),
         ("BeautySurfaceAltBrush", 0xFF33333A),
+        ("BeautySettingsPageBrush", 0xFF222228),
         ("BeautyPopupHoverBrush", 0xFF38383F),
         ("BeautyPopupPressedBrush", 0xFF45454D),
     ];
