@@ -23,6 +23,7 @@ public sealed partial class MainWindow
         void OnTab(Action<BrowserTab> action) { if (_shell.CurrentTab is { } tab) action(tab); }
 
         Page(VirtualKey.H, Ctrl, ToggleHistory);
+        Page(VirtualKey.R, Ctrl | VirtualKeyModifiers.Menu, () => OnTab(t => _ = t.ToggleReaderAsync()));
         Page(VirtualKey.J, Ctrl, ToggleDownloads);
         Page(VirtualKey.S, Ctrl, ToggleDock);
         Page(VirtualKey.S, Ctrl | Shift, () => StartCapture(ScreenshotMode.Area)); // the picker also has "Full page"

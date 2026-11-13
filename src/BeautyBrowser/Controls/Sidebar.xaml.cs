@@ -195,7 +195,8 @@ public sealed partial class Sidebar : UserControl
         BackButton.IsEnabled = tab?.CanGoBack ?? false;
         ForwardButton.IsEnabled = tab?.CanGoForward ?? false;
         UrlText.Text = ShortUrl(tab?.Url);
-        UrlInsecureIcon.Visibility = Uri.TryCreate(tab?.Url, UriKind.Absolute, out var uri) && uri.Scheme == "http"
+        RefreshReader();
+        UrlInsecureIcon.Visibility = Uri.TryCreate(ReaderMode.PageUrl(tab?.Url), UriKind.Absolute, out var uri) && uri.Scheme == "http"
             ? Visibility.Visible
             : Visibility.Collapsed;
     }
@@ -227,7 +228,9 @@ public sealed partial class Sidebar : UserControl
 
 
     /// <summary>"https://www.google.com/search?q=x" → "google.com".</summary>
-    internal static string ShortUrl(string? url) =>
+    internal static string ShortUrl(string? url) => ShortPageUrl(ReaderMode.PageUrl(url));
+
+    private static string ShortPageUrl(string? url) =>
         StartPage.Is(url) ? L.T("New tab", "Nueva pestaña")
         : StartPage.IsSettings(url) ? L.T("Settings", "Ajustes")
         : Uri.TryCreate(url, UriKind.Absolute, out var uri) && uri.Scheme is "http" or "https"
@@ -259,7 +262,7 @@ public sealed partial class Sidebar : UserControl
     {
         if (_shell?.CurrentTab is not { } tab) return;
         var package = new DataPackage();
-        package.SetText(tab.Url);
+        package.SetText(ReaderMode.PageUrl(tab.Url));
         Clipboard.SetContent(package);
 
         CopyLinkIcon.Glyph = ""; // a check mark for a moment
@@ -269,6 +272,19 @@ public sealed partial class Sidebar : UserControl
 
 
     private void SiteFlyout_Opening(object sender, object e) => SitePanel.Refresh();
+
+    private void RefreshReader()
+    {
+        var tab = _watchedTab;
+        var inReader = tab?.InReader == true;
+        ReaderButton.Visibility = inReader || tab?.IsReadable == true ? Visibility.Visible : Visibility.Collapsed;
+        ReaderIcon.Foreground = (Brush)Application.Current.Resources[inReader ? "BeautyAccentBrush" : "BeautyTextBrush"];
+        ToolTipService.SetToolTip(ReaderButton, inReader
+            ? L.T("Close reading mode (Ctrl+Alt+R)", "Cerrar el modo lectura (Ctrl+Alt+R)")
+            : L.T("Reading mode (Ctrl+Alt+R)", "Modo lectura (Ctrl+Alt+R)"));
+    }
+
+    private void Reader_Click(object sender, RoutedEventArgs e) => _ = _watchedTab?.ToggleReaderAsync();
 
 
     private void ZoomReset_Click(object sender, RoutedEventArgs e) { _shell?.CurrentTab?.ResetZoom(); RefreshZoom(); }

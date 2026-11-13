@@ -117,7 +117,7 @@ public sealed partial class TopBar : UserControl
     /// <summary>While typing: the full address, readable and selected, so typing replaces it.</summary>
     private void ShowEditingText()
     {
-        var url = _watchedTab?.Url;
+        var url = ReaderMode.PageUrl(_watchedTab?.Url);
         var text = _addressText ?? (StartPage.Is(url) || StartPage.IsSettings(url) ? "" : AddressDisplay.ToDisplay(url ?? ""));
         _addressText = null;
         AddressBox.Text = text;
@@ -829,11 +829,12 @@ public sealed partial class TopBar : UserControl
         ForwardButton.IsEnabled = tab?.CanGoForward ?? false;
         RefreshZoomBadge();
         RefreshFavorite();
+        RefreshReader();
         if (_editing) return; // the user is typing: the box is theirs
-        var url = tab?.Url;
+        var url = ReaderMode.PageUrl(tab?.Url);
         AddressBox.Text = StartPage.Is(url) ? "" : Sidebar.ShortUrl(url);
         UrlSearchIcon.Visibility = StartPage.Is(url) ? Visibility.Visible : Visibility.Collapsed;
-        var scheme = Uri.TryCreate(tab?.Url, UriKind.Absolute, out var uri) ? uri.Scheme : "";
+        var scheme = Uri.TryCreate(url, UriKind.Absolute, out var uri) ? uri.Scheme : "";
         UrlInsecureIcon.Visibility = scheme == "http" ? Visibility.Visible : Visibility.Collapsed;
         UrlSecureIcon.Visibility = scheme == "https" ? Visibility.Visible : Visibility.Collapsed;
     }
@@ -866,6 +867,19 @@ public sealed partial class TopBar : UserControl
         SpaceMenu.Items.Add(add);
     }
 
+    private void RefreshReader()
+    {
+        var tab = _watchedTab;
+        var inReader = tab?.InReader == true;
+        ReaderButton.Visibility = inReader || tab?.IsReadable == true ? Visibility.Visible : Visibility.Collapsed;
+        ReaderIcon.Foreground = (Brush)Application.Current.Resources[inReader ? "BeautyAccentBrush" : "BeautyTextBrush"];
+        ToolTipService.SetToolTip(ReaderButton, inReader
+            ? L.T("Close reading mode (Ctrl+Alt+R)", "Cerrar el modo lectura (Ctrl+Alt+R)")
+            : L.T("Reading mode (Ctrl+Alt+R)", "Modo lectura (Ctrl+Alt+R)"));
+    }
+
+    private void Reader_Click(object sender, RoutedEventArgs e) => _ = _watchedTab?.ToggleReaderAsync();
+
     private void RefreshZoomBadge()
     {
         var percent = _watchedTab?.ZoomPercent ?? BrowserTab.DefaultZoomPercent;
@@ -877,7 +891,7 @@ public sealed partial class TopBar : UserControl
     private void RefreshFavorite()
     {
         var url = _watchedTab?.Url;
-        var usable = !string.IsNullOrEmpty(url) && !StartPage.Is(url) && !StartPage.IsSettings(url);
+        var usable = !string.IsNullOrEmpty(url) && !StartPage.Is(url) && !StartPage.IsSettings(url) && !ReaderMode.Is(url);
         FavoriteButton.Visibility = usable ? Visibility.Visible : Visibility.Collapsed;
         var favorite = usable && _shell?.Favorites.Contains(url!) == true;
         FavoriteStarIcon.Glyph = favorite ? "\uE735" : "\uE734";

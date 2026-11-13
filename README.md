@@ -87,6 +87,11 @@ Everything stays on your PC, in `%LOCALAPPDATA%\BeautyBrowser`: the Chromium pro
 
 Issues and pull requests are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
+## Third-party code
+
+- Reading mode uses [Readability.js](https://github.com/mozilla/readability) by Mozilla (Apache License 2.0). Its source and license are kept, unchanged, in `src/BeautyKit/Assets/Reader/`.
+- The ad blocker uses uBlock Origin's filter lists and scriptlets.
+
 ## License
 
 [MIT](LICENSE)

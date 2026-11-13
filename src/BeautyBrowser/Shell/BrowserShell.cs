@@ -24,6 +24,10 @@ public sealed class BrowserShell
         Archive = new ArchivedTabsService(Database);
         Updates = new UpdateService(ui);
 
+        // The reading mode's text size: what was saved, and saved again when its buttons change it (on Chromium's thread).
+        ReaderMode.FontSize = Settings.ReaderFontSize;
+        ReaderMode.FontSizeChanged += (_, size) => ui.TryEnqueue(() => Settings.ReaderFontSize = size);
+
         // Sites where popups were allowed for good are read by Chromium's thread from here on.
         foreach (var origin in SitePermissions.OriginsAllowing(PagePermission.Popups)) BrowserTab.AllowPopupsFrom(origin);
 

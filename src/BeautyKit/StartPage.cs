@@ -51,6 +51,7 @@ public static class StartPage
     private sealed class Factory(bool isPrivate = false) : ISchemeHandlerFactory
     {
         public IResourceHandler Create(IBrowser browser, IFrame frame, string schemeName, IRequest request) =>
+            ReaderMode.Is(request.Url) ? ReaderMode.Serve(request.Url, isPrivate || Dark) :
             ResourceHandler.FromString(IsSettings(request.Url) ? SettingsHtml(isPrivate || Dark) : Html(isPrivate), Encoding.UTF8, mimeType: "text/html");
     }
 

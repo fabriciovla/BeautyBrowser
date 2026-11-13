@@ -1386,6 +1386,12 @@ public sealed partial class MainWindow : Window
         ToggleHistory();
     }
 
+    private void Reader_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+    {
+        args.Handled = true;
+        _ = _shell.CurrentTab?.ToggleReaderAsync();
+    }
+
     private void ToggleHistory()
     {
         if (_libraryShown && Library.Section == LibrarySection.History) CloseLibrary(returnToSidebar: false);
