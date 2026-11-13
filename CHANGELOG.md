@@ -3,6 +3,27 @@
 What each Beauty Browser release changes, newest first. Every release gets its section here before it is published:
 `tools/publish-release.ps1` uses it as the release notes and refuses to publish without it.
 
+## [0.1.5] - 2026-11-13
+
+### Added
+- Choose where the tabs live: sidebar on the left, sidebar on the right, or tabs on top (Settings → Sidebar and tabs).
+  With tabs on top the new tab opens on the right, tabs can be dragged to reorder, and the + button opens a tab.
+  The address bar of the top bar is a real search box, the library opens under the bar, and the site settings, zoom
+  badge and favorites star live inside the address bar. Tabs show a speaker while they play sound (click to mute) and
+  have a menu with Reload, Mute, Close others and Close tabs to the right.
+- Settings open as a tab, with categories, a search box and card pages.
+- Middle click, Ctrl+click and "Open link in new tab" open the page in a background tab and tell you about it (in the
+  top bar the new tab glows for a moment).
+- The start page is simpler and shows the icon of your search engine. It also lists the people who contribute to
+  Beauty Browser.
+
+### Fixed
+- Middle click and Ctrl+click on a normal link open a new tab.
+- The minimum window size is 720 × 480, and the sidebar floats over the page when the window is narrower than 900.
+- The right sidebar fills the whole window height.
+- Tabs on top: dragging is limited to the bar, many tabs scroll instead of overflowing, Ctrl+T focuses the address
+  bar, and Ctrl+1…9 and Ctrl+Tab follow the order you see.
+
 ## [0.1.4] - 2026-11-12
 
 ### Added
