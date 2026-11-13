@@ -55,6 +55,12 @@ public sealed partial class TopBar : UserControl
     /// <summary>The free part of the tab strip, which drags the window.</summary>
     public FrameworkElement DragArea => DragZone;
 
+    /// <summary>Rounded top corners like the window's; square when maximized.</summary>
+    public bool Rounded
+    {
+        set => Panel.CornerRadius = value ? new CornerRadius(8, 8, 0, 0) : new CornerRadius(0);
+    }
+
     /// <summary>Where the download animation lands.</summary>
     public FrameworkElement LibraryTarget => DownloadsButton;
 

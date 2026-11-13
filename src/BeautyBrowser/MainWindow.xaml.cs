@@ -498,6 +498,7 @@ public sealed partial class MainWindow : Window
         var maximized = !_fullscreen && AppWindow.Presenter is OverlappedPresenter { State: OverlappedPresenterState.Maximized };
         if (maximized == _maximized) return;
         _maximized = maximized;
+        TopBar.Rounded = !maximized;
         ApplyPageCorners();
         ApplyLayout();
         if (_captionShown && !TabsOnTop) AnimatePageTopClip(StripHeight - Edge);
@@ -705,7 +706,7 @@ public sealed partial class MainWindow : Window
         var track = Math.Max(0, PageArea.ActualWidth * LoadBarTrack);
         var width = track * _loadValue;
         // On the top frame; when maximized (no frame), over the top edge of the page.
-        LoadBar.Margin = new Thickness(_pageLeft + _pageShift + (PageArea.ActualWidth - width) / 2, TabsOnTop ? PageTop - 3 : _maximized ? 0 : 2.5, 0, 0);
+        LoadBar.Margin = new Thickness(_pageLeft + _pageShift + (PageArea.ActualWidth - width) / 2, (TabsOnTop ? TopBarHeight : 0) + (_maximized ? 0 : 2.5), 0, 0);
         LoadBar.Width = width;
     }
 

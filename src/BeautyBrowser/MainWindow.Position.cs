@@ -98,8 +98,8 @@ public sealed partial class MainWindow
         AppTitleBar.Height = origin.Y + TopBar.DragArea.ActualHeight;
     }
 
-    /// <summary>The page's top edge: under the toolbar with tabs on top, at the frame otherwise.</summary>
-    private double PageTop => TabsOnTop ? TopBarHeight : Edge;
+    /// <summary>The page's top edge: under the toolbar (with the glass frame between) with tabs on top, at the frame otherwise.</summary>
+    private double PageTop => TabsOnTop ? TopBarHeight + Edge : Edge;
 
     /// <summary>The page's right edge: after a sidebar pinned on the right, at the frame otherwise.</summary>
     private double PageRight => _sidebarDocked && SidebarRight ? SidebarWidth + Edge : Edge;

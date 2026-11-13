@@ -2,17 +2,27 @@
     x:Class="BeautyBrowser.Controls.TopBar"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:controls="using:BeautyBrowser.Controls"
     xmlns:local="using:BeautyBrowser">
 
     <!--
         Tabs on top, as in Chrome: a strip of tabs (the caption buttons sit at its right end) and below it the toolbar
-        with navigation, the address and the library. It lies on the window glass; the page starts underneath.
+        with navigation, the address and the library. The same frosted glass as the sidebar (acrylic, grain and a thin
+        edge), with the window glass between it and the page.
     -->
-    <Grid>
+    <Grid
+        x:Name="Panel"
+        Background="{StaticResource BeautyPanelBrush}"
+        BorderBrush="{StaticResource BeautyPanelBorderBrush}"
+        BorderThickness="0,0,0,1"
+        CornerRadius="8,8,0,0">
         <Grid.RowDefinitions>
             <RowDefinition Height="40" />  <!-- tabs -->
             <RowDefinition Height="46" />  <!-- toolbar -->
         </Grid.RowDefinitions>
+
+        <!-- Glass grain (Settings → Appearance), under the content -->
+        <controls:NoiseLayer Grid.RowSpan="2" />
 
         <Grid x:Name="Strip" Padding="8,6,0,0">
             <Grid.ColumnDefinitions>
@@ -98,15 +108,18 @@
                 Padding="14,0"
                 HorizontalAlignment="Stretch"
                 HorizontalContentAlignment="Left"
-                Background="{StaticResource BeautySubtleFillBrush}"
-                BorderThickness="0"
+                Background="{StaticResource BeautyTileBrush}"
+                BorderBrush="{StaticResource BeautyTileBorderBrush}"
+                BorderThickness="1"
                 Click="Url_Click"
                 CornerRadius="17"
                 Foreground="{StaticResource BeautyTextBrush}"
                 ToolTipService.ToolTip="{local:T En='Search or type a URL (Ctrl+L)', Es='Buscar o escribir una URL (Ctrl+L)'}">
                 <Button.Resources>
-                    <StaticResource x:Key="ButtonBackgroundPointerOver" ResourceKey="BeautySubtleFillHoverBrush" />
-                    <StaticResource x:Key="ButtonBackgroundPressed" ResourceKey="BeautySubtleFillHoverBrush" />
+                    <StaticResource x:Key="ButtonBackgroundPointerOver" ResourceKey="BeautyCardBrush" />
+                    <StaticResource x:Key="ButtonBackgroundPressed" ResourceKey="BeautyCardBrush" />
+                    <StaticResource x:Key="ButtonBorderBrushPointerOver" ResourceKey="BeautyTileBorderBrush" />
+                    <StaticResource x:Key="ButtonBorderBrushPressed" ResourceKey="BeautyTileBorderBrush" />
                 </Button.Resources>
                 <StackPanel Orientation="Horizontal" Spacing="8">
                     <FontIcon
