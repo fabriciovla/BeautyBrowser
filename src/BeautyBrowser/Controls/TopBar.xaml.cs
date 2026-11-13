@@ -25,7 +25,9 @@ namespace BeautyBrowser.Controls;
 public sealed partial class TopBar : UserControl
 {
     private const double MaxTabWidth = 220;
-    private const double MinTabWidth = 64;
+    private const double MinTabWidth = 28;
+    private const double CompactBelow = 84;   // narrower than this, a tab shows its icon only
+    private const double FreeDragWidth = 40;  // always left free before the window buttons, to drag the window by
     private const double PinnedTabWidth = 40;
     private const double TabGap = 2;
     private static readonly TimeSpan TabMotion = TimeSpan.FromMilliseconds(220);
@@ -46,6 +48,8 @@ public sealed partial class TopBar : UserControl
     {
         InitializeComponent();
         Strip.SizeChanged += (_, _) => Layout(animate: false);
+        // Too many tabs never spill over the + and the window buttons: what does not fit is cut.
+        TabsViewport.SizeChanged += (_, e) => TabsViewport.Clip = new RectangleGeometry { Rect = new Rect(0, 0, e.NewSize.Width, e.NewSize.Height) };
     }
 
     public event EventHandler<PaletteMode>? PaletteRequested;
@@ -77,13 +81,20 @@ public sealed partial class TopBar : UserControl
     public void FocusAddress(string text)
     {
         _addressText = text;
-        if (_editing)
+        if (AddressHasFocus)
         {
             ShowEditingText();
             AddressFocused?.Invoke(this, EventArgs.Empty);
         }
-        else AddressBox.Focus(FocusState.Programmatic);
+        else
+        {
+            _editing = false; // whatever a late LostFocus left behind: the box gets the focus from scratch
+            AddressBox.Focus(FocusState.Programmatic);
+        }
     }
+
+    /// <summary>Whether the cursor is in the address bar right now.</summary>
+    public bool AddressHasFocus => XamlRoot is not null && FocusManager.GetFocusedElement(XamlRoot) == AddressBox;
 
     private void AddressBox_GotFocus(object sender, RoutedEventArgs e)
     {
@@ -231,9 +242,12 @@ public sealed partial class TopBar : UserControl
         var pinned = _items.Keys.Count(k => k is FavoriteSite);
         var regular = _items.Count - pinned;
         var reserved = Strip.Padding.Left + FavoritesButton.Width + FavoritesButton.Margin.Right
-                       + NewTabButton.Width + NewTabButton.Margin.Left + Strip.ColumnDefinitions[4].Width.Value + 24;
+                       + NewTabButton.Width + NewTabButton.Margin.Left + Strip.ColumnDefinitions[4].Width.Value + FreeDragWidth;
+        var viewport = Math.Max(0, Strip.ActualWidth - reserved);
+        TabsViewport.MaxWidth = viewport;
         var available = Strip.ActualWidth - reserved - pinned * (PinnedTabWidth + TabGap);
         var tabWidth = regular == 0 ? MaxTabWidth : Math.Clamp(available / regular - TabGap, MinTabWidth, MaxTabWidth);
+        foreach (var item in _items.Values) SetCompact(item, tabWidth < CompactBelow);
 
         var plan = Tabs.Children.OfType<Grid>().Select(item =>
         {
@@ -242,6 +256,8 @@ public sealed partial class TopBar : UserControl
             var to = closing ? 0 : item.Tag is FavoriteSite ? PinnedTabWidth : tabWidth;
             return (Item: item, From: from, To: to, FromOpacity: item.Opacity, ToOpacity: closing ? 0.0 : 1.0);
         }).ToList();
+
+        KeepCurrentInView(plan.Select(step => (step.Item, step.To)).ToList(), viewport);
 
         if (!animate)
         {
@@ -263,6 +279,46 @@ public sealed partial class TopBar : UserControl
             foreach (var item in _closing) Tabs.Children.Remove(item);
             _closing.Clear();
         });
+    }
+
+    private double _scroll; // how far the tabs are slid left inside their window
+
+    /// <summary>
+    /// When the tabs are wider than the window they run in, they slide so the current one is whole in view (and not
+    /// further than the last one's edge).
+    /// </summary>
+    private void KeepCurrentInView(List<(Grid Item, double Width)> plan, double viewport)
+    {
+        var total = plan.Sum(step => step.Width) + Math.Max(0, plan.Count - 1) * TabGap;
+        if (total <= viewport) _scroll = 0;
+        else
+        {
+            var x = 0.0;
+            foreach (var (item, width) in plan)
+            {
+                if (IsCurrent(item))
+                {
+                    if (x + width > _scroll + viewport) _scroll = x + width - viewport;
+                    if (x < _scroll) _scroll = x;
+                    break;
+                }
+                x += width + TabGap;
+            }
+            _scroll = Math.Clamp(_scroll, 0, total - viewport);
+        }
+        Tabs.Margin = new Thickness(-_scroll, 0, 0, 0);
+    }
+
+    /// <summary>Narrow tabs (many open) show only the icon, centered; the close button waits for a wider tab.</summary>
+    private static void SetCompact(Grid item, bool compact)
+    {
+        if (item.Tag is not BrowserTab) return;
+        var content = ContentOf(item);
+        content.ColumnSpacing = compact ? 0 : 8;
+        content.HorizontalAlignment = compact ? HorizontalAlignment.Center : HorizontalAlignment.Stretch;
+        CardOf(item).Padding = compact ? new Thickness(0) : new Thickness(10, 0, 4, 0);
+        content.Children[1].Visibility = compact ? Visibility.Collapsed : Visibility.Visible;
+        content.Children[^1].Visibility = compact ? Visibility.Collapsed : Visibility.Visible;
     }
 
     private void Observe(object key)
@@ -405,6 +461,7 @@ public sealed partial class TopBar : UserControl
     private void DragMove(Grid item, PointerRoutedEventArgs e)
     {
         if (_drag is not { } drag || drag.Item != item) return;
+        if (!e.GetCurrentPoint(item).Properties.IsLeftButtonPressed) { DragEnd(item); return; } // released out of sight
         var x = e.GetCurrentPoint(Tabs).Position.X;
         if (!drag.Moving)
         {
@@ -417,12 +474,25 @@ public sealed partial class TopBar : UserControl
 
         var left = x - drag.Grab;
         var regular = Tabs.Children.OfType<Grid>().Where(c => c.Tag is BrowserTab && !_closing.Contains(c)).ToList();
-        var index = regular.IndexOf(item);
-        var center = left + item.ActualWidth / 2;
-        if (index > 0 && center < regular[index - 1].ActualOffset.X + regular[index - 1].ActualWidth / 2)
-            Swap(item, regular[index - 1]);
-        else if (index < regular.Count - 1 && center > regular[index + 1].ActualOffset.X + regular[index + 1].ActualWidth / 2)
-            Swap(item, regular[index + 1]);
+        // It stays within the run of normal tabs: never over the favorites, the + or the window buttons.
+        if (regular.Count > 0)
+        {
+            var min = regular[0].ActualOffset.X;
+            var max = Math.Min(regular[^1].ActualOffset.X + regular[^1].ActualWidth, Tabs.ActualWidth) - item.ActualWidth;
+            left = Math.Clamp(left, min, Math.Max(min, max));
+        }
+        // Crossing a neighbor's middle swaps; a fast move can cross several.
+        for (var guard = 0; guard < regular.Count; guard++)
+        {
+            regular = Tabs.Children.OfType<Grid>().Where(c => c.Tag is BrowserTab && !_closing.Contains(c)).ToList();
+            var index = regular.IndexOf(item);
+            var center = left + item.ActualWidth / 2;
+            if (index > 0 && center < regular[index - 1].ActualOffset.X + regular[index - 1].ActualWidth / 2)
+                Swap(item, regular[index - 1]);
+            else if (index < regular.Count - 1 && center > regular[index + 1].ActualOffset.X + regular[index + 1].ActualWidth / 2)
+                Swap(item, regular[index + 1]);
+            else break;
+        }
 
         item.Translation = new System.Numerics.Vector3((float)(left - item.ActualOffset.X), 0, 0);
     }

@@ -216,9 +216,32 @@ public sealed class BrowserShell
         CurrentTabChanged?.Invoke(this, EventArgs.Empty);
     }
 
-    /// <summary>The next (+1) or previous (-1) tab of the current space, wrapping around (Ctrl+Tab).</summary>
+    /// <summary>
+    /// Tabs on top show the space backwards (the newest on the right, after the open favorites), and the keys that
+    /// move between tabs follow what is shown.
+    /// </summary>
+    public bool TabsReversed { get; set; }
+
+    /// <summary>The open favorites, then the space's tabs, in the order they are shown.</summary>
+    public List<BrowserTab> TabsInShownOrder()
+    {
+        var shown = OpenFavoriteTabs().ToList();
+        shown.AddRange(TabsReversed ? CurrentSpace.Tabs.Reverse() : CurrentSpace.Tabs);
+        return shown;
+    }
+
+    /// <summary>The next (+1) or previous (-1) tab of the current space, wrapping around (Ctrl+PgDn / Ctrl+PgUp).</summary>
     public void SelectRelativeTab(int delta)
     {
+        if (TabsReversed)
+        {
+            var shown = TabsInShownOrder();
+            if (shown.Count < 2) return;
+            var at = CurrentTab is { } now ? shown.IndexOf(now) : -1;
+            if (at < 0) at = delta > 0 ? -1 : 0;
+            ActivateTab(shown[((at + delta) % shown.Count + shown.Count) % shown.Count]);
+            return;
+        }
         var tabs = CurrentSpace.Tabs;
         if (tabs.Count < 2) return;
         var index = CurrentTab is { } tab ? tabs.IndexOf(tab) : 0;
@@ -228,6 +251,12 @@ public sealed class BrowserShell
     /// <summary>Ctrl+1…8: tab N of the current space. Ctrl+9: the last one, as in Chrome.</summary>
     public void SelectTabNumber(int number)
     {
+        if (TabsReversed)
+        {
+            var shown = TabsInShownOrder();
+            if (shown.Count > 0) ActivateTab(number >= 9 ? shown[^1] : shown[Math.Min(number, shown.Count) - 1]);
+            return;
+        }
         var tabs = CurrentSpace.Tabs;
         if (tabs.Count == 0) return;
         SelectTab(number >= 9 ? tabs[^1] : tabs[Math.Min(number, tabs.Count) - 1]);

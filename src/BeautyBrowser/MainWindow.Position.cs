@@ -62,6 +62,7 @@ public sealed partial class MainWindow
     {
         HidePreview();
         var top = TabsOnTop;
+        _shell.TabsReversed = top;
 
         Sidebar.Visibility = top ? Visibility.Collapsed : Visibility.Visible;
         Sidebar.HorizontalAlignment = SidebarRight ? HorizontalAlignment.Right : HorizontalAlignment.Left;
