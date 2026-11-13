@@ -80,6 +80,11 @@ public sealed partial class SiteSettingsPanel : UserControl
         tab.Reload(); // the change shows right away
     }
 
+    private void Boost_Click(object sender, RoutedEventArgs e)
+    {
+        if (_shell?.CurrentTab is { } tab) _shell.RequestBoost(tab);
+    }
+
     private void ZoomIn_Click(object sender, RoutedEventArgs e) { _shell?.CurrentTab?.ZoomIn(); RefreshZoom(); }
     private void ZoomOut_Click(object sender, RoutedEventArgs e) { _shell?.CurrentTab?.ZoomOut(); RefreshZoom(); }
     private void ZoomReset_Click(object sender, RoutedEventArgs e) { _shell?.CurrentTab?.ResetZoom(); RefreshZoom(); }

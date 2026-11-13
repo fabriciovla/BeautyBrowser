@@ -303,6 +303,11 @@ public sealed class BrowserShell
     /// </summary>
     public void CloseTab(BrowserTab tab) => tab.RequestClose();
 
+    /// <summary>The site settings asked for the tab's Boost card (MainWindow.Boosts).</summary>
+    public event EventHandler<BrowserTab>? BoostRequested;
+
+    public void RequestBoost(BrowserTab tab) => BoostRequested?.Invoke(this, tab);
+
     // Split view: pairs of tabs shown side by side, in screen order (left, right). Selecting either shows both;
     // selecting a tab outside the pair shows that tab alone, and the pair comes back when one of its tabs is chosen.
     private readonly List<(BrowserTab Left, BrowserTab Right)> _splits = [];

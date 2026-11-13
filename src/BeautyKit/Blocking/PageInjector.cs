@@ -40,6 +40,10 @@ internal sealed class PageInjector(string? pageToken) : IRenderProcessHandler
             if (frame.IsMain && !string.IsNullOrEmpty(pageToken))
                 context.Execute(PageScripts.Passwords.Replace("__BB_PAGE_TOKEN__", pageToken), "beautybrowser://passwords.js", 1, out _);
 
+            // The site's Boost (Arc-style look of its own), before the page paints.
+            if (frame.IsMain && Boosts.CssForPage(url) is { Length: > 0 } boostCss)
+                context.Execute(Boosts.StyleScript(boostCss), "beautybrowser://boost.js", 1, out _);
+
             var code = CodeFor(url, frame.IsMain);
             V8Exception? blockerError = null;
             if (code.Length > 0) context.Execute(code, "beautybrowser://blocker.js", 1, out blockerError);
