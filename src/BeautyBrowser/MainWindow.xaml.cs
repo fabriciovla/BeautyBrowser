@@ -1236,6 +1236,7 @@ public sealed partial class MainWindow : Window
         if (!_sidebarDocked) SetSidebarShown(false);
         var current = _shell.CurrentTab?.Url;
         var initial = mode == PaletteMode.Navigate && !search && !StartPage.Is(current) ? current ?? "" : "";
+        if (TryOpenTopAddress(mode, initial)) return;
         Palette.Open(_shell, mode, initial);
     }
 

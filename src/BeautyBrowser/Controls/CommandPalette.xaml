@@ -28,7 +28,7 @@
                 <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
 
-            <Grid Height="58" Padding="20,0,12,0" ColumnSpacing="12">
+            <Grid x:Name="SearchRow" Height="58" Padding="20,0,12,0" ColumnSpacing="12">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="*" />
@@ -70,6 +70,7 @@
                 Grid.Row="2"
                 MaxHeight="430"
                 Padding="8,6,8,8"
+                AllowFocusOnInteraction="False"
                 IsItemClickEnabled="True"
                 ItemClick="Results_ItemClick"
                 SelectionMode="Single">
