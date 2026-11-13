@@ -280,6 +280,44 @@
                             </StackPanel>
                             <Border Style="{StaticResource SettingsCard}">
                                 <StackPanel Spacing="22">
+                                    <StackPanel Spacing="10">
+                                        <StackPanel Spacing="2">
+                                            <TextBlock Style="{StaticResource SettingsGroupTitle}" Text="{app:T En='What the blocker has stopped', Es='Lo que bloqueó el bloqueador'}" />
+                                            <TextBlock x:Name="StatsHint" Style="{StaticResource SettingsHint}" />
+                                        </StackPanel>
+                                        <Grid ColumnSpacing="10">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+                                            <Border Grid.Column="0" Padding="14,12" Style="{StaticResource SettingsBox}">
+                                                <StackPanel Spacing="2">
+                                                    <TextBlock x:Name="StatAds" FontSize="24" FontWeight="SemiBold" />
+                                                    <TextBlock FontSize="12" Foreground="{StaticResource BeautyTextSecondaryBrush}" Text="{app:T En='Ads blocked', Es='Anuncios bloqueados'}" TextWrapping="Wrap" />
+                                                </StackPanel>
+                                            </Border>
+                                            <Border Grid.Column="1" Padding="14,12" Style="{StaticResource SettingsBox}">
+                                                <StackPanel Spacing="2">
+                                                    <TextBlock x:Name="StatTrackers" FontSize="24" FontWeight="SemiBold" />
+                                                    <TextBlock FontSize="12" Foreground="{StaticResource BeautyTextSecondaryBrush}" Text="{app:T En='Trackers blocked', Es='Rastreadores bloqueados'}" TextWrapping="Wrap" />
+                                                </StackPanel>
+                                            </Border>
+                                            <Border Grid.Column="2" Padding="14,12" Style="{StaticResource SettingsBox}">
+                                                <StackPanel Spacing="2">
+                                                    <TextBlock x:Name="StatData" FontSize="24" FontWeight="SemiBold" />
+                                                    <TextBlock FontSize="12" Foreground="{StaticResource BeautyTextSecondaryBrush}" Text="{app:T En='Data saved (est.)', Es='Datos ahorrados (est.)'}" TextWrapping="Wrap" />
+                                                </StackPanel>
+                                            </Border>
+                                            <Border Grid.Column="3" Padding="14,12" Style="{StaticResource SettingsBox}">
+                                                <StackPanel Spacing="2">
+                                                    <TextBlock x:Name="StatTime" FontSize="24" FontWeight="SemiBold" />
+                                                    <TextBlock FontSize="12" Foreground="{StaticResource BeautyTextSecondaryBrush}" Text="{app:T En='Time saved (est.)', Es='Tiempo ahorrado (est.)'}" TextWrapping="Wrap" />
+                                                </StackPanel>
+                                            </Border>
+                                        </Grid>
+                                    </StackPanel>
                                     <StackPanel Spacing="6">
                                         <TextBlock Style="{StaticResource SettingsGroupTitle}" Text="{app:T En='Blocking', Es='Bloqueos'}" />
                                         <StackPanel x:Name="PrivacyToggles" />

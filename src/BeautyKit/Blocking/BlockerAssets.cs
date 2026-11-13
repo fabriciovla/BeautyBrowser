@@ -57,6 +57,7 @@ internal static class BlockerAssets
     public static string ScriptletsPath => Path.Combine(Folder, "scriptlets.json");
     public static string PageRulesPath => Path.Combine(Folder, "page-rules.json");
     public static string StatePath => Path.Combine(Folder, "state.json");
+    public static string StatsPath => Path.Combine(Folder, "stats.json");
     public static string UpdatedPath => Path.Combine(Folder, "updated.txt");
 
     private static readonly HttpClient Http = CreateHttp();

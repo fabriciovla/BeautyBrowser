@@ -56,8 +56,19 @@ public sealed class BlockerState
     public List<string> AllowedSites { get; set; } = [];
 }
 
+/// <summary>What the blocker has blocked since it started counting, kept between sessions.</summary>
+public sealed class BlockerStats
+{
+    public long Ads { get; set; }
+    public long Trackers { get; set; }
+    public long Bytes { get; set; }
+    public long Milliseconds { get; set; }
+    public DateTime Since { get; set; } = DateTime.UtcNow;
+}
+
 [JsonSerializable(typeof(PageRules))]
 [JsonSerializable(typeof(BlockerState))]
+[JsonSerializable(typeof(BlockerStats))]
 [JsonSerializable(typeof(List<string>))]
 [JsonSerializable(typeof(string))]
 internal sealed partial class BlockingJson : JsonSerializerContext;

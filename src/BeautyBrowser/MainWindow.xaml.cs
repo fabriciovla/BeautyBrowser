@@ -463,6 +463,7 @@ public sealed partial class MainWindow : Window
     private void Shutdown()
     {
         SaveWindowPlacement();
+        BeautyKit.Blocking.ContentBlocker.FlushStats();
         // Closing every tab and shutting Chromium down takes a few seconds with many tabs: the window goes away right
         // away instead of staying frozen on screen meanwhile.
         AppWindow.Hide();

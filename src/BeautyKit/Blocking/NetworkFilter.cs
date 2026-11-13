@@ -155,6 +155,7 @@ internal sealed class NetworkFilter
     public required string Raw;
     public bool Exception;
     public bool Important;
+    public bool Tracker; // it comes from a privacy list
     public bool MatchCase;
 
     public byte Anchor;

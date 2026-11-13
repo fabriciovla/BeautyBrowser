@@ -6,6 +6,23 @@
 
     <!-- Site settings (zoom and the ad blocker for this site): the content of the flyout in the sidebar and in the top bar. -->
     <StackPanel Width="220" Spacing="10">
+        <!-- What the blocker stopped on this page. -->
+        <StackPanel Orientation="Horizontal" Spacing="10">
+            <TextBlock
+                x:Name="BlockedNumber"
+                VerticalAlignment="Center"
+                FontSize="30"
+                FontWeight="SemiBold"
+                Text="0" />
+            <TextBlock
+                x:Name="BlockedLabel"
+                MaxWidth="130"
+                VerticalAlignment="Center"
+                FontSize="12"
+                Foreground="{StaticResource BeautyTextSecondaryBrush}"
+                TextWrapping="Wrap" />
+        </StackPanel>
+        <Rectangle Height="1" Fill="{StaticResource BeautyDividerBrush}" />
         <TextBlock FontWeight="SemiBold" Text="Zoom" />
         <Grid ColumnSpacing="8">
             <Grid.ColumnDefinitions>
