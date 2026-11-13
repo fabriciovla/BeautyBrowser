@@ -89,6 +89,19 @@
                         </StackPanel>
                     </Button>
                     <Button
+                        x:Name="ArchivedTab"
+                        AutomationProperties.AutomationId="LibraryArchived"
+                        AutomationProperties.Name="{local:T En='Archived', Es='Archivadas'}"
+                        Click="Rail_Click"
+                        Style="{StaticResource BeautyRailButton}"
+                        Tag="Archived"
+                        ToolTipService.ToolTip="{local:T En='Archived tabs', Es='Pestañas archivadas'}">
+                        <StackPanel Spacing="7">
+                            <FontIcon FontSize="22" Glyph="&#xE7B8;" />
+                            <TextBlock HorizontalAlignment="Center" FontSize="12" Text="{local:T En='Archived', Es='Archivadas'}" />
+                        </StackPanel>
+                    </Button>
+                    <Button
                         x:Name="ExtensionsTab"
                         AutomationProperties.Name="{local:T En='Extensions', Es='Extensiones'}"
                         Click="Rail_Click"
@@ -141,6 +154,7 @@
             <controls:SpacesPanel x:Name="SpacesView" Visibility="Collapsed" />
             <controls:HistoryPanel x:Name="HistoryView" />
             <controls:ExtensionsPanel x:Name="ExtensionsView" Visibility="Collapsed" />
+            <controls:ArchivedPanel x:Name="ArchivedView" Visibility="Collapsed" />
         </Grid>
     </Grid>
 </UserControl>

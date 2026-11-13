@@ -21,6 +21,7 @@ public sealed class BrowserShell
         Database = database ?? new DatabaseService();
         History = new HistoryService(ui, Database);
         Settings = new SettingsService(Database);
+        Archive = new ArchivedTabsService(Database);
         Updates = new UpdateService(ui);
 
         // The reading mode's text size: what was saved, and saved again when its buttons change it (on Chromium's thread).
@@ -47,6 +48,55 @@ public sealed class BrowserShell
         CurrentTabChanged += (_, _) => ScheduleSessionSave();
         CurrentSpaceChanged += (_, _) => ScheduleSessionSave();
         SpaceRenamed += (_, _) => ScheduleSessionSave();
+
+        // Tabs nobody uses are archived: looked at every few minutes, and a little after the app starts.
+        _archiveTimer = ui.CreateTimer();
+        _archiveTimer.Interval = TimeSpan.FromMinutes(10);
+        _archiveTimer.Tick += (_, _) => ArchiveStaleTabs();
+        _archiveTimer.Start();
+        _firstLook = ui.CreateTimer(); // a field: a timer nobody holds is collected and never fires
+        var firstLook = _firstLook;
+        firstLook.Interval = TimeSpan.FromSeconds(45);
+        firstLook.IsRepeating = false;
+        firstLook.Tick += (_, _) => ArchiveStaleTabs();
+        firstLook.Start();
+    }
+
+    public ArchivedTabsService Archive { get; }
+    private readonly DispatcherQueueTimer _archiveTimer;
+    private readonly DispatcherQueueTimer _firstLook;
+
+    /// <summary>
+    /// Archives (closes and keeps in the library) the tabs not used for as long as the setting says. Never the
+    /// favorites, the tab on screen, one that is playing sound, a page that is not a web page, or the last tab of a
+    /// space.
+    /// </summary>
+    public void ArchiveStaleTabs()
+    {
+        var hours = Settings.ArchiveAfterHours;
+        if (hours <= 0) return;
+        var limit = DateTime.UtcNow - TimeSpan.FromHours(hours);
+
+        foreach (var space in Spaces.Where(s => !s.IsPrivate).ToList())
+        {
+            foreach (var tab in space.Tabs.ToList())
+            {
+                if (space.Tabs.Count <= 1) break;
+                if (tab == CurrentTab || tab.LastActiveUtc > limit || IsFavoriteTab(tab)) continue;
+                if (tab.Media?.IsPlaying == true || tab.IsFullscreen || _devTools.ContainsKey(tab)) continue;
+                if (!Uri.TryCreate(tab.Url, UriKind.Absolute, out var uri) || uri.Scheme is not ("http" or "https")) continue;
+
+                Archive.Add(tab.Url, tab.Title, tab.FaviconUrl, space.Name, tab.LastActiveUtc);
+                RemoveTab(tab, remember: false); // not in "reopen closed tab": it is in the library
+            }
+        }
+    }
+
+    /// <summary>Opens an archived tab again in the current space and takes it out of the archive.</summary>
+    public void ReopenArchived(ArchivedTab archived)
+    {
+        Archive.Remove(archived.Id);
+        NewTab(archived.Url);
     }
 
     public ObservableCollection<Space> Spaces { get; } = [];
@@ -215,6 +265,8 @@ public sealed class BrowserShell
         }
 
         if (previous == tab && space.ActiveTab == tab) return;
+        if (previous is not null) previous.LastActiveUtc = DateTime.UtcNow; // it was in use until now
+        tab.LastActiveUtc = DateTime.UtcNow;
         if (previous is { IsFullscreen: true }) previous.ExitFullscreen();
         space.ActiveTab = tab;
         CurrentTabChanged?.Invoke(this, EventArgs.Empty);
@@ -358,7 +410,7 @@ public sealed class BrowserShell
     }
 
     /// <summary>Removes a tab right away, without asking the page.</summary>
-    public void RemoveTab(BrowserTab tab)
+    public void RemoveTab(BrowserTab tab, bool remember = true)
     {
         Unsplit(tab); // the other one stays as a normal tab
         if (IsFavoriteTab(tab))
@@ -372,7 +424,7 @@ public sealed class BrowserShell
 
         var index = space.Tabs.IndexOf(tab);
         var wasActive = space.ActiveTab == tab;
-        if (!StartPage.Is(tab.Url) && !space.IsPrivate) RememberClosed(tab.Url, space, tab.GetHistory());
+        if (remember && !StartPage.Is(tab.Url) && !space.IsPrivate) RememberClosed(tab.Url, space, tab.GetHistory());
         space.Tabs.RemoveAt(index);
         if (wasActive) space.ActiveTab = null;
 
@@ -630,6 +682,8 @@ public sealed class BrowserShell
         /// <summary>Each tab's back/forward list, in the same order as Tabs (missing in older sessions).</summary>
         public List<TabHistoryData>? History { get; set; }
         public int Active { get; set; }
+        /// <summary>When each tab was last used (UTC), in the same order as Tabs (missing in older sessions).</summary>
+        public List<DateTime>? LastActive { get; set; }
     }
 
     public sealed class TabHistoryData
@@ -657,6 +711,7 @@ public sealed class BrowserShell
                 if (string.IsNullOrWhiteSpace(url)) continue;
                 var tab = _engine.CreateTab(url, TabCreation.WhenShown);
                 if (saved.History?.ElementAtOrDefault(i) is { } history) tab.SetRestoredHistory(history.Urls, history.Index);
+                if (saved.LastActive is { } times && i < times.Count && times[i] != default) tab.LastActiveUtc = times[i];
                 if (History.Lookup(url) is { } entry) tab.SetPlaceholder(entry.Title, entry.FaviconUrl);
                 Wire(tab);
                 space.Tabs.Add(tab);
@@ -696,6 +751,7 @@ public sealed class BrowserShell
                 Tabs = space.Tabs.Select(t => t.Url).ToList(),
                 History = space.Tabs.Select(t => t.GetHistory()).Select(h => new TabHistoryData { Urls = h.Urls, Index = h.Index }).ToList(),
                 Active = space.ActiveTab is null ? 0 : Math.Max(0, space.Tabs.IndexOf(space.ActiveTab)),
+                LastActive = space.Tabs.Select(t => t.LastActiveUtc).ToList(),
             }).ToList(),
         });
     }

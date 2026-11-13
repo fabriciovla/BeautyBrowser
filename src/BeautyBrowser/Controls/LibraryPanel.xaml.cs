@@ -10,7 +10,7 @@ using Windows.System;
 
 namespace BeautyBrowser.Controls;
 
-public enum LibrarySection { History, Downloads, Spaces, Extensions }
+public enum LibrarySection { History, Downloads, Spaces, Extensions, Archived }
 
 /// <summary>
 /// The library: a section rail (downloads, spaces, history, extensions and settings) and the section's list, docked to
@@ -48,14 +48,18 @@ public sealed partial class LibraryPanel : UserControl
         DownloadsHost.Children.Add(new DownloadsPanel(shell.Downloads));
         SpacesView.Attach(shell);
         ExtensionsView.Attach(shell);
+        ArchivedView.Attach(shell);
     }
 
     public void Show(LibrarySection section)
     {
         if (section == LibrarySection.Spaces) SpacesView.Refresh(); // keep tab counts current
+        if (section == LibrarySection.Archived) ArchivedView.Refresh();
         Select(section, animate: IsLoaded && Section != section);
         if (section == LibrarySection.History)
             DispatcherQueue.TryEnqueue(() => HistoryView.FocusSearch()); // typing searches right away
+        else if (section == LibrarySection.Archived)
+            DispatcherQueue.TryEnqueue(() => ArchivedView.FocusSearch());
         else
             Focus(FocusState.Programmatic);
     }
@@ -88,6 +92,7 @@ public sealed partial class LibraryPanel : UserControl
             LibrarySection.Spaces => SpacesTab,
             LibrarySection.History => HistoryTab,
             LibrarySection.Extensions => ExtensionsTab,
+            LibrarySection.Archived => ArchivedTab,
             _ => null,
         };
         if (railTab is not null && railTab.ActualHeight > 0)
@@ -100,7 +105,7 @@ public sealed partial class LibraryPanel : UserControl
         }
         RailPill.Opacity = railTab is null ? 0 : 1;
 
-        foreach (var tab in new[] { DownloadsTab, SpacesTab, HistoryTab, ExtensionsTab })
+        foreach (var tab in new[] { DownloadsTab, SpacesTab, HistoryTab, ArchivedTab, ExtensionsTab })
             tab.Foreground = Brush(tab == railTab ? "BeautyTextBrush" : "BeautyTextSecondaryBrush");
 
         // Only the selected section's list is visible.
@@ -109,6 +114,7 @@ public sealed partial class LibraryPanel : UserControl
             LibrarySection.Downloads => (FrameworkElement)DownloadsHost,
             LibrarySection.Spaces => SpacesView,
             LibrarySection.Extensions => ExtensionsView,
+            LibrarySection.Archived => ArchivedView,
             _ => HistoryView,
         };
         foreach (var child in SectionHost.Children.OfType<FrameworkElement>())

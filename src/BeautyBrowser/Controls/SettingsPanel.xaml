@@ -268,6 +268,13 @@
                                         </StackPanel>
                                         <Grid x:Name="IdleChips" ColumnSpacing="6" />
                                     </StackPanel>
+                                    <StackPanel Spacing="10">
+                                        <StackPanel Spacing="2">
+                                            <TextBlock Style="{StaticResource SettingsGroupTitle}" Text="{app:T En='Archive tabs you do not use', Es='Archivar pestañas sin uso'}" />
+                                            <TextBlock Style="{StaticResource SettingsHint}" Text="{app:T En='They close and wait in the library, under Archived. Favorites, the current tab and tabs playing sound are left alone.', Es='Se cierran y quedan en la biblioteca, en Archivadas. No se tocan los favoritos, la pestaña actual ni las que suenan.'}" />
+                                        </StackPanel>
+                                        <Grid x:Name="ArchiveChips" ColumnSpacing="6" />
+                                    </StackPanel>
                                 </StackPanel>
                             </Border>
                         </StackPanel>

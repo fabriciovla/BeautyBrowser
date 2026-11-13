@@ -124,6 +124,10 @@ public sealed partial class SettingsPanel : UserControl
             .Select(option => (option.Name, (Func<bool>)(() => option.Seconds == s.SidebarIdleSeconds),
                 (Action)(() => s.SidebarIdleSeconds = option.Seconds)))
             .ToList());
+        Chips(ArchiveChips, SettingsService.ArchiveAfterOptions
+            .Select(option => (option.Name, (Func<bool>)(() => option.Hours == s.ArchiveAfterHours),
+                (Action)(() => s.ArchiveAfterHours = option.Hours)))
+            .ToList());
         // With the tabs on top there is no sidebar: pinning it, its previews and hiding it make no sense.
         void SidebarOnly()
         {
