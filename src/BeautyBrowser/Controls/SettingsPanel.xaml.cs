@@ -113,6 +113,10 @@ public sealed partial class SettingsPanel : UserControl
         _toggleRefreshers.Clear();
         _toggleRefreshers.Add(FillTheme); // the ring follows the theme, also when it changes from onboarding
         PositionChoice(s);
+        ToggleRows(ExternalLinkToggles,
+            [(L.T("Open them in the quick view", "Abrirlos en la vista rápida"),
+                L.T("A small window over what you are doing; \"Open as tab\" keeps the page", "Una ventanita encima de lo que estás haciendo; \"Abrir como pestaña\" la deja"),
+                () => s.ExternalLinksInPeek, v => s.ExternalLinksInPeek = v)]);
         ToggleRows(SidebarToggles,
             [(L.T("Keep the sidebar pinned", "Mantener la barra fija"), L.T("The page shifts over and the sidebar stays in view", "La página se corre y la barra queda siempre a la vista"),
                  () => s.SidebarDocked, v => s.SidebarDocked = v),

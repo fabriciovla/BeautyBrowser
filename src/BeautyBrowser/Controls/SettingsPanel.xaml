@@ -118,6 +118,10 @@
                                             <StackPanel x:Name="StartupRows" />
                                         </Border>
                                     </StackPanel>
+                                    <StackPanel Spacing="6">
+                                        <TextBlock Style="{StaticResource SettingsGroupTitle}" Text="{app:T En='Links from other apps', Es='Links de otras apps'}" />
+                                        <StackPanel x:Name="ExternalLinkToggles" />
+                                    </StackPanel>
                                     <StackPanel Spacing="10">
                                         <TextBlock Style="{StaticResource SettingsGroupTitle}" Text="{app:T En='Search engine', Es='Buscador'}" />
                                         <Border Style="{StaticResource SettingsBox}">

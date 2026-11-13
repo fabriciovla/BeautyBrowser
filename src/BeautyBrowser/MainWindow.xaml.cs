@@ -133,9 +133,11 @@ public sealed partial class MainWindow : Window
         ExternalLinks.Listen(url => DispatcherQueue.TryEnqueue(() =>
         {
             if (_fullscreen) _shell.CurrentTab?.ExitFullscreen();
-            _shell.NewTab(url);
             if (AppWindow.Presenter is OverlappedPresenter { State: OverlappedPresenterState.Minimized } window) window.Restore();
             Activate();
+            // As Arc's Little Arc: over the current page, ready to keep as a tab or dismiss (Settings → General).
+            if (_shell.Settings.ExternalLinksInPeek && _shell.CurrentTab is not null && !_onboardingOpen) OpenPeek(null, url);
+            else _shell.NewTab(url);
         }));
         SetupPeek();
         Switcher.Attach(_shell);
@@ -1602,7 +1604,9 @@ public sealed partial class MainWindow : Window
             new Vector3((float)bounds.Width / 2, (float)bounds.Height / 2, 0);
     }
 
-    private void OpenPeek(BrowserTab from, string? url = null, BrowserTab? popup = null)
+    /// <param name="from">The tab that opened it (its privacy, and the click it grows from); null for a link from
+    /// another app, which opens as a normal page from the center.</param>
+    private void OpenPeek(BrowserTab? from, string? url = null, BrowserTab? popup = null)
     {
         url ??= popup?.Url ?? "";
         if (_fullscreen) { _shell.NewTab(url); return; }
@@ -1618,7 +1622,7 @@ public sealed partial class MainWindow : Window
         }
 
         _peekVersion++;
-        _peekTab = popup ?? _shell.CreatePeekTab(url, from.IsPrivate);
+        _peekTab = popup ?? _shell.CreatePeekTab(url, from?.IsPrivate ?? false);
         PeekLayer.Visibility = Visibility.Visible;
         LayoutPeek();
         PeekView.Tab = _peekTab;
@@ -1627,7 +1631,7 @@ public sealed partial class MainWindow : Window
         // It grows from the clicked link, or from the center when that is unknown.
         var bounds = PeekBounds();
         var center = new Point(bounds.X + bounds.Width / 2, bounds.Y + bounds.Height / 2);
-        var click = from == _shell.CurrentTab && WebView.LastPressPosition is { } press
+        var click = from is not null && from == _shell.CurrentTab && WebView.LastPressPosition is { } press
             ? WebView.TransformToVisual(Root).TransformPoint(press)
             : center;
         AnimatePeekIn(new Vector3((float)(click.X - center.X), (float)(click.Y - center.Y), 0));
