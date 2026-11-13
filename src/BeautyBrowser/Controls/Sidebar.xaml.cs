@@ -101,6 +101,12 @@ public sealed partial class Sidebar : UserControl
         }
     }
 
+    /// <summary>On the right edge the glass border goes on the other side.</summary>
+    public bool IsOnRight
+    {
+        set => Panel.BorderThickness = value ? new Thickness(1, 0, 0, 0) : new Thickness(0, 0, 1, 0);
+    }
+
     public void Attach(BrowserShell shell)
     {
         _shell = shell;
@@ -209,7 +215,7 @@ public sealed partial class Sidebar : UserControl
 
 
     /// <summary>"https://www.google.com/search?q=x" → "google.com".</summary>
-    private static string ShortUrl(string? url) =>
+    internal static string ShortUrl(string? url) =>
         StartPage.Is(url) ? L.T("New tab", "Nueva pestaña")
         : StartPage.IsSettings(url) ? L.T("Settings", "Ajustes")
         : Uri.TryCreate(url, UriKind.Absolute, out var uri) && uri.Scheme is "http" or "https"

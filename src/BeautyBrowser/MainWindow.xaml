@@ -586,6 +586,12 @@
             VerticalAlignment="Top"
             Background="Transparent" />
 
+        <!-- Tabs on top (Settings → Sidebar and tabs): the strip and toolbar above the page. -->
+        <controls:TopBar
+            x:Name="TopBar"
+            VerticalAlignment="Top"
+            Visibility="Collapsed" />
+
         <!-- The sidebar sits on the window edge, sharing Windows' corners; it shows when the mouse reaches the left. -->
         <controls:Sidebar
             x:Name="Sidebar"

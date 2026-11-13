@@ -250,6 +250,13 @@
                             </StackPanel>
                             <Border Style="{StaticResource SettingsCard}">
                                 <StackPanel Spacing="22">
+                                    <StackPanel Spacing="10">
+                                        <StackPanel Spacing="2">
+                                            <TextBlock Style="{StaticResource SettingsGroupTitle}" Text="{app:T En='Tab position', Es='Posición de las pestañas'}" />
+                                            <TextBlock Style="{StaticResource SettingsHint}" Text="{app:T En='A sidebar on either edge, or tabs on top as in other browsers', Es='Una barra a un costado, o las pestañas arriba como en otros navegadores'}" />
+                                        </StackPanel>
+                                        <Grid x:Name="PositionCards" ColumnSpacing="12" />
+                                    </StackPanel>
                                     <StackPanel Spacing="6">
                                         <TextBlock Style="{StaticResource SettingsGroupTitle}" Text="{app:T En='Sidebar', Es='Barra lateral'}" />
                                         <StackPanel x:Name="SidebarToggles" />
