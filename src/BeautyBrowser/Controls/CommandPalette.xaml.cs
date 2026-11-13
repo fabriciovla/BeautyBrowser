@@ -8,6 +8,7 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Imaging;
+using Windows.Foundation;
 using Windows.System;
 
 namespace BeautyBrowser.Controls;
@@ -64,7 +65,34 @@ public sealed partial class CommandPalette : UserControl
         Results.ItemsSource = _items;
         Card.Shadow = new ThemeShadow();
         Card.Translation = new Vector3(0, 0, 48);
-        SizeChanged += (_, _) => Card.Margin = new Thickness(40, ActualHeight * 0.26, 40, 0);
+        SizeChanged += (_, _) => PlaceCard();
+    }
+
+    /// <summary>
+    /// With tabs on top, where the address bar is (in this control's coordinates): the palette opens right over it, as
+    /// Chrome's address box does, with the suggestions dropping below. Null: centered, a quarter down the window.
+    /// </summary>
+    public Func<Rect?>? AnchorProvider { get; set; }
+
+    private void PlaceCard()
+    {
+        if (AnchorProvider?.Invoke() is { } anchor)
+        {
+            Card.HorizontalAlignment = HorizontalAlignment.Left;
+            Card.MaxWidth = double.PositiveInfinity;
+            Card.Width = Math.Max(anchor.Width, 480);
+            // The 58 px search row centered on the bar, so the text sits where the address was.
+            Card.Margin = new Thickness(anchor.X, anchor.Y + anchor.Height / 2 - 29, 0, 0);
+            Card.RenderTransformOrigin = new Point(0.5, 0);
+        }
+        else
+        {
+            Card.HorizontalAlignment = HorizontalAlignment.Stretch;
+            Card.MaxWidth = 760;
+            Card.Width = double.NaN;
+            Card.Margin = new Thickness(40, ActualHeight * 0.26, 40, 0);
+            Card.RenderTransformOrigin = new Point(0.5, 0.5);
+        }
     }
 
     public bool IsOpen => Visibility == Visibility.Visible;
@@ -79,6 +107,7 @@ public sealed partial class CommandPalette : UserControl
         _userMovedSelection = false;
 
         Visibility = Visibility.Visible;
+        PlaceCard();
         // The address is shown readable ("España", not "Espa%C3%B1a") without changing where it goes.
         Query.Text = mode == PaletteMode.Navigate ? AddressDisplay.ToDisplay(initialText) : initialText;
         Query.SelectAll();
