@@ -106,6 +106,39 @@
                 </StackPanel>
             </Border>
 
+            <!-- A link opened in the background (middle click, Ctrl+click): a tap on it goes to that tab. -->
+            <Border
+                x:Name="NewTabToast"
+                Margin="0,14,0,0"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Top"
+                Background="#E6202020"
+                CornerRadius="16"
+                IsHitTestVisible="False"
+                Opacity="0"
+                PointerEntered="NewTabToast_PointerEntered"
+                PointerExited="NewTabToast_PointerExited">
+                <Border.OpacityTransition>
+                    <ScalarTransition Duration="0:0:0.15" />
+                </Border.OpacityTransition>
+                <Button
+                    x:Name="NewTabToastButton"
+                    Padding="14,7"
+                    Background="Transparent"
+                    AutomationProperties.AutomationId="NewTabToast"
+                    BorderThickness="0"
+                    Click="NewTabToast_Click"
+                    CornerRadius="16">
+                    <StackPanel Orientation="Horizontal" Spacing="10">
+                        <FontIcon FontSize="14" Foreground="White" Glyph="&#xE8A7;" />
+                        <StackPanel MaxWidth="300">
+                            <TextBlock x:Name="NewTabToastText" FontSize="13" Foreground="White" TextTrimming="CharacterEllipsis" />
+                            <TextBlock x:Name="NewTabToastTitle" FontSize="12" Foreground="#B3FFFFFF" TextTrimming="CharacterEllipsis" />
+                        </StackPanel>
+                    </StackPanel>
+                </Button>
+            </Border>
+
             <local:ResizeHandle
                 x:Name="DevToolsSplitter"
                 Grid.Column="1"

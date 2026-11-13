@@ -58,7 +58,7 @@ public sealed partial class BrowserView
 
         if (info.HasLink)
         {
-            Add(L.T("Open link in new tab", "Abrir enlace en una pestaña nueva"), () => tab.OpenInNewTab(info.LinkUrl));
+            Add(L.T("Open link in new tab", "Abrir enlace en una pestaña nueva"), () => tab.OpenInNewTab(info.LinkUrl, background: true));
             Add(L.T("Save link as…", "Guardar enlace como…"), () => tab.Download(info.LinkUrl, askWhere: true));
             Add(L.T("Copy link address", "Copiar dirección del enlace"), () => CopyText(info.LinkUrl));
             if (info.LinkText.Length > 0)
@@ -68,7 +68,7 @@ public sealed partial class BrowserView
 
         if (info.IsImage)
         {
-            Add(L.T("Open image in new tab", "Abrir imagen en una pestaña nueva"), () => tab.OpenInNewTab(info.SourceUrl));
+            Add(L.T("Open image in new tab", "Abrir imagen en una pestaña nueva"), () => tab.OpenInNewTab(info.SourceUrl, background: true));
             Add(L.T("Save image as…", "Guardar imagen como…"), () => tab.Download(info.SourceUrl, askWhere: true));
             Add(L.T("Copy image", "Copiar imagen"), () => CopyImage(tab, info), enabled: info.SourceUrl.Length > 0);
             Add(L.T("Copy image address", "Copiar dirección de la imagen"), () => CopyText(info.SourceUrl));
@@ -88,7 +88,7 @@ public sealed partial class BrowserView
                 Add(L.T("Copy video frame", "Copiar fotograma del video"), () => CopyVideoFrame(tab, info));
                 Separator();
             }
-            Add(L.T($"Open {kind} in new tab", $"Abrir {kind} en una pestaña nueva"), () => tab.OpenInNewTab(info.SourceUrl));
+            Add(L.T($"Open {kind} in new tab", $"Abrir {kind} en una pestaña nueva"), () => tab.OpenInNewTab(info.SourceUrl, background: true));
             Add(L.T($"Save {kind} as…", $"Guardar {kind} como…"), () => tab.Download(info.SourceUrl, askWhere: true));
             Add(L.T($"Copy {kind} address", $"Copiar dirección del {kind}"), () => CopyText(info.SourceUrl));
             Separator();

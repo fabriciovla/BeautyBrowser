@@ -124,6 +124,7 @@ public sealed partial class MainWindow : Window
         SetupPermissions();
         SetupPasswords();
         SetupZoomToast();
+        SetupNewTabToast();
         SetupNotices();
         SetupUpdates();
         // Links other apps send while BeautyBrowser is open: a new tab, with the window brought to the front.
