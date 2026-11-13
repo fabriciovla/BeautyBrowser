@@ -88,6 +88,7 @@ public sealed partial class SettingsPanel : UserControl
 
         _toggleRefreshers.Clear();
         _toggleRefreshers.Add(FillTheme); // the ring follows the theme, also when it changes from onboarding
+        PositionChoice(s);
         ToggleRows(SidebarToggles,
             [(L.T("Keep the sidebar pinned", "Mantener la barra fija"), L.T("The page shifts over and the sidebar stays in view", "La página se corre y la barra queda siempre a la vista"),
                  () => s.SidebarDocked, v => s.SidebarDocked = v),
@@ -313,6 +314,108 @@ public sealed partial class SettingsPanel : UserControl
             host.Children.Add(chip);
         }
         RefreshGroup();
+    }
+
+    /// <summary>
+    /// Three cards with a small drawing of each layout (left sidebar, right sidebar, tabs on top); the chosen one gets
+    /// an accent border.
+    /// </summary>
+    private void PositionChoice(SettingsService s)
+    {
+        PositionCards.Children.Clear();
+        PositionCards.ColumnDefinitions.Clear();
+        var options = new[]
+        {
+            ("left", L.T("Left", "Izquierda")),
+            ("right", L.T("Right", "Derecha")),
+            ("top", L.T("Top", "Arriba")),
+        };
+        var cards = new List<(Button Card, Border Frame, string Key)>();
+        void Refresh()
+        {
+            foreach (var (_, frame, key) in cards)
+            {
+                var selected = s.SidebarPosition == key;
+                frame.BorderBrush = Brush(selected ? "BeautyAccentBrush" : "BeautyPanelBorderBrush");
+                frame.BorderThickness = new Thickness(selected ? 2 : 1);
+            }
+        }
+
+        for (var i = 0; i < options.Length; i++)
+        {
+            var (key, name) = options[i];
+            PositionCards.ColumnDefinitions.Add(new ColumnDefinition());
+            var frame = new Border
+            {
+                Height = 92,
+                CornerRadius = new CornerRadius(10),
+                Background = Brush("BeautySubtleFillBrush"),
+                Padding = new Thickness(8),
+                Child = LayoutSketch(key),
+            };
+            var card = new Button
+            {
+                Style = (Style)Application.Current.Resources["BeautyListRowButton"],
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+                HorizontalContentAlignment = HorizontalAlignment.Stretch,
+                Padding = new Thickness(4),
+                CornerRadius = new CornerRadius(12),
+                Content = new StackPanel
+                {
+                    Spacing = 8,
+                    Children = { frame, new TextBlock { Text = name, FontSize = 14, HorizontalAlignment = HorizontalAlignment.Center } },
+                },
+            };
+            Microsoft.UI.Xaml.Automation.AutomationProperties.SetAutomationId(card, "Position" + key);
+            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(card, name);
+            Grid.SetColumn(card, i);
+            card.Click += (_, _) =>
+            {
+                s.SidebarPosition = key;
+                Refresh();
+            };
+            cards.Add((card, frame, key));
+            PositionCards.Children.Add(card);
+        }
+        _toggleRefreshers.Add(Refresh);
+        Refresh();
+    }
+
+    /// <summary>A miniature window: the page as a white card and the tabs as a darker bar where they live.</summary>
+    private static Grid LayoutSketch(string position)
+    {
+        var bar = Brush("BeautyFillHoverBrush");
+        var page = Brush("BeautyCardBrush");
+        var grid = new Grid { ColumnSpacing = 5, RowSpacing = 5 };
+        Border Block(Brush fill) => new() { Background = fill, CornerRadius = new CornerRadius(4) };
+
+        if (position == "top")
+        {
+            grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(14) });
+            grid.RowDefinitions.Add(new RowDefinition());
+            var strip = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 3 };
+            strip.Children.Add(new Border { Width = 22, Background = page, CornerRadius = new CornerRadius(3) });
+            strip.Children.Add(new Border { Width = 22, Background = bar, CornerRadius = new CornerRadius(3) });
+            strip.Children.Add(new Border { Width = 22, Background = bar, CornerRadius = new CornerRadius(3) });
+            grid.Children.Add(strip);
+            var body = Block(page);
+            Grid.SetRow(body, 1);
+            grid.Children.Add(body);
+            return grid;
+        }
+
+        var side = new ColumnDefinition { Width = new GridLength(30) };
+        var rest = new ColumnDefinition();
+        if (position == "right") { grid.ColumnDefinitions.Add(rest); grid.ColumnDefinitions.Add(side); }
+        else { grid.ColumnDefinitions.Add(side); grid.ColumnDefinitions.Add(rest); }
+        var tabs = new StackPanel { Spacing = 3 };
+        for (var i = 0; i < 4; i++) tabs.Children.Add(new Border { Height = 8, Background = i == 0 ? page : bar, CornerRadius = new CornerRadius(2) });
+        var pageBlock = Block(page);
+        Grid.SetColumn(tabs, position == "right" ? 1 : 0);
+        Grid.SetColumn(pageBlock, position == "right" ? 0 : 1);
+        grid.Children.Add(tabs);
+        grid.Children.Add(pageBlock);
+        return grid;
     }
 
     // Every switch can repaint itself from the saved value, so it follows changes made elsewhere (the sidebar pin
