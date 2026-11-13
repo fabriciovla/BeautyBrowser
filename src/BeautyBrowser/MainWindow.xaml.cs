@@ -142,6 +142,7 @@ public sealed partial class MainWindow : Window
         Activated += (_, e) => { if (e.WindowActivationState == WindowActivationState.Deactivated && Switcher.IsOpen) CancelSwitcher(); };
         Library.Attach(_shell);
         Library.CloseRequested += (_, _) => CloseLibrary(returnToSidebar: true);
+        InitSettingsTab();
         Palette.Closed += (_, _) => WebView.Focus(FocusState.Programmatic);
         DevToolsSplitter.Dragged += (_, dx) => ResizeDevTools(_devToolsWidth - dx);
 

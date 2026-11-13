@@ -6,395 +6,551 @@
     xmlns:local="using:BeautyBrowser.Controls">
 
     <!--
-        Settings inside the library, built from custom rows (options with a check mark, chips and switches). The dynamic
-        rows are built in SettingsPanel.xaml.cs. ScrollView rather than ScrollViewer: wheel scrolling is animated on
-        the GPU, as smooth as in pages.
+        The settings tab (beauty://settings), drawn by the app over Chromium's empty page. Categories on the left; each
+        one is its own page on the right: a title with its icon and a white card with titled groups (check boxes, lists
+        in a bordered box, chips). Searching shows the matching groups of every category. The dynamic rows are built in
+        SettingsPanel.xaml.cs. ScrollView rather than ScrollViewer: wheel scrolling is animated on the GPU.
     -->
-    <ScrollView
-        ContentOrientation="Vertical"
-        HorizontalScrollBarVisibility="Hidden"
-        VerticalScrollBarVisibility="Auto">
-        <StackPanel Padding="6,0,6,18">
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="ms-appx:///Theme/BeautySurface.xaml" />
+            </ResourceDictionary.MergedDictionaries>
 
-            <TextBlock Style="{StaticResource BeautySectionLabel}" Text="{app:T En='On startup', Es='Al iniciar'}" />
-            <Border Padding="2" Background="{StaticResource BeautySubtleFillBrush}" CornerRadius="10">
-                <StackPanel x:Name="StartupRows" />
-            </Border>
+            <Style x:Key="SettingsSectionHeader" TargetType="StackPanel">
+                <Setter Property="Orientation" Value="Horizontal" />
+                <Setter Property="Spacing" Value="12" />
+                <Setter Property="Margin" Value="4,30,0,16" />
+            </Style>
+            <Style x:Key="SettingsCard" TargetType="Border">
+                <Setter Property="Padding" Value="24,20,24,24" />
+                <Setter Property="Background" Value="{StaticResource BeautyCardBrush}" />
+                <Setter Property="BorderBrush" Value="{StaticResource BeautyPanelBorderBrush}" />
+                <Setter Property="BorderThickness" Value="1" />
+                <Setter Property="CornerRadius" Value="12" />
+            </Style>
+            <!-- A list or a link inside the card: a box with a thin border, rows split by lines. -->
+            <Style x:Key="SettingsBox" TargetType="Border">
+                <Setter Property="BorderBrush" Value="{StaticResource BeautyPanelBorderBrush}" />
+                <Setter Property="BorderThickness" Value="1" />
+                <Setter Property="CornerRadius" Value="8" />
+            </Style>
+            <Style x:Key="SettingsGroupTitle" TargetType="TextBlock">
+                <Setter Property="FontSize" Value="16" />
+                <Setter Property="FontWeight" Value="SemiBold" />
+            </Style>
+            <Style x:Key="SettingsHint" TargetType="TextBlock">
+                <Setter Property="FontSize" Value="13" />
+                <Setter Property="Foreground" Value="{StaticResource BeautyTextSecondaryBrush}" />
+                <Setter Property="TextWrapping" Value="Wrap" />
+            </Style>
+        </ResourceDictionary>
+    </UserControl.Resources>
 
-            <TextBlock Style="{StaticResource BeautySectionLabel}" Text="{app:T En='Search engine', Es='Buscador'}" />
-            <Border Padding="2" Background="{StaticResource BeautySubtleFillBrush}" CornerRadius="10">
-                <StackPanel x:Name="EngineRows" />
-            </Border>
+    <Grid Background="{StaticResource BeautySettingsPageBrush}" CornerRadius="{StaticResource BeautyContentCornerRadius}">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="272" />
+            <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
 
-            <TextBlock Style="{StaticResource BeautySectionLabel}" Text="{app:T En='Home page and new tabs', Es='Página de inicio y pestañas nuevas'}" />
+        <!-- Categories -->
+        <StackPanel Padding="24,36,16,24" Spacing="2">
+            <StackPanel Margin="12,0,0,20" Orientation="Horizontal" Spacing="12">
+                <FontIcon VerticalAlignment="Center" FontSize="20" Glyph="&#xE713;" />
+                <TextBlock VerticalAlignment="Center" FontSize="24" FontWeight="SemiBold" Text="{app:T En='Settings', Es='Ajustes'}" />
+            </StackPanel>
+            <StackPanel x:Name="NavRows" Spacing="2" />
+        </StackPanel>
+
+        <Grid Grid.Column="1">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+
+            <!-- Search across every category. -->
             <Grid
-                Height="38"
-                Padding="12,0,8,0"
-                Background="{StaticResource BeautySubtleFillBrush}"
+                MaxWidth="680"
+                Height="40"
+                Margin="32,32,32,0"
+                Padding="14,0,8,0"
+                Background="{StaticResource BeautyCardBrush}"
+                BorderBrush="{StaticResource BeautyPanelBorderBrush}"
+                BorderThickness="1"
                 ColumnSpacing="10"
-                CornerRadius="10">
+                CornerRadius="8">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="*" />
                 </Grid.ColumnDefinitions>
-                <FontIcon
-                    FontSize="13"
-                    Foreground="{StaticResource BeautyTextSecondaryBrush}"
-                    Glyph="&#xE80F;" />
+                <FontIcon FontSize="14" Foreground="{StaticResource BeautyTextSecondaryBrush}" Glyph="&#xE721;" />
                 <TextBox
-                    x:Name="HomePageText"
+                    x:Name="SearchBox"
                     Grid.Column="1"
-                    Padding="0,8"
+                    Padding="0,9"
                     VerticalAlignment="Center"
-                    FontSize="13"
+                    FontSize="14"
                     IsSpellCheckEnabled="False"
-                    KeyDown="HomePageText_KeyDown"
-                    LostFocus="HomePageText_LostFocus"
-                    PlaceholderText="https://www.google.com" />
+                    PlaceholderText="{app:T En='Search settings', Es='Buscar en ajustes'}"
+                    TextChanged="SearchBox_TextChanged" />
             </Grid>
 
-            <TextBlock Style="{StaticResource BeautySectionLabel}" Text="{app:T En='Appearance', Es='Apariencia'}" />
-            <Border Padding="12,10,12,12" Background="{StaticResource BeautySubtleFillBrush}" CornerRadius="10">
-                <StackPanel Spacing="8">
-                    <TextBlock FontSize="13" Text="{app:T En='Mode', Es='Modo'}" />
-                    <Grid x:Name="ModeChips" Margin="0,0,0,6" ColumnSpacing="4" />
-                    <TextBlock FontSize="13" Text="{app:T En='Color', Es='Color'}" />
-                    <StackPanel x:Name="ThemeRow" Margin="-4,0,0,6" Orientation="Horizontal" Spacing="2" />
-                    <TextBlock FontSize="13" Text="{app:T En='Page zoom', Es='Zoom de las páginas'}" />
-                    <Grid x:Name="ZoomChips" ColumnSpacing="4" />
-                    <TextBlock Margin="0,6,0,0" FontSize="13" Text="{app:T En='Font size', Es='Tamaño de letra'}" />
-                    <Grid x:Name="FontChips" ColumnSpacing="4" />
-                    <TextBlock
-                        FontSize="11"
-                        Foreground="{StaticResource BeautyTextSecondaryBrush}"
-                        Text="{app:T En='Applies right away to every tab.', Es='Se aplica en el momento a todas las pestañas.'}"
-                        TextWrapping="Wrap" />
-                </StackPanel>
-            </Border>
+            <ScrollView
+                x:Name="Scroller"
+                Grid.Row="1"
+                ContentOrientation="Vertical"
+                HorizontalScrollBarVisibility="Hidden"
+                VerticalScrollBarVisibility="Auto">
+                <StackPanel MaxWidth="680" Margin="32,0,32,48">
+                    <StackPanel x:Name="Sections">
 
-            <TextBlock Style="{StaticResource BeautySectionLabel}" Text="{app:T En='Glass texture', Es='Textura del vidrio'}" />
-            <Border Padding="12,8,12,12" Background="{StaticResource BeautySubtleFillBrush}" CornerRadius="10">
-                <StackPanel Spacing="6">
-                    <Grid>
-                        <TextBlock VerticalAlignment="Center" FontSize="13" Text="{app:T En='Texture', Es='Textura'}" />
-                        <Button
-                            x:Name="TextureButton"
-                            Height="30"
-                            Padding="10,0,8,0"
-                            HorizontalAlignment="Right"
-                            Background="{StaticResource BeautyCardBrush}"
-                            Style="{StaticResource BeautyIconButton}"
-                            UseSystemFocusVisuals="False">
-                            <StackPanel Orientation="Horizontal" Spacing="8">
-                                <TextBlock x:Name="TextureName" VerticalAlignment="Center" FontSize="12" />
-                                <FontIcon VerticalAlignment="Center" FontSize="9" Glyph="&#xE70D;" />
+                        <!-- General -->
+                        <StackPanel x:Name="SectionGeneral">
+                            <StackPanel Style="{StaticResource SettingsSectionHeader}">
+                                <FontIcon VerticalAlignment="Center" FontSize="20" Glyph="&#xE80F;" />
+                                <TextBlock VerticalAlignment="Center" FontSize="24" FontWeight="SemiBold" Text="{app:T En='General', Es='General'}" />
                             </StackPanel>
-                            <Button.Flyout>
-                                <Flyout x:Name="TextureFlyout" Placement="BottomEdgeAlignedRight">
-                                    <Flyout.FlyoutPresenterStyle>
-                                        <Style TargetType="FlyoutPresenter">
-                                            <Setter Property="Padding" Value="4" />
-                                            <Setter Property="MinWidth" Value="0" />
-                                            <Setter Property="CornerRadius" Value="10" />
-                                            <Setter Property="Background" Value="{StaticResource BeautySurfaceBrush}" />
-                                            <Setter Property="BorderBrush" Value="{StaticResource BeautyFillHoverBrush}" />
-                                        </Style>
-                                    </Flyout.FlyoutPresenterStyle>
-                                    <StackPanel x:Name="TextureRows" Width="150" />
-                                </Flyout>
-                            </Button.Flyout>
-                        </Button>
-                    </Grid>
-
-                    <Grid Margin="0,4,0,0">
-                        <TextBlock FontSize="13" Text="{app:T En='Grain', Es='Grano'}" />
-                        <TextBlock
-                            x:Name="GrainText"
-                            HorizontalAlignment="Right"
-                            FontSize="12"
-                            Foreground="{StaticResource BeautyTextSecondaryBrush}" />
-                    </Grid>
-                    <!-- Live sample: the same glass with the selected texture. -->
-                    <Border
-                        Height="56"
-                        Background="{StaticResource BeautySurfaceAltBrush}"
-                        BorderBrush="{StaticResource BeautyInsetBorderBrush}"
-                        BorderThickness="1"
-                        CornerRadius="8">
-                        <local:NoiseLayer />
-                    </Border>
-                    <local:BeautySlider x:Name="GrainSlider" />
-
-                    <Grid Margin="0,2,0,0">
-                        <TextBlock FontSize="13" Text="{app:T En='Softness', Es='Suavidad'}" />
-                        <TextBlock
-                            x:Name="SoftnessText"
-                            HorizontalAlignment="Right"
-                            FontSize="12"
-                            Foreground="{StaticResource BeautyTextSecondaryBrush}" />
-                    </Grid>
-                    <local:BeautySlider x:Name="SoftnessSlider" />
-
-                    <Button
-                        Height="28"
-                        Padding="12,0"
-                        HorizontalAlignment="Right"
-                        Background="{StaticResource BeautySubtleFillBrush}"
-                        Click="ResetGlass_Click"
-                        Style="{StaticResource BeautyIconButton}"
-                        UseSystemFocusVisuals="False">
-                        <TextBlock FontSize="12" Text="{app:T En='Reset', Es='Restablecer'}" />
-                    </Button>
-                </StackPanel>
-            </Border>
-
-            <TextBlock Style="{StaticResource BeautySectionLabel}" Text="{app:T En='Sidebar and tabs', Es='Barra lateral y pestañas'}" />
-            <Border Padding="2" Background="{StaticResource BeautySubtleFillBrush}" CornerRadius="10">
-                <StackPanel>
-                    <StackPanel x:Name="SidebarToggles" />
-                    <Rectangle Height="1" Margin="12,0,10,0" Fill="{StaticResource BeautyDividerBrush}" />
-                    <StackPanel Padding="12,10,12,10" Spacing="8">
-                        <StackPanel Spacing="1">
-                            <TextBlock FontSize="13" Text="{app:T En='Hide the sidebar automatically', Es='Esconder la barra sola'}" />
-                            <TextBlock
-                                FontSize="11"
-                                Foreground="{StaticResource BeautyTextSecondaryBrush}"
-                                Text="{app:T En='When the mouse rests and it is not pinned', Es='Con el mouse quieto, cuando no está fija'}"
-                                TextWrapping="Wrap" />
+                            <Border Style="{StaticResource SettingsCard}">
+                                <StackPanel Spacing="22">
+                                    <StackPanel Spacing="10">
+                                        <TextBlock Style="{StaticResource SettingsGroupTitle}" Text="{app:T En='On startup', Es='Al iniciar'}" />
+                                        <Border Style="{StaticResource SettingsBox}">
+                                            <StackPanel x:Name="StartupRows" />
+                                        </Border>
+                                    </StackPanel>
+                                    <StackPanel Spacing="10">
+                                        <TextBlock Style="{StaticResource SettingsGroupTitle}" Text="{app:T En='Search engine', Es='Buscador'}" />
+                                        <Border Style="{StaticResource SettingsBox}">
+                                            <StackPanel x:Name="EngineRows" />
+                                        </Border>
+                                    </StackPanel>
+                                    <StackPanel Spacing="10">
+                                        <TextBlock Style="{StaticResource SettingsGroupTitle}" Text="{app:T En='Home page and new tabs', Es='Página de inicio y pestañas nuevas'}" />
+                                        <Border Style="{StaticResource SettingsBox}">
+                                            <Grid Height="40" Padding="14,0,8,0" ColumnSpacing="10">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="Auto" />
+                                                    <ColumnDefinition Width="*" />
+                                                </Grid.ColumnDefinitions>
+                                                <FontIcon FontSize="13" Foreground="{StaticResource BeautyTextSecondaryBrush}" Glyph="&#xE80F;" />
+                                                <TextBox
+                                                    x:Name="HomePageText"
+                                                    Grid.Column="1"
+                                                    Padding="0,9"
+                                                    VerticalAlignment="Center"
+                                                    FontSize="15"
+                                                    IsSpellCheckEnabled="False"
+                                                    KeyDown="HomePageText_KeyDown"
+                                                    LostFocus="HomePageText_LostFocus"
+                                                    PlaceholderText="https://www.google.com" />
+                                            </Grid>
+                                        </Border>
+                                    </StackPanel>
+                                </StackPanel>
+                            </Border>
                         </StackPanel>
-                        <Grid x:Name="IdleChips" ColumnSpacing="4" />
-                    </StackPanel>
-                </StackPanel>
-            </Border>
 
-            <TextBlock Style="{StaticResource BeautySectionLabel}" Text="{app:T En='Downloads', Es='Descargas'}" />
-            <Border Padding="2" Background="{StaticResource BeautySubtleFillBrush}" CornerRadius="10">
-                <StackPanel>
-                    <Button
-                        MinHeight="50"
-                        Padding="12,7,10,7"
-                        Click="ChangeFolder_Click"
-                        Style="{StaticResource BeautyListRowButton}"
-                        ToolTipService.ToolTip="{app:T En='Choose another folder', Es='Elegir otra carpeta'}">
-                        <Grid ColumnSpacing="12">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto" />
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="Auto" />
-                            </Grid.ColumnDefinitions>
-                            <FontIcon FontSize="15" Glyph="&#xE8B7;" />
-                            <StackPanel Grid.Column="1" Spacing="1">
-                                <TextBlock FontSize="13" Text="{app:T En='Save to', Es='Guardar en'}" />
-                                <TextBlock
-                                    x:Name="FolderText"
-                                    FontSize="11"
-                                    Foreground="{StaticResource BeautyTextSecondaryBrush}"
-                                    TextTrimming="CharacterEllipsis" />
+                        <!-- Appearance -->
+                        <StackPanel x:Name="SectionAppearance">
+                            <StackPanel Style="{StaticResource SettingsSectionHeader}">
+                                <FontIcon VerticalAlignment="Center" FontSize="20" Glyph="&#xE790;" />
+                                <TextBlock VerticalAlignment="Center" FontSize="24" FontWeight="SemiBold" Text="{app:T En='Appearance', Es='Apariencia'}" />
                             </StackPanel>
-                            <TextBlock
-                                Grid.Column="2"
-                                VerticalAlignment="Center"
-                                FontSize="12"
-                                Foreground="{StaticResource BeautyAccentBrush}"
-                                Text="{app:T En='Change', Es='Cambiar'}" />
-                        </Grid>
-                    </Button>
-                    <Rectangle Height="1" Margin="40,0,10,0" Fill="{StaticResource BeautyDividerBrush}" />
-                    <StackPanel x:Name="DownloadToggles" />
-                </StackPanel>
-            </Border>
+                            <Border Style="{StaticResource SettingsCard}">
+                                <StackPanel Spacing="22">
+                                    <StackPanel Spacing="10">
+                                        <TextBlock Style="{StaticResource SettingsGroupTitle}" Text="{app:T En='Mode', Es='Modo'}" />
+                                        <Grid x:Name="ModeChips" ColumnSpacing="6" />
+                                    </StackPanel>
+                                    <StackPanel Spacing="10">
+                                        <TextBlock Style="{StaticResource SettingsGroupTitle}" Text="{app:T En='Color', Es='Color'}" />
+                                        <StackPanel x:Name="ThemeRow" Margin="-4,0,0,0" Orientation="Horizontal" Spacing="2" />
+                                    </StackPanel>
+                                    <StackPanel Spacing="10">
+                                        <TextBlock Style="{StaticResource SettingsGroupTitle}" Text="{app:T En='Page zoom', Es='Zoom de las páginas'}" />
+                                        <Grid x:Name="ZoomChips" ColumnSpacing="6" />
+                                    </StackPanel>
+                                    <StackPanel Spacing="10">
+                                        <TextBlock Style="{StaticResource SettingsGroupTitle}" Text="{app:T En='Font size', Es='Tamaño de letra'}" />
+                                        <Grid x:Name="FontChips" ColumnSpacing="6" />
+                                        <TextBlock Style="{StaticResource SettingsHint}" Text="{app:T En='Applies right away to every tab.', Es='Se aplica en el momento a todas las pestañas.'}" />
+                                    </StackPanel>
+                                    <StackPanel Spacing="10">
+                                        <Grid>
+                                            <TextBlock VerticalAlignment="Center" Style="{StaticResource SettingsGroupTitle}" Text="{app:T En='Glass texture', Es='Textura del vidrio'}" />
+                                            <Button
+                                                x:Name="TextureButton"
+                                                Height="32"
+                                                Padding="12,0,10,0"
+                                                HorizontalAlignment="Right"
+                                                BorderBrush="{StaticResource BeautyPanelBorderBrush}"
+                                                BorderThickness="1"
+                                                Style="{StaticResource BeautyIconButton}"
+                                                UseSystemFocusVisuals="False">
+                                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                                    <TextBlock x:Name="TextureName" VerticalAlignment="Center" FontSize="13" />
+                                                    <FontIcon VerticalAlignment="Center" FontSize="9" Glyph="&#xE70D;" />
+                                                </StackPanel>
+                                                <Button.Flyout>
+                                                    <Flyout x:Name="TextureFlyout" Placement="BottomEdgeAlignedRight">
+                                                        <Flyout.FlyoutPresenterStyle>
+                                                            <Style TargetType="FlyoutPresenter">
+                                                                <Setter Property="Padding" Value="4" />
+                                                                <Setter Property="MinWidth" Value="0" />
+                                                                <Setter Property="CornerRadius" Value="10" />
+                                                                <Setter Property="Background" Value="{StaticResource BeautySurfaceBrush}" />
+                                                                <Setter Property="BorderBrush" Value="{StaticResource BeautyFillHoverBrush}" />
+                                                            </Style>
+                                                        </Flyout.FlyoutPresenterStyle>
+                                                        <StackPanel x:Name="TextureRows" Width="150" />
+                                                    </Flyout>
+                                                </Button.Flyout>
+                                            </Button>
+                                        </Grid>
+                                        <!-- Live sample: the same glass with the selected texture. -->
+                                        <Border
+                                            Height="64"
+                                            Background="{StaticResource BeautySurfaceAltBrush}"
+                                            BorderBrush="{StaticResource BeautyInsetBorderBrush}"
+                                            BorderThickness="1"
+                                            CornerRadius="8">
+                                            <local:NoiseLayer />
+                                        </Border>
+                                        <Grid Margin="0,4,0,0">
+                                            <TextBlock FontSize="15" Text="{app:T En='Grain', Es='Grano'}" />
+                                            <TextBlock x:Name="GrainText" HorizontalAlignment="Right" Style="{StaticResource SettingsHint}" />
+                                        </Grid>
+                                        <local:BeautySlider x:Name="GrainSlider" />
+                                        <Grid>
+                                            <TextBlock FontSize="15" Text="{app:T En='Softness', Es='Suavidad'}" />
+                                            <TextBlock x:Name="SoftnessText" HorizontalAlignment="Right" Style="{StaticResource SettingsHint}" />
+                                        </Grid>
+                                        <local:BeautySlider x:Name="SoftnessSlider" />
+                                        <Button
+                                            Height="32"
+                                            Padding="14,0"
+                                            HorizontalAlignment="Right"
+                                            BorderBrush="{StaticResource BeautyPanelBorderBrush}"
+                                            BorderThickness="1"
+                                            Click="ResetGlass_Click"
+                                            Style="{StaticResource BeautyIconButton}"
+                                            UseSystemFocusVisuals="False">
+                                            <TextBlock FontSize="13" Text="{app:T En='Reset', Es='Restablecer'}" />
+                                        </Button>
+                                    </StackPanel>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
 
-            <TextBlock Style="{StaticResource BeautySectionLabel}" Text="{app:T En='Privacy and security', Es='Privacidad y seguridad'}" />
-            <Border Padding="2" Background="{StaticResource BeautySubtleFillBrush}" CornerRadius="10">
-                <StackPanel>
-                    <StackPanel x:Name="PrivacyToggles" />
-                    <Rectangle Height="1" Margin="40,0,10,0" Fill="{StaticResource BeautyDividerBrush}" />
-                    <Button
-                        x:Name="ClearHistoryRow"
-                        MinHeight="50"
-                        Padding="12,7,10,7"
-                        Click="ClearHistory_Click"
-                        Style="{StaticResource BeautyListRowButton}">
-                        <Grid ColumnSpacing="12">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto" />
-                                <ColumnDefinition Width="*" />
-                            </Grid.ColumnDefinitions>
-                            <FontIcon FontSize="15" Glyph="&#xE81C;" />
-                            <StackPanel Grid.Column="1" Spacing="1">
-                                <TextBlock FontSize="13" Text="{app:T En='Clear history', Es='Borrar historial'}" />
-                                <TextBlock
-                                    x:Name="ClearHistoryHint"
-                                    FontSize="11"
-                                    Foreground="{StaticResource BeautyTextSecondaryBrush}"
-                                    Text="{app:T En='The pages you visited on this PC', Es='Las páginas que visitaste en esta PC'}"
-                                    TextWrapping="Wrap" />
+                        <!-- Sidebar and tabs -->
+                        <StackPanel x:Name="SectionSidebar">
+                            <StackPanel Style="{StaticResource SettingsSectionHeader}">
+                                <FontIcon VerticalAlignment="Center" FontSize="20" Glyph="&#xE89F;" />
+                                <TextBlock VerticalAlignment="Center" FontSize="24" FontWeight="SemiBold" Text="{app:T En='Sidebar and tabs', Es='Barra lateral y pestañas'}" />
                             </StackPanel>
-                        </Grid>
-                    </Button>
-                    <Rectangle Height="1" Margin="40,0,10,0" Fill="{StaticResource BeautyDividerBrush}" />
-                    <Button
-                        x:Name="ClearCookiesRow"
-                        MinHeight="50"
-                        Padding="12,7,10,7"
-                        Click="ClearCookies_Click"
-                        Style="{StaticResource BeautyListRowButton}">
-                        <Grid ColumnSpacing="12">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto" />
-                                <ColumnDefinition Width="*" />
-                            </Grid.ColumnDefinitions>
-                            <FontIcon FontSize="15" Glyph="&#xE72E;" />
-                            <StackPanel Grid.Column="1" Spacing="1">
-                                <TextBlock FontSize="13" Text="{app:T En='Clear cookies and sessions', Es='Borrar cookies y sesiones'}" />
-                                <TextBlock
-                                    x:Name="ClearCookiesHint"
-                                    FontSize="11"
-                                    Foreground="{StaticResource BeautyTextSecondaryBrush}"
-                                    Text="{app:T En='You will have to sign in to sites again', Es='Vas a tener que volver a iniciar sesión en los sitios'}"
-                                    TextWrapping="Wrap" />
+                            <Border Style="{StaticResource SettingsCard}">
+                                <StackPanel Spacing="22">
+                                    <StackPanel Spacing="6">
+                                        <TextBlock Style="{StaticResource SettingsGroupTitle}" Text="{app:T En='Sidebar', Es='Barra lateral'}" />
+                                        <StackPanel x:Name="SidebarToggles" />
+                                    </StackPanel>
+                                    <StackPanel Spacing="10">
+                                        <StackPanel Spacing="2">
+                                            <TextBlock Style="{StaticResource SettingsGroupTitle}" Text="{app:T En='Hide the sidebar automatically', Es='Esconder la barra sola'}" />
+                                            <TextBlock Style="{StaticResource SettingsHint}" Text="{app:T En='When the mouse rests and it is not pinned', Es='Con el mouse quieto, cuando no está fija'}" />
+                                        </StackPanel>
+                                        <Grid x:Name="IdleChips" ColumnSpacing="6" />
+                                    </StackPanel>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+
+                        <!-- Privacy and security -->
+                        <StackPanel x:Name="SectionPrivacy">
+                            <StackPanel Style="{StaticResource SettingsSectionHeader}">
+                                <FontIcon VerticalAlignment="Center" FontSize="20" Glyph="&#xE72E;" />
+                                <TextBlock VerticalAlignment="Center" FontSize="24" FontWeight="SemiBold" Text="{app:T En='Privacy and security', Es='Privacidad y seguridad'}" />
                             </StackPanel>
-                        </Grid>
-                    </Button>
-                </StackPanel>
-            </Border>
+                            <Border Style="{StaticResource SettingsCard}">
+                                <StackPanel Spacing="22">
+                                    <StackPanel Spacing="6">
+                                        <TextBlock Style="{StaticResource SettingsGroupTitle}" Text="{app:T En='Blocking', Es='Bloqueos'}" />
+                                        <StackPanel x:Name="PrivacyToggles" />
+                                    </StackPanel>
+                                    <StackPanel Spacing="10">
+                                        <TextBlock Style="{StaticResource SettingsGroupTitle}" Text="{app:T En='Browsing data', Es='Datos de navegación'}" />
+                                        <Border Style="{StaticResource SettingsBox}">
+                                            <StackPanel>
+                                                <Button
+                                                    x:Name="ClearHistoryRow"
+                                                    MinHeight="54"
+                                                    Padding="14,8,14,8"
+                                                    Click="ClearHistory_Click"
+                                                    Style="{StaticResource BeautyListRowButton}">
+                                                    <Grid ColumnSpacing="14">
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="Auto" />
+                                                            <ColumnDefinition Width="*" />
+                                                        </Grid.ColumnDefinitions>
+                                                        <FontIcon FontSize="15" Glyph="&#xE81C;" />
+                                                        <StackPanel Grid.Column="1" Spacing="2">
+                                                            <TextBlock FontSize="15" Text="{app:T En='Clear history', Es='Borrar historial'}" />
+                                                            <TextBlock
+                                                                x:Name="ClearHistoryHint"
+                                                                Style="{StaticResource SettingsHint}"
+                                                                Text="{app:T En='The pages you visited on this PC', Es='Las páginas que visitaste en esta PC'}" />
+                                                        </StackPanel>
+                                                    </Grid>
+                                                </Button>
+                                                <Rectangle Height="1" Fill="{StaticResource BeautyDividerBrush}" />
+                                                <Button
+                                                    x:Name="ClearCookiesRow"
+                                                    MinHeight="54"
+                                                    Padding="14,8,14,8"
+                                                    Click="ClearCookies_Click"
+                                                    Style="{StaticResource BeautyListRowButton}">
+                                                    <Grid ColumnSpacing="14">
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="Auto" />
+                                                            <ColumnDefinition Width="*" />
+                                                        </Grid.ColumnDefinitions>
+                                                        <FontIcon FontSize="15" Glyph="&#xE72E;" />
+                                                        <StackPanel Grid.Column="1" Spacing="2">
+                                                            <TextBlock FontSize="15" Text="{app:T En='Clear cookies and sessions', Es='Borrar cookies y sesiones'}" />
+                                                            <TextBlock
+                                                                x:Name="ClearCookiesHint"
+                                                                Style="{StaticResource SettingsHint}"
+                                                                Text="{app:T En='You will have to sign in to sites again', Es='Vas a tener que volver a iniciar sesión en los sitios'}" />
+                                                        </StackPanel>
+                                                    </Grid>
+                                                </Button>
+                                            </StackPanel>
+                                        </Border>
+                                    </StackPanel>
+                                    <StackPanel Spacing="10">
+                                        <TextBlock Style="{StaticResource SettingsGroupTitle}" Text="{app:T En='Saved passwords', Es='Contraseñas guardadas'}" />
+                                        <Border Style="{StaticResource SettingsBox}">
+                                            <StackPanel x:Name="PasswordRows" />
+                                        </Border>
+                                    </StackPanel>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
 
-            <TextBlock Style="{StaticResource BeautySectionLabel}" Text="{app:T En='Saved passwords', Es='Contraseñas guardadas'}" />
-            <Border Padding="2" Background="{StaticResource BeautySubtleFillBrush}" CornerRadius="10">
-                <StackPanel x:Name="PasswordRows" />
-            </Border>
+                        <!-- Downloads -->
+                        <StackPanel x:Name="SectionDownloads">
+                            <StackPanel Style="{StaticResource SettingsSectionHeader}">
+                                <FontIcon VerticalAlignment="Center" FontSize="20" Glyph="&#xE896;" />
+                                <TextBlock VerticalAlignment="Center" FontSize="24" FontWeight="SemiBold" Text="{app:T En='Downloads', Es='Descargas'}" />
+                            </StackPanel>
+                            <Border Style="{StaticResource SettingsCard}">
+                                <StackPanel Spacing="22">
+                                    <StackPanel Spacing="10">
+                                        <TextBlock Style="{StaticResource SettingsGroupTitle}" Text="{app:T En='Where files go', Es='Dónde se guardan'}" />
+                                        <Border Style="{StaticResource SettingsBox}">
+                                            <Button
+                                                MinHeight="54"
+                                                Padding="14,8,14,8"
+                                                Click="ChangeFolder_Click"
+                                                Style="{StaticResource BeautyListRowButton}"
+                                                ToolTipService.ToolTip="{app:T En='Choose another folder', Es='Elegir otra carpeta'}">
+                                                <Grid ColumnSpacing="14">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="Auto" />
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="Auto" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <FontIcon FontSize="15" Glyph="&#xE8B7;" />
+                                                    <StackPanel Grid.Column="1" Spacing="2">
+                                                        <TextBlock FontSize="15" Text="{app:T En='Save to', Es='Guardar en'}" />
+                                                        <TextBlock
+                                                            x:Name="FolderText"
+                                                            Style="{StaticResource SettingsHint}"
+                                                            TextTrimming="CharacterEllipsis"
+                                                            TextWrapping="NoWrap" />
+                                                    </StackPanel>
+                                                    <TextBlock
+                                                        Grid.Column="2"
+                                                        VerticalAlignment="Center"
+                                                        FontSize="14"
+                                                        Foreground="{StaticResource BeautyAccentBrush}"
+                                                        Text="{app:T En='Change', Es='Cambiar'}" />
+                                                </Grid>
+                                            </Button>
+                                        </Border>
+                                        <StackPanel x:Name="DownloadToggles" />
+                                    </StackPanel>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
 
-            <TextBlock Style="{StaticResource BeautySectionLabel}" Text="{app:T En='Interface language', Es='Idioma de la interfaz'}" />
-            <Border Padding="2" Background="{StaticResource BeautySubtleFillBrush}" CornerRadius="10">
-                <StackPanel>
-                    <StackPanel x:Name="InterfaceLanguageRows" />
-                    <!-- Only shown after changing the language, which applies on restart. -->
-                    <Button
-                        x:Name="LanguageRestartRow"
-                        MinHeight="44"
-                        Padding="12,6,12,6"
-                        Click="Restart_Click"
-                        Style="{StaticResource BeautyListRowButton}"
-                        Visibility="Collapsed">
-                        <Grid ColumnSpacing="12">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="Auto" />
-                            </Grid.ColumnDefinitions>
-                            <TextBlock
-                                VerticalAlignment="Center"
-                                FontSize="12"
-                                Foreground="{StaticResource BeautyTextSecondaryBrush}"
-                                Text="{app:T En='Applies on restart. Your tabs come back.', Es='Se aplica al reiniciar. Tus pestañas vuelven.'}"
-                                TextWrapping="Wrap" />
-                            <TextBlock
-                                Grid.Column="1"
-                                VerticalAlignment="Center"
-                                FontSize="12"
-                                FontWeight="SemiBold"
-                                Foreground="{StaticResource BeautyAccentBrush}"
-                                Text="{app:T En='Restart now', Es='Reiniciar ahora'}" />
-                        </Grid>
-                    </Button>
-                </StackPanel>
-            </Border>
+                        <!-- Languages -->
+                        <StackPanel x:Name="SectionLanguages">
+                            <StackPanel Style="{StaticResource SettingsSectionHeader}">
+                                <FontIcon VerticalAlignment="Center" FontSize="20" Glyph="&#xE774;" />
+                                <TextBlock VerticalAlignment="Center" FontSize="24" FontWeight="SemiBold" Text="{app:T En='Languages', Es='Idiomas'}" />
+                            </StackPanel>
+                            <Border Style="{StaticResource SettingsCard}">
+                                <StackPanel Spacing="22">
+                                    <StackPanel Spacing="10">
+                                        <TextBlock Style="{StaticResource SettingsGroupTitle}" Text="{app:T En='Interface language', Es='Idioma de la interfaz'}" />
+                                        <Border Style="{StaticResource SettingsBox}">
+                                            <StackPanel>
+                                                <StackPanel x:Name="InterfaceLanguageRows" />
+                                                <!-- Only shown after changing the language, which applies on restart. -->
+                                                <Button
+                                                    x:Name="LanguageRestartRow"
+                                                    MinHeight="46"
+                                                    Padding="14,6,14,6"
+                                                    Click="Restart_Click"
+                                                    Style="{StaticResource BeautyListRowButton}"
+                                                    Visibility="Collapsed">
+                                                    <Grid ColumnSpacing="12">
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="*" />
+                                                            <ColumnDefinition Width="Auto" />
+                                                        </Grid.ColumnDefinitions>
+                                                        <TextBlock
+                                                            VerticalAlignment="Center"
+                                                            Style="{StaticResource SettingsHint}"
+                                                            Text="{app:T En='Applies on restart. Your tabs come back.', Es='Se aplica al reiniciar. Tus pestañas vuelven.'}" />
+                                                        <TextBlock
+                                                            Grid.Column="1"
+                                                            VerticalAlignment="Center"
+                                                            FontSize="13"
+                                                            FontWeight="SemiBold"
+                                                            Foreground="{StaticResource BeautyAccentBrush}"
+                                                            Text="{app:T En='Restart now', Es='Reiniciar ahora'}" />
+                                                    </Grid>
+                                                </Button>
+                                            </StackPanel>
+                                        </Border>
+                                    </StackPanel>
+                                    <StackPanel Spacing="10">
+                                        <TextBlock Style="{StaticResource SettingsGroupTitle}" Text="{app:T En='Preferred page language', Es='Idioma preferido de las páginas'}" />
+                                        <Border Style="{StaticResource SettingsBox}">
+                                            <StackPanel x:Name="LanguageRows" />
+                                        </Border>
+                                    </StackPanel>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
 
-            <TextBlock Style="{StaticResource BeautySectionLabel}" Text="{app:T En='Preferred page language', Es='Idioma preferido de las páginas'}" />
-            <Border Padding="2" Background="{StaticResource BeautySubtleFillBrush}" CornerRadius="10">
-                <StackPanel x:Name="LanguageRows" />
-            </Border>
+                        <!-- System -->
+                        <StackPanel x:Name="SectionSystem">
+                            <StackPanel Style="{StaticResource SettingsSectionHeader}">
+                                <FontIcon VerticalAlignment="Center" FontSize="20" Glyph="&#xE7F8;" />
+                                <TextBlock VerticalAlignment="Center" FontSize="24" FontWeight="SemiBold" Text="{app:T En='System', Es='Sistema'}" />
+                            </StackPanel>
+                            <Border Style="{StaticResource SettingsCard}">
+                                <StackPanel Spacing="22">
+                                    <StackPanel Spacing="6">
+                                        <TextBlock Style="{StaticResource SettingsGroupTitle}" Text="{app:T En='Performance', Es='Rendimiento'}" />
+                                        <StackPanel x:Name="SystemToggles" />
+                                        <!-- Only shown after changing hardware acceleration, which applies on restart. -->
+                                        <Border x:Name="RestartRow" Style="{StaticResource SettingsBox}" Visibility="Collapsed">
+                                            <Button
+                                                MinHeight="46"
+                                                Padding="14,6,14,6"
+                                                Click="Restart_Click"
+                                                Style="{StaticResource BeautyListRowButton}">
+                                                <Grid ColumnSpacing="12">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="Auto" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <TextBlock
+                                                        VerticalAlignment="Center"
+                                                        Style="{StaticResource SettingsHint}"
+                                                        Text="{app:T En='Applies on restart. Your tabs come back.', Es='Se aplica al reiniciar. Tus pestañas vuelven.'}" />
+                                                    <TextBlock
+                                                        Grid.Column="1"
+                                                        VerticalAlignment="Center"
+                                                        FontSize="13"
+                                                        FontWeight="SemiBold"
+                                                        Foreground="{StaticResource BeautyAccentBrush}"
+                                                        Text="{app:T En='Restart now', Es='Reiniciar ahora'}" />
+                                                </Grid>
+                                            </Button>
+                                        </Border>
+                                    </StackPanel>
+                                    <StackPanel Spacing="10">
+                                        <TextBlock Style="{StaticResource SettingsGroupTitle}" Text="{app:T En='Updates', Es='Actualizaciones'}" />
+                                        <!-- Checks GitHub Releases now; when a version is ready, restarts to install it. -->
+                                        <Border Style="{StaticResource SettingsBox}">
+                                            <Button
+                                                x:Name="UpdateRow"
+                                                MinHeight="54"
+                                                Padding="14,8,14,8"
+                                                Click="Update_Click"
+                                                Style="{StaticResource BeautyListRowButton}">
+                                                <Grid ColumnSpacing="14">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="Auto" />
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="Auto" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <FontIcon x:Name="UpdateIcon" FontSize="15" Glyph="&#xE895;" />
+                                                    <StackPanel Grid.Column="1" Spacing="2">
+                                                        <TextBlock x:Name="UpdateTitle" FontSize="15" />
+                                                        <TextBlock x:Name="UpdateHint" Style="{StaticResource SettingsHint}" />
+                                                    </StackPanel>
+                                                    <FontIcon
+                                                        Grid.Column="2"
+                                                        FontSize="11"
+                                                        Foreground="{StaticResource BeautyTextSecondaryBrush}"
+                                                        Glyph="&#xE76C;" />
+                                                </Grid>
+                                            </Button>
+                                        </Border>
+                                    </StackPanel>
+                                    <StackPanel Spacing="10">
+                                        <TextBlock Style="{StaticResource SettingsGroupTitle}" Text="{app:T En='Reset', Es='Restablecer'}" />
+                                        <Border Style="{StaticResource SettingsBox}">
+                                            <Button
+                                                x:Name="ResetRow"
+                                                MinHeight="54"
+                                                Padding="14,8,14,8"
+                                                Click="Reset_Click"
+                                                Style="{StaticResource BeautyListRowButton}">
+                                                <Grid ColumnSpacing="14">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="Auto" />
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="Auto" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <FontIcon FontSize="15" Glyph="&#xE777;" />
+                                                    <StackPanel Grid.Column="1" Spacing="2">
+                                                        <TextBlock FontSize="15" Text="{app:T En='Reset settings', Es='Restablecer configuración'}" />
+                                                        <TextBlock
+                                                            x:Name="ResetHint"
+                                                            Style="{StaticResource SettingsHint}"
+                                                            Text="{app:T En='Restores the defaults. History and favorites stay.', Es='Vuelve todo a como venía. No borra historial ni favoritos.'}" />
+                                                    </StackPanel>
+                                                    <FontIcon
+                                                        Grid.Column="2"
+                                                        FontSize="11"
+                                                        Foreground="{StaticResource BeautyTextSecondaryBrush}"
+                                                        Glyph="&#xE76C;" />
+                                                </Grid>
+                                            </Button>
+                                        </Border>
+                                        <TextBlock x:Name="VersionText" Margin="2,4,0,0" Style="{StaticResource SettingsHint}" />
+                                    </StackPanel>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
 
-            <TextBlock Style="{StaticResource BeautySectionLabel}" Text="{app:T En='System', Es='Sistema'}" />
-            <Border Padding="2" Background="{StaticResource BeautySubtleFillBrush}" CornerRadius="10">
-                <StackPanel>
-                    <StackPanel x:Name="SystemToggles" />
-                    <!-- Only shown after changing hardware acceleration, which applies on restart. -->
-                    <Button
-                        x:Name="RestartRow"
-                        MinHeight="44"
-                        Padding="12,6,12,6"
-                        Click="Restart_Click"
-                        Style="{StaticResource BeautyListRowButton}"
-                        Visibility="Collapsed">
-                        <Grid ColumnSpacing="12">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="Auto" />
-                            </Grid.ColumnDefinitions>
-                            <TextBlock
-                                VerticalAlignment="Center"
-                                FontSize="12"
-                                Foreground="{StaticResource BeautyTextSecondaryBrush}"
-                                Text="{app:T En='Applies on restart. Your tabs come back.', Es='Se aplica al reiniciar. Tus pestañas vuelven.'}"
-                                TextWrapping="Wrap" />
-                            <TextBlock
-                                Grid.Column="1"
-                                VerticalAlignment="Center"
-                                FontSize="12"
-                                FontWeight="SemiBold"
-                                Foreground="{StaticResource BeautyAccentBrush}"
-                                Text="{app:T En='Restart now', Es='Reiniciar ahora'}" />
-                        </Grid>
-                    </Button>
-                </StackPanel>
-            </Border>
-
-            <!-- Updates: checks GitHub Releases now; when a version is ready, restarts to install it. -->
-            <Button
-                x:Name="UpdateRow"
-                MinHeight="50"
-                Margin="0,14,0,0"
-                Padding="12,7,10,7"
-                Click="Update_Click"
-                Style="{StaticResource BeautyListRowButton}">
-                <Grid ColumnSpacing="12">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="*" />
-                    </Grid.ColumnDefinitions>
-                    <FontIcon x:Name="UpdateIcon" FontSize="15" Glyph="&#xE895;" />
-                    <StackPanel Grid.Column="1" Spacing="1">
-                        <TextBlock x:Name="UpdateTitle" FontSize="13" />
-                        <TextBlock
-                            x:Name="UpdateHint"
-                            FontSize="11"
-                            Foreground="{StaticResource BeautyTextSecondaryBrush}"
-                            TextWrapping="Wrap" />
                     </StackPanel>
-                </Grid>
-            </Button>
-
-            <Button
-                x:Name="ResetRow"
-                MinHeight="50"
-                Margin="0,6,0,0"
-                Padding="12,7,10,7"
-                Click="Reset_Click"
-                Style="{StaticResource BeautyListRowButton}">
-                <Grid ColumnSpacing="12">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="*" />
-                    </Grid.ColumnDefinitions>
-                    <FontIcon FontSize="15" Glyph="&#xE777;" />
-                    <StackPanel Grid.Column="1" Spacing="1">
-                        <TextBlock FontSize="13" Text="{app:T En='Reset settings', Es='Restablecer configuración'}" />
-                        <TextBlock
-                            x:Name="ResetHint"
-                            FontSize="11"
-                            Foreground="{StaticResource BeautyTextSecondaryBrush}"
-                            Text="{app:T En='Restores the defaults. History and favorites stay.', Es='Vuelve todo a como venía. No borra historial ni favoritos.'}"
-                            TextWrapping="Wrap" />
-                    </StackPanel>
-                </Grid>
-            </Button>
-
-            <TextBlock
-                x:Name="VersionText"
-                Margin="10,18,10,0"
-                FontSize="11"
-                Foreground="{StaticResource BeautyTextSecondaryBrush}"
-                TextWrapping="Wrap" />
-        </StackPanel>
-    </ScrollView>
+                    <TextBlock
+                        x:Name="NoResults"
+                        Margin="4,40,0,0"
+                        FontSize="14"
+                        Foreground="{StaticResource BeautyTextSecondaryBrush}"
+                        Text="{app:T En='No setting matches that.', Es='Ningún ajuste coincide con eso.'}"
+                        Visibility="Collapsed" />
+                </StackPanel>
+            </ScrollView>
+        </Grid>
+    </Grid>
 </UserControl>

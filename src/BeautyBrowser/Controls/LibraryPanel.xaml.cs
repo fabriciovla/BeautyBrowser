@@ -10,7 +10,7 @@ using Windows.System;
 
 namespace BeautyBrowser.Controls;
 
-public enum LibrarySection { History, Downloads, Settings, Spaces, Extensions }
+public enum LibrarySection { History, Downloads, Spaces, Extensions }
 
 /// <summary>
 /// The library: a section rail (downloads, spaces, history, extensions and settings) and the section's list, docked to
@@ -31,6 +31,9 @@ public sealed partial class LibraryPanel : UserControl
     /// <summary>The user wants to close the library (arrow or Esc).</summary>
     public event EventHandler? CloseRequested;
 
+    /// <summary>The rail's Settings button: the window opens the settings tab.</summary>
+    public event EventHandler? SettingsRequested;
+
     public LibrarySection Section { get; private set; } = LibrarySection.History;
 
     /// <summary>Where the download animation lands while the library is open.</summary>
@@ -44,7 +47,6 @@ public sealed partial class LibraryPanel : UserControl
         HistoryView.UrlSelected += (_, url) => _shell?.Open(url, inNewTab: false);
         DownloadsHost.Children.Add(new DownloadsPanel(shell.Downloads));
         SpacesView.Attach(shell);
-        SettingsView.Attach(shell);
         ExtensionsView.Attach(shell);
     }
 
@@ -57,9 +59,6 @@ public sealed partial class LibraryPanel : UserControl
         else
             Focus(FocusState.Programmatic);
     }
-
-    /// <summary>Scrolls the settings to the rows that clear history, cookies and cache.</summary>
-    public void RevealClearData() => SettingsView.RevealClearData();
 
     /// <summary>Spaces, with the new space form open above the existing ones.</summary>
     public void StartNewSpace()
@@ -89,7 +88,6 @@ public sealed partial class LibraryPanel : UserControl
             LibrarySection.Spaces => SpacesTab,
             LibrarySection.History => HistoryTab,
             LibrarySection.Extensions => ExtensionsTab,
-            LibrarySection.Settings => SettingsTab,
             _ => null,
         };
         if (railTab is not null && railTab.ActualHeight > 0)
@@ -102,7 +100,7 @@ public sealed partial class LibraryPanel : UserControl
         }
         RailPill.Opacity = railTab is null ? 0 : 1;
 
-        foreach (var tab in new[] { DownloadsTab, SpacesTab, HistoryTab, ExtensionsTab, SettingsTab })
+        foreach (var tab in new[] { DownloadsTab, SpacesTab, HistoryTab, ExtensionsTab })
             tab.Foreground = Brush(tab == railTab ? "BeautyTextBrush" : "BeautyTextSecondaryBrush");
 
         // Only the selected section's list is visible.
@@ -110,7 +108,6 @@ public sealed partial class LibraryPanel : UserControl
         {
             LibrarySection.Downloads => (FrameworkElement)DownloadsHost,
             LibrarySection.Spaces => SpacesView,
-            LibrarySection.Settings => SettingsView,
             LibrarySection.Extensions => ExtensionsView,
             _ => HistoryView,
         };
@@ -151,6 +148,9 @@ public sealed partial class LibraryPanel : UserControl
         if (sender is FrameworkElement { Tag: string tag } && Enum.TryParse<LibrarySection>(tag, out var section))
             Show(section);
     }
+
+    // Settings is a tab of its own (beauty://settings), not a library section.
+    private void Settings_Click(object sender, RoutedEventArgs e) => SettingsRequested?.Invoke(this, EventArgs.Empty);
 
     private void Back_Click(object sender, RoutedEventArgs e) => CloseRequested?.Invoke(this, EventArgs.Empty);
 
