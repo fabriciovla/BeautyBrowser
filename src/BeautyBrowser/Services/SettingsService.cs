@@ -191,6 +191,18 @@ public sealed class SettingsService
         set => Save("sidebar_idle_seconds", value.ToString(CultureInfo.InvariantCulture));
     }
 
+    /// <summary>Hours without using a tab before it is archived on its own; 0 means never.</summary>
+    public static readonly IReadOnlyList<(string Name, int Hours)> ArchiveAfterOptions =
+    [
+        (L.T("12 hours", "12 horas"), 12), (L.T("1 day", "1 día"), 24), (L.T("1 week", "1 semana"), 168), (L.T("Never", "Nunca"), 0),
+    ];
+
+    public int ArchiveAfterHours
+    {
+        get => GetInt("archive_after_hours", 24);
+        set => Save("archive_after_hours", value.ToString(CultureInfo.InvariantCulture));
+    }
+
     /// <summary>Preview when hovering a tab.</summary>
     public bool TabPreviews
     {

@@ -53,6 +53,17 @@ public sealed class DatabaseService
                 value TEXT NOT NULL
             );
 
+            CREATE TABLE IF NOT EXISTS archived_tabs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                url TEXT NOT NULL,
+                title TEXT,
+                favicon_url TEXT,
+                space TEXT,
+                last_active TEXT NOT NULL,
+                archived_at TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_archived_tabs_at ON archived_tabs(archived_at DESC);
+
             INSERT OR IGNORE INTO settings (key, value) VALUES ('search_engine', 'Google');
             INSERT OR IGNORE INTO settings (key, value) VALUES ('home_url', 'https://www.google.com');
         ";
@@ -79,6 +90,91 @@ public sealed class DatabaseService
         cmd.Parameters.AddWithValue("@title", (object?)title ?? DBNull.Value);
         cmd.Parameters.AddWithValue("@favicon", (object?)faviconUrl ?? DBNull.Value);
         cmd.Parameters.AddWithValue("@now", DateTime.UtcNow.ToString("o"));
+        cmd.ExecuteNonQuery();
+    }
+
+    public void AddArchivedTab(string url, string title, string? faviconUrl, string space, DateTime lastActiveUtc)
+    {
+        using var conn = new SqliteConnection(_connectionString);
+        conn.Open();
+
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = @"
+            INSERT INTO archived_tabs (url, title, favicon_url, space, last_active, archived_at)
+            VALUES (@url, @title, @favicon, @space, @last, @now);
+        ";
+        cmd.Parameters.AddWithValue("@url", url);
+        cmd.Parameters.AddWithValue("@title", title);
+        cmd.Parameters.AddWithValue("@favicon", (object?)faviconUrl ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("@space", space);
+        cmd.Parameters.AddWithValue("@last", lastActiveUtc.ToString("o"));
+        cmd.Parameters.AddWithValue("@now", DateTime.UtcNow.ToString("o"));
+        cmd.ExecuteNonQuery();
+    }
+
+    public List<ArchivedTab> GetArchivedTabs(string query, int limit)
+    {
+        var list = new List<ArchivedTab>();
+        using var conn = new SqliteConnection(_connectionString);
+        conn.Open();
+
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = @"
+            SELECT id, url, title, favicon_url, space, last_active, archived_at
+            FROM archived_tabs
+            WHERE @q = '' OR url LIKE @like OR title LIKE @like
+            ORDER BY archived_at DESC
+            LIMIT @limit;
+        ";
+        cmd.Parameters.AddWithValue("@q", query);
+        cmd.Parameters.AddWithValue("@like", $"%{query}%");
+        cmd.Parameters.AddWithValue("@limit", limit);
+
+        using var reader = cmd.ExecuteReader();
+        while (reader.Read())
+        {
+            DateTime.TryParse(reader.GetString(5), null, System.Globalization.DateTimeStyles.RoundtripKind, out var last);
+            DateTime.TryParse(reader.GetString(6), null, System.Globalization.DateTimeStyles.RoundtripKind, out var archived);
+            var url = reader.GetString(1);
+            list.Add(new ArchivedTab
+            {
+                Id = reader.GetInt64(0),
+                Url = url,
+                Title = reader.IsDBNull(2) || string.IsNullOrWhiteSpace(reader.GetString(2)) ? url : reader.GetString(2),
+                FaviconUrl = reader.IsDBNull(3) ? null : reader.GetString(3),
+                Space = reader.IsDBNull(4) ? "" : reader.GetString(4),
+                LastActive = last.ToLocalTime(),
+                ArchivedAt = archived.ToLocalTime(),
+            });
+        }
+        return list;
+    }
+
+    public int CountArchivedTabs()
+    {
+        using var conn = new SqliteConnection(_connectionString);
+        conn.Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT COUNT(*) FROM archived_tabs;";
+        return Convert.ToInt32(cmd.ExecuteScalar());
+    }
+
+    public void DeleteArchivedTab(long id)
+    {
+        using var conn = new SqliteConnection(_connectionString);
+        conn.Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "DELETE FROM archived_tabs WHERE id = @id;";
+        cmd.Parameters.AddWithValue("@id", id);
+        cmd.ExecuteNonQuery();
+    }
+
+    public void ClearArchivedTabs()
+    {
+        using var conn = new SqliteConnection(_connectionString);
+        conn.Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "DELETE FROM archived_tabs;";
         cmd.ExecuteNonQuery();
     }
 
