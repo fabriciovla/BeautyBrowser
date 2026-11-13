@@ -10,6 +10,7 @@ namespace BeautyBrowser;
 public sealed partial class MainWindow
 {
     private BrowserTab? _toastTab;
+    private Action? _toastAction; // what a tap does when the notice is not about a tab
     private int _toastCount;
     private DispatcherTimer? _newTabToastTimer;
 
@@ -31,6 +32,9 @@ public sealed partial class MainWindow
             return;
         }
         if (_fullscreen) return;
+        _toastAction = null;
+        NewTabToastIcon.Glyph = "";
+        NewTabToastTitle.Visibility = Visibility.Visible;
         // Several in a row: one notice that counts them, and a tap goes to the last.
         _toastCount = NewTabToast.Opacity > 0 ? _toastCount + 1 : 1;
         WatchToastTab(tab);
@@ -41,6 +45,25 @@ public sealed partial class MainWindow
         HideZoomToast();
         NewTabToast.Opacity = 1;
         NewTabToast.IsHitTestVisible = true;
+
+        _newTabToastTimer ??= CreateNewTabToastTimer();
+        _newTabToastTimer.Stop();
+        _newTabToastTimer.Start();
+    }
+
+    /// <summary>The same small notice for anything else (a screenshot): a title, a detail and what a tap does, if anything.</summary>
+    private void ShowInfoToast(string text, string detail, string glyph, Action? tap)
+    {
+        HideNewTabToast();
+        _toastCount = 0;
+        _toastAction = tap;
+        NewTabToastIcon.Glyph = glyph;
+        NewTabToastText.Text = text;
+        NewTabToastTitle.Text = detail;
+        NewTabToastTitle.Visibility = detail.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+        HideZoomToast();
+        NewTabToast.Opacity = 1;
+        NewTabToast.IsHitTestVisible = tap is not null;
 
         _newTabToastTimer ??= CreateNewTabToastTimer();
         _newTabToastTimer.Stop();
@@ -66,6 +89,7 @@ public sealed partial class MainWindow
         _newTabToastTimer?.Stop();
         NewTabToast.Opacity = 0;
         NewTabToast.IsHitTestVisible = false;
+        _toastAction = null;
         if (_toastTab is not null) _toastTab.PropertyChanged -= ToastTab_PropertyChanged;
         _toastTab = null;
     }
@@ -81,8 +105,10 @@ public sealed partial class MainWindow
     private void NewTabToast_Click(object sender, RoutedEventArgs e)
     {
         var tab = _toastTab;
+        var action = _toastAction;
         HideNewTabToast();
-        if (tab is not null) _shell.SelectTab(tab);
+        if (action is not null) action();
+        else if (tab is not null) _shell.SelectTab(tab);
     }
 
     private DispatcherTimer CreateNewTabToastTimer()

@@ -25,6 +25,7 @@ public sealed partial class MainWindow
         Page(VirtualKey.H, Ctrl, ToggleHistory);
         Page(VirtualKey.J, Ctrl, ToggleDownloads);
         Page(VirtualKey.S, Ctrl, ToggleDock);
+        Page(VirtualKey.S, Ctrl | Shift, () => StartCapture(ScreenshotMode.Area)); // the picker also has "Full page"
         Page(VirtualKey.D, Ctrl, () => OnTab(_shell.ToggleFavorite));
         Page(VirtualKey.P, Ctrl, () => OnTab(t => t.Print()));
         Page(VirtualKey.U, Ctrl, ViewSourceOfCurrent);

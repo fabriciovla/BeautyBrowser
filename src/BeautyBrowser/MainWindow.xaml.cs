@@ -126,6 +126,7 @@ public sealed partial class MainWindow : Window
         SetupPasswords();
         SetupZoomToast();
         SetupNewTabToast();
+        SetupScreenshots();
         SetupNotices();
         SetupSplit();
         SetupUpdates();
@@ -1400,6 +1401,7 @@ public sealed partial class MainWindow : Window
     /// <summary>Esc closes the topmost thing the app has open. False when there was nothing to close.</summary>
     private bool CloseWithEscape()
     {
+        if (CancelCapture()) return true;
         if (_userFullscreen)
         {
             SetWindowFullscreen(false);
