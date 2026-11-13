@@ -240,6 +240,16 @@ public sealed class SettingsService
         set => Save("block_popups", value);
     }
 
+    /// <summary>
+    /// Links from other apps (mail, chat…) open in the quick view over the current page, like Arc's Little Arc, instead
+    /// of a new tab; "Open as tab" keeps them.
+    /// </summary>
+    public bool ExternalLinksInPeek
+    {
+        get => GetBool("external_links_peek", true);
+        set => Save("external_links_peek", value);
+    }
+
 
     /// <summary>Position and size of the window when it was last closed (not maximized); null the first time.</summary>
     public Windows.Graphics.RectInt32? WindowBounds
