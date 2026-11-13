@@ -80,6 +80,7 @@ public sealed partial class MainWindow
             if (DockWanted != _sidebarDocked || (DockWanted && !_sidebarShown)) SetDocked(DockWanted, animate);
         }
 
+        ApplyPageCorners(); // square with tabs on top
         UpdateDragZone();
         ApplyLayout(animateWidth: animate);
         LayoutLoadBar();
@@ -99,7 +100,7 @@ public sealed partial class MainWindow
     }
 
     /// <summary>The page's top edge: under the toolbar (with the glass frame between) with tabs on top, at the frame otherwise.</summary>
-    private double PageTop => TabsOnTop ? TopBarHeight + Edge : Edge;
+    private double PageTop => TabsOnTop ? TopBarHeight : Edge;
 
     /// <summary>The page's right edge: after a sidebar pinned on the right, at the frame otherwise.</summary>
     private double PageRight => _sidebarDocked && SidebarRight ? SidebarWidth + Edge : Edge;
