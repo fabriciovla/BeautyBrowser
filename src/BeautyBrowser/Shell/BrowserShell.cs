@@ -187,10 +187,13 @@ public sealed class BrowserShell
     private const string PrivateIcon = ""; // Segoe "InPrivate"
 
     // A link a private tab opens in a new tab stays private, even when another space is in view.
-    private BrowserTab NewTabFrom(BrowserTab source, string url) =>
+    private BrowserTab NewTabFrom(BrowserTab source, string url, bool activate = true) =>
         source.IsPrivate != CurrentSpace.IsPrivate && Spaces.FirstOrDefault(s => s.IsPrivate == source.IsPrivate) is { } space
-            ? NewTabIn(space, url, activate: true)
-            : NewTab(url);
+            ? NewTabIn(space, url, activate)
+            : NewTab(url, activate);
+
+    /// <summary>A link opened in a tab behind the current one (middle click, Ctrl+click, "Open link in new tab").</summary>
+    public event EventHandler<BrowserTab>? BackgroundTabOpened;
 
     /// <summary>The start page (beauty://newtab). Opens when no tab is left, instead of loading a search engine.</summary>
     public BrowserTab OpenStartPage() => NewTab(StartPage.Url);
@@ -629,6 +632,7 @@ public sealed class BrowserShell
     private void Wire(BrowserTab tab)
     {
         tab.NewTabRequested += (_, url) => NewTabFrom(tab, url);
+        tab.BackgroundTabRequested += (_, url) => BackgroundTabOpened?.Invoke(this, NewTabFrom(tab, url, activate: false));
         tab.PopupOpened += (_, popup) =>
         {
             Wire(popup);
