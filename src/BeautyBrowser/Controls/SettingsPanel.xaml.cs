@@ -100,6 +100,18 @@ public sealed partial class SettingsPanel : UserControl
             .Select(option => (option.Name, (Func<bool>)(() => option.Seconds == s.SidebarIdleSeconds),
                 (Action)(() => s.SidebarIdleSeconds = option.Seconds)))
             .ToList());
+        // With the tabs on top there is no sidebar: pinning it, its previews and hiding it make no sense.
+        void SidebarOnly()
+        {
+            var top = s.SidebarPosition == "top";
+            for (var i = 0; i < 2 && i < SidebarToggles.Children.Count; i++)
+                SidebarToggles.Children[i].Visibility = top ? Visibility.Collapsed : Visibility.Visible;
+            // The page and the search show and hide whole groups: this one stays out while it does not apply.
+            if (top) _hiddenGroups.Add(IdleGroup); else _hiddenGroups.Remove(IdleGroup);
+            IdleGroup.Visibility = top ? Visibility.Collapsed : Visibility.Visible;
+        }
+        _toggleRefreshers.Add(SidebarOnly);
+        SidebarOnly();
 
         FolderText.Text = s.DownloadsFolder;
         ToggleRows(DownloadToggles,
@@ -421,6 +433,7 @@ public sealed partial class SettingsPanel : UserControl
     // Every switch can repaint itself from the saved value, so it follows changes made elsewhere (the sidebar pin
     // button, for instance).
     private readonly List<Action> _toggleRefreshers = [];
+    private readonly HashSet<UIElement> _hiddenGroups = [];
 
     /// <summary>Rows with our own check box on the left: a rounded square that fills with the accent and a check mark.</summary>
     private void ToggleRows(StackPanel host, IReadOnlyList<(string Title, string? Hint, Func<bool> Get, Action<bool> Set)> toggles)
@@ -604,6 +617,7 @@ public sealed partial class SettingsPanel : UserControl
             text.FontWeight = on ? FontWeights.SemiBold : FontWeights.Normal;
             text.Foreground = icon.Foreground = Brush(on ? "BeautyTextBrush" : "BeautyTextSecondaryBrush");
         }
+        foreach (var hidden in _hiddenGroups) hidden.Visibility = Visibility.Collapsed;
         NoResults.Visibility = Visibility.Collapsed;
         Scroller.ScrollTo(0, 0, new ScrollingScrollOptions(ScrollingAnimationMode.Disabled));
     }
@@ -638,6 +652,7 @@ public sealed partial class SettingsPanel : UserControl
             text.Foreground = icon.Foreground = Brush(shown ? "BeautyTextBrush" : "BeautyTextSecondaryBrush");
             any |= shown;
         }
+        foreach (var hidden in _hiddenGroups) hidden.Visibility = Visibility.Collapsed;
         NoResults.Visibility = any ? Visibility.Collapsed : Visibility.Visible;
         Scroller.ScrollTo(0, 0, new ScrollingScrollOptions(ScrollingAnimationMode.Disabled));
     }

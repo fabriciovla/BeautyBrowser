@@ -68,6 +68,7 @@ public sealed partial class MainWindow
         Sidebar.HorizontalAlignment = SidebarRight ? HorizontalAlignment.Right : HorizontalAlignment.Left;
         Sidebar.IsOnRight = SidebarRight; // its content starts below the caption buttons
         TopBar.Visibility = top && !_fullscreen ? Visibility.Visible : Visibility.Collapsed;
+        LibraryHost.Margin = new Thickness(0, top ? TopBarHeight : 0, 0, 0); // under the bar, which stays where it is
 
         // Tabs on top keep the caption buttons visible, at the strip's right end; the page is not dragged from.
         WebView.WindowDragZone = top ? 0 : PageDragZone;
