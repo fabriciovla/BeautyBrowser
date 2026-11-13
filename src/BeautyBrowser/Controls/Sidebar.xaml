@@ -29,7 +29,7 @@
         </Grid.RowDefinitions>
 
         <!-- Glass grain (Settings → Appearance), under the content -->
-        <controls:NoiseLayer Grid.RowSpan="9" Margin="-10,-10,-8,-8" />
+        <controls:NoiseLayer x:Name="PanelNoise" Grid.RowSpan="9" Margin="-10,-10,-8,-8" />
 
         <Grid>
             <StackPanel Orientation="Horizontal" Spacing="2">
