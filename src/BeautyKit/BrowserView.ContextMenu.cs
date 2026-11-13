@@ -133,6 +133,10 @@ public sealed partial class BrowserView
         }
 
         Separator();
+        var capture = new MenuFlyoutSubItem { Text = L.T("Screenshot", "Captura de pantalla") };
+        capture.Items.Add(CaptureItem(L.T("Capture full page", "Capturar página entera"), ScreenshotMode.FullPage));
+        capture.Items.Add(CaptureItem(L.T("Capture area", "Capturar zona"), ScreenshotMode.Area));
+        items.Add(capture);
         Add(L.T("Inspect", "Inspeccionar"), () => tab.Inspect(info.X, info.Y));
 
         menu.ShowAt(this, new FlyoutShowOptions
@@ -140,6 +144,16 @@ public sealed partial class BrowserView
             Position = new Point(info.X, info.Y),
             ShowMode = FlyoutShowMode.Standard,
         });
+    }
+
+    /// <summary>The page's "Screenshot" menu was used: the app takes it from there (it draws the area picker).</summary>
+    public event EventHandler<ScreenshotMode>? CaptureRequested;
+
+    private MenuFlyoutItem CaptureItem(string text, ScreenshotMode mode)
+    {
+        var item = new MenuFlyoutItem { Text = text };
+        item.Click += (_, _) => CaptureRequested?.Invoke(this, mode);
+        return item;
     }
 
     private static bool IsWebUrl(string url) =>

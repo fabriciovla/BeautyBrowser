@@ -158,7 +158,7 @@
                     Click="NewTabToast_Click"
                     CornerRadius="16">
                     <StackPanel Orientation="Horizontal" Spacing="10">
-                        <FontIcon FontSize="14" Foreground="White" Glyph="&#xE8A7;" />
+                        <FontIcon x:Name="NewTabToastIcon" FontSize="14" Foreground="White" Glyph="&#xE8A7;" />
                         <StackPanel MaxWidth="300">
                             <TextBlock x:Name="NewTabToastText" FontSize="13" Foreground="White" TextTrimming="CharacterEllipsis" />
                             <TextBlock x:Name="NewTabToastTitle" FontSize="12" Foreground="#B3FFFFFF" TextTrimming="CharacterEllipsis" />
@@ -166,6 +166,51 @@
                     </StackPanel>
                 </Button>
             </Border>
+
+            <!-- Screenshot of an area: the page dims, except the rectangle dragged over it (MainWindow.Screenshots). -->
+            <Grid
+                x:Name="CaptureOverlay"
+                Background="#01000000"
+                PointerMoved="CaptureOverlay_PointerMoved"
+                PointerPressed="CaptureOverlay_PointerPressed"
+                PointerReleased="CaptureOverlay_PointerReleased"
+                Visibility="Collapsed">
+                <Path x:Name="CaptureDim" Fill="#8C000000" IsHitTestVisible="False" />
+                <Border
+                    x:Name="CaptureFrame"
+                    HorizontalAlignment="Left"
+                    VerticalAlignment="Top"
+                    BorderBrush="White"
+                    BorderThickness="2"
+                    CornerRadius="2"
+                    IsHitTestVisible="False"
+                    Visibility="Collapsed" />
+                <Border
+                    Margin="0,14,0,0"
+                    Padding="14,6"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Top"
+                    Background="#E6202020"
+                    CornerRadius="16">
+                    <StackPanel Orientation="Horizontal" Spacing="10">
+                        <FontIcon VerticalAlignment="Center" FontSize="14" Foreground="White" Glyph="&#xE722;" />
+                        <TextBlock VerticalAlignment="Center" FontSize="13" Foreground="White" Text="{local:T En='Drag to choose the area', Es='Arrastrá para elegir la zona'}" />
+                        <Button
+                            Padding="8,2"
+                            AutomationProperties.AutomationId="CaptureFullPage"
+                            Click="CaptureFullPage_Click"
+                            Content="{local:T En='Full page', Es='Página entera'}"
+                            FontSize="12" />
+                        <Button
+                            x:Name="CaptureCancel"
+                            Padding="8,2"
+                            AutomationProperties.AutomationId="CaptureCancel"
+                            Click="CaptureCancel_Click"
+                            Content="{local:T En='Cancel', Es='Cancelar'}"
+                            FontSize="12" />
+                    </StackPanel>
+                </Border>
+            </Grid>
 
             <local:ResizeHandle
                 x:Name="DevToolsSplitter"
