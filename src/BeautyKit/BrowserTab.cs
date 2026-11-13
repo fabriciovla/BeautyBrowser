@@ -209,6 +209,12 @@ public sealed partial class BrowserTab : INotifyPropertyChanged, IDisposable
     public event EventHandler<string>? NewTabRequested;
 
     /// <summary>
+    /// A middle or Ctrl+click on a link, or "Open link in new tab": the page opens in a tab behind the current one, which
+    /// stays in view. Without a listener it opens as a regular tab.
+    /// </summary>
+    public event EventHandler<string>? BackgroundTabRequested;
+
+    /// <summary>
     /// A plain click on a link that opens another tab. The app shows it in a mini window over the page, like Arc's
     /// Peek; without a listener it opens as a tab.
     /// </summary>
@@ -677,6 +683,65 @@ public sealed partial class BrowserTab : INotifyPropertyChanged, IDisposable
                && uri.Scheme is "http" or "https" or "blob";
     }
 
+    /// <summary>
+    /// The checks every request for a new tab goes through, whether it comes from window.open/target=_blank
+    /// (OnBeforePopup) or from a middle or Ctrl+click on a plain link (OnOpenUrlFromTab). True when the request ends
+    /// here: blocked, handed to an app, or not a web page.
+    /// </summary>
+    private bool FilterNewTab(IBrowser? browser, IFrame? frame, string targetUrl, bool userGesture)
+    {
+        // Popups the page opens without a user gesture are blocked when the setting is on.
+        if (BlockPopups && !userGesture)
+        {
+            // Unless the user chose to always allow them for this site; otherwise the app can offer that.
+            var origin = OriginOf(browser?.MainFrame?.Url);
+            if (!ArePopupsAllowedFrom(origin))
+            {
+                ReportBlockedPopup(origin, targetUrl);
+                return true;
+            }
+        }
+        // A link to an app (target=_blank mailto:…) opens no tab: the app is offered instead.
+        if (TryHandleExternal(targetUrl, browser?.MainFrame?.Url)) return true;
+        // A page may only open web pages: window.open("data:text/html,…") would be a ready-made phishing tab.
+        if (!IsPopupUrlAllowed(targetUrl)) return true;
+        // Ads that open "on your click" (popunders on streaming sites) are closed by the blocker.
+        if (Blocking.ContentBlocker.IsAdPopup(targetUrl, frame?.Url ?? browser?.MainFrame?.Url))
+        {
+            CountBlocked();
+            return true;
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// Ctrl+click or middle click (background tab) opens a regular tab; a plain click opens the mini window.
+    /// Shift+click (new window) and Ctrl+Shift+click (foreground tab) open a regular tab too, as in Chrome.
+    /// </summary>
+    private void RequestNewTab(string targetUrl, WindowOpenDisposition disposition, bool userGesture)
+    {
+        var peek = userGesture
+                   && disposition is not (WindowOpenDisposition.NewBackgroundTab or WindowOpenDisposition.NewWindow)
+                   && (GetAsyncKeyState(VkControl) & 0x8000) == 0;
+        OnUi(() =>
+        {
+            if (peek && PeekRequested is { } handler) handler(this, targetUrl);
+            else if (disposition == WindowOpenDisposition.NewBackgroundTab) OpenInBackground(targetUrl);
+            else NewTabRequested?.Invoke(this, targetUrl);
+        });
+    }
+
+    /// <summary>
+    /// A middle or Ctrl+click on a normal link: Chromium reports it here, not as a popup. True when the app opened it.
+    /// </summary>
+    private bool OpenUrlFromTab(IBrowser browser, IFrame frame, string targetUrl, WindowOpenDisposition disposition, bool userGesture)
+    {
+        if (disposition is not (WindowOpenDisposition.NewBackgroundTab or WindowOpenDisposition.NewForegroundTab or WindowOpenDisposition.NewWindow))
+            return false;
+        if (!FilterNewTab(browser, frame, targetUrl, userGesture)) RequestNewTab(targetUrl, disposition, userGesture);
+        return true;
+    }
+
     private sealed class TabLifeSpanHandler(BrowserTab tab) : CefSharp.Handler.LifeSpanHandler
     {
         protected override bool OnBeforePopup(IWebBrowser chromiumWebBrowser, IBrowser browser, IFrame frame,
@@ -685,27 +750,7 @@ public sealed partial class BrowserTab : INotifyPropertyChanged, IDisposable
             ref bool noJavascriptAccess, out IWebBrowser? newBrowser)
         {
             newBrowser = null;
-            // Popups the page opens without a user gesture are blocked when the setting is on.
-            if (BlockPopups && !userGesture)
-            {
-                // Unless the user chose to always allow them for this site; otherwise the app can offer that.
-                var origin = OriginOf(browser?.MainFrame?.Url);
-                if (!ArePopupsAllowedFrom(origin))
-                {
-                    tab.ReportBlockedPopup(origin, targetUrl);
-                    return true;
-                }
-            }
-            // A link to an app (target=_blank mailto:…) opens no tab: the app is offered instead.
-            if (tab.TryHandleExternal(targetUrl, browser?.MainFrame?.Url)) return true;
-            // A page may only open web pages: window.open("data:text/html,…") would be a ready-made phishing tab.
-            if (!IsPopupUrlAllowed(targetUrl)) return true;
-            // Ads that open "on your click" (popunders on streaming sites) are closed by the blocker.
-            if (Blocking.ContentBlocker.IsAdPopup(targetUrl, frame?.Url ?? browser?.MainFrame?.Url))
-            {
-                tab.CountBlocked();
-                return true;
-            }
+            if (tab.FilterNewTab(browser, frame, targetUrl, userGesture)) return true;
             // window.open with a size is a popup window the page talks to (sign-in, payments): Chromium creates it in a
             // tab of ours so window.opener keeps working. Opening it as a plain tab instead would leave the sign-in hung.
             if (targetDisposition == WindowOpenDisposition.NewPopup)
@@ -719,16 +764,7 @@ public sealed partial class BrowserTab : INotifyPropertyChanged, IDisposable
                 return false;
             }
 
-            // Ctrl+click or middle click (background tab) opens a regular tab; a plain click opens the mini window.
-            // Shift+click (new window) and Ctrl+Shift+click (foreground tab) open a regular tab too, as in Chrome.
-            var peek = userGesture
-                       && targetDisposition is not (WindowOpenDisposition.NewBackgroundTab or WindowOpenDisposition.NewWindow)
-                       && (GetAsyncKeyState(VkControl) & 0x8000) == 0;
-            tab.OnUi(() =>
-            {
-                if (peek && tab.PeekRequested is { } handler) handler(tab, targetUrl);
-                else tab.NewTabRequested?.Invoke(tab, targetUrl);
-            });
+            tab.RequestNewTab(targetUrl, targetDisposition, userGesture);
             return true; // cancel the popup: the app opens it
         }
 

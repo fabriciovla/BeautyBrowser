@@ -8,6 +8,7 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Imaging;
+using Windows.Foundation;
 using Windows.System;
 
 namespace BeautyBrowser.Controls;
@@ -64,8 +65,80 @@ public sealed partial class CommandPalette : UserControl
         Results.ItemsSource = _items;
         Card.Shadow = new ThemeShadow();
         Card.Translation = new Vector3(0, 0, 48);
-        SizeChanged += (_, _) => Card.Margin = new Thickness(40, ActualHeight * 0.26, 40, 0);
+        SizeChanged += (_, _) => PlaceCard();
     }
+
+    // With tabs on top the address bar itself is the search box: the palette only shows the results, as a list
+    // dropping from it (OpenAttached).
+    private TextBox? _external;
+    private Rect _anchor;
+
+    /// <summary>The box being typed in: the palette's own, or the address bar's.</summary>
+    private TextBox Input => _external ?? Query;
+
+    private void PlaceCard()
+    {
+        if (_external is not null)
+        {
+            Card.HorizontalAlignment = HorizontalAlignment.Left;
+            Card.MaxWidth = double.PositiveInfinity;
+            Card.Width = _anchor.Width;
+            Card.Margin = new Thickness(_anchor.X, _anchor.Bottom + 6, 0, 0);
+            Card.RenderTransformOrigin = new Point(0.5, 0);
+        }
+        else
+        {
+            Card.HorizontalAlignment = HorizontalAlignment.Stretch;
+            Card.MaxWidth = 760;
+            Card.Width = double.NaN;
+            Card.Margin = new Thickness(40, ActualHeight * 0.26, 40, 0);
+            Card.RenderTransformOrigin = new Point(0.5, 0.5);
+        }
+    }
+
+    /// <summary>
+    /// Results for a box outside the palette (the address bar with tabs on top): the list drops right below it, the
+    /// box keeps the focus and the keys (arrows, Enter, Tab, Esc) still move through the results. The page stays
+    /// clickable; the box losing focus closes it.
+    /// </summary>
+    public void OpenAttached(BrowserShell shell, PaletteMode mode, TextBox input, Rect anchor)
+    {
+        Detach();
+        _shell = shell;
+        _mode = mode;
+        _suggestions = [];
+        _userMovedSelection = false;
+        _external = input;
+        _anchor = anchor;
+        input.TextChanged += Query_TextChanged;
+        input.PreviewKeyDown += Query_PreviewKeyDown;
+        SearchRow.Visibility = Visibility.Collapsed;
+        Divider.Visibility = Visibility.Collapsed;
+        Backdrop.Background = null; // clicks reach the page and the address bar
+
+        Visibility = Visibility.Visible;
+        PlaceCard();
+        Refresh();
+        RequestSuggestions(input.Text.Trim());
+        Motion.Animate("palette", TimeSpan.FromMilliseconds(120), t =>
+        {
+            Card.Opacity = t;
+            CardScale.ScaleX = CardScale.ScaleY = Motion.Lerp(0.985, 1, t);
+        });
+    }
+
+    private void Detach()
+    {
+        if (_external is not { } input) return;
+        input.TextChanged -= Query_TextChanged;
+        input.PreviewKeyDown -= Query_PreviewKeyDown;
+        _external = null;
+        SearchRow.Visibility = Visibility.Visible;
+        Divider.Visibility = Visibility.Visible;
+        Backdrop.Background = new SolidColorBrush(Windows.UI.Color.FromArgb(1, 0, 0, 0));
+    }
+
+    public bool IsAttached => _external is not null;
 
     public bool IsOpen => Visibility == Visibility.Visible;
 
@@ -73,12 +146,14 @@ public sealed partial class CommandPalette : UserControl
 
     public void Open(BrowserShell shell, PaletteMode mode, string initialText = "")
     {
+        Detach();
         _shell = shell;
         _mode = mode;
         _suggestions = [];
         _userMovedSelection = false;
 
         Visibility = Visibility.Visible;
+        PlaceCard();
         // The address is shown readable ("España", not "Espa%C3%B1a") without changing where it goes.
         Query.Text = mode == PaletteMode.Navigate ? AddressDisplay.ToDisplay(initialText) : initialText;
         Query.SelectAll();
@@ -95,6 +170,12 @@ public sealed partial class CommandPalette : UserControl
     public void Close()
     {
         if (!IsOpen) return;
+        if (_external is { } input)
+        {
+            // The address bar gets its text back right away; that must not search again while the list fades.
+            input.TextChanged -= Query_TextChanged;
+            input.PreviewKeyDown -= Query_PreviewKeyDown;
+        }
         Motion.Animate("palette", TimeSpan.FromMilliseconds(100), t =>
         {
             Card.Opacity = 1 - t;
@@ -102,6 +183,7 @@ public sealed partial class CommandPalette : UserControl
         }, completed: () =>
         {
             Visibility = Visibility.Collapsed;
+            Detach();
             Closed?.Invoke(this, EventArgs.Empty);
         });
     }
@@ -110,7 +192,7 @@ public sealed partial class CommandPalette : UserControl
     private void Refresh()
     {
         if (_shell is null) return;
-        var query = Query.Text.Trim();
+        var query = Input.Text.Trim();
         var results = new List<PaletteResult>();
 
         // The private space neither shows the history nor mixes in the other spaces' tabs, and the other spaces do
@@ -246,7 +328,7 @@ public sealed partial class CommandPalette : UserControl
             using var doc = JsonDocument.Parse(json);
             var list = doc.RootElement[1].EnumerateArray().Select(e => e.GetString() ?? "").Where(s => s.Length > 0).ToList();
 
-            if (request.IsCancellationRequested || Query.Text.Trim() != query) return;
+            if (request.IsCancellationRequested || Input.Text.Trim() != query) return;
             _suggestions = list;
             Refresh();
         }
@@ -259,7 +341,7 @@ public sealed partial class CommandPalette : UserControl
     private void Execute(PaletteResult? result)
     {
         if (_shell is null) return;
-        var query = Query.Text.Trim();
+        var query = Input.Text.Trim();
 
         if (result?.Tab is { } tab) _shell.SelectTab(tab);
         else if (result?.Url is { } url) _shell.Open(url, inNewTab: _mode == PaletteMode.NewTab);
@@ -289,7 +371,7 @@ public sealed partial class CommandPalette : UserControl
     {
         _userMovedSelection = false;
         Refresh();
-        RequestSuggestions(Query.Text.Trim());
+        RequestSuggestions(Input.Text.Trim());
     }
 
     private void Query_PreviewKeyDown(object sender, KeyRoutedEventArgs e)
@@ -307,7 +389,7 @@ public sealed partial class CommandPalette : UserControl
                 Results.SelectedIndex = (Results.SelectedIndex - 1 + count) % count;
                 Results.ScrollIntoView(Results.SelectedItem);
                 break;
-            case VirtualKey.Enter when CtrlDown() && CompleteDotCom(Query.Text) is { } completed:
+            case VirtualKey.Enter when CtrlDown() && CompleteDotCom(Input.Text) is { } completed:
                 _shell?.Open(completed, inNewTab: _mode == PaletteMode.NewTab);
                 Close();
                 break;
@@ -319,9 +401,9 @@ public sealed partial class CommandPalette : UserControl
                 break;
             // Tab completes the box with the highlighted result ("you" → "youtube.com"), to keep typing after it.
             case VirtualKey.Tab when Completion(Results.SelectedItem as PaletteResult) is { } completion
-                                     && !completion.Equals(Query.Text.Trim(), StringComparison.OrdinalIgnoreCase):
-                Query.Text = completion;
-                Query.SelectionStart = completion.Length;
+                                     && !completion.Equals(Input.Text.Trim(), StringComparison.OrdinalIgnoreCase):
+                Input.Text = completion;
+                Input.SelectionStart = completion.Length;
                 break;
             case VirtualKey.Tab:
                 break; // focus stays in the box

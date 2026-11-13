@@ -6,9 +6,12 @@ namespace BeautyKit;
 
 public sealed record StartPageSite(string Title, string Url, string? Icon);
 
+/// <summary>Someone who contributed to the project on GitHub: shown on the start page under the search box.</summary>
+public sealed record StartPageContributor(string Login, string Avatar, string Profile);
+
 /// <summary>
-/// The new tab page (beauty://newtab), laid out like Dia's: the ⌘ mark, a large search box, a greeting and, rising from
-/// the bottom edge, tilted cards that preview our apps. It is served by the browser itself, so it works offline.
+/// The new tab page (beauty://newtab), laid out like Dia's: the ⌘ mark, a large search box with the chosen engine's icon
+/// and a greeting. It is served by the browser itself, so it works offline.
 /// </summary>
 public static class StartPage
 {
@@ -17,12 +20,20 @@ public static class StartPage
 
     public static bool Is(string? url) => url is not null && url.StartsWith("beauty://newtab", StringComparison.OrdinalIgnoreCase);
 
+    /// <summary>
+    /// The settings tab. Chromium shows an empty page with the title and the gear icon; the app draws its own settings
+    /// over it, so it behaves like any tab (sidebar, close, session restore).
+    /// </summary>
+    public const string SettingsUrl = "beauty://settings/";
+
+    public static bool IsSettings(string? url) => url is not null && url.StartsWith("beauty://settings", StringComparison.OrdinalIgnoreCase);
+
     /// <summary>Registers beauty:// with Chromium. Must run before the engine starts.</summary>
     internal static void Register(CefSettingsBase settings) =>
         settings.RegisterScheme(new CefCustomScheme
         {
             SchemeName = Scheme,
-            DomainName = "newtab",
+            DomainName = "", // every page of ours: newtab and settings (see Factory)
             IsStandard = true,
             IsSecure = true,
             IsLocal = false,
@@ -34,14 +45,17 @@ public static class StartPage
     /// factory too or beauty://newtab fails with ERR_UNKNOWN_URL_SCHEME.
     /// </summary>
     internal static void Register(IRequestContext context) =>
-        context.RegisterSchemeHandlerFactory(Scheme, "newtab", new Factory(isPrivate: true));
+        context.RegisterSchemeHandlerFactory(Scheme, "", new Factory(isPrivate: true));
 
-    /// <param name="isPrivate">The private space's page: dark, says what is not kept, and has no app cards.</param>
+    /// <param name="isPrivate">The private space's page: dark and says what is not kept.</param>
     private sealed class Factory(bool isPrivate = false) : ISchemeHandlerFactory
     {
         public IResourceHandler Create(IBrowser browser, IFrame frame, string schemeName, IRequest request) =>
-            ResourceHandler.FromString(Html(isPrivate), Encoding.UTF8, mimeType: "text/html");
+            ResourceHandler.FromString(IsSettings(request.Url) ? SettingsHtml(isPrivate || Dark) : Html(isPrivate), Encoding.UTF8, mimeType: "text/html");
     }
+
+    /// <summary>The project's contributors (filled by the app from GitHub, cached); empty hides the section.</summary>
+    public static IReadOnlyList<StartPageContributor> Contributors { get; set; } = [];
 
     /// <summary>The app is in dark mode: new tabs open with the dark page.</summary>
     public static bool Dark { get; set; }
@@ -53,43 +67,29 @@ public static class StartPage
         template.Contains("duckduckgo", StringComparison.OrdinalIgnoreCase) ? "DuckDuckGo"
         : template.Contains("bing.", StringComparison.OrdinalIgnoreCase) ? "Bing"
         : template.Contains("ecosia", StringComparison.OrdinalIgnoreCase) ? "Ecosia"
+        : template.Contains("search.brave", StringComparison.OrdinalIgnoreCase) ? "Brave"
         : "Google";
 
     private static string Json(object value) => JsonSerializer.Serialize(value).Replace("</", "<\\/");
 
-    // The cards at the bottom, left to right: our apps for now (sponsored startups will take these places later).
-    private static readonly (string Name, string Preview, string UrlEnglish, string UrlSpanish)[] Apps =
-    [
-        ("Beauty Screenshot", "screenshot-preview.webp", "https://beauty-shell.vercel.app/en/screenshot/", "https://beauty-shell.vercel.app/screenshot/"),
-        ("Beauty Shell", "shell-preview.webp", "https://beauty-shell.vercel.app/en/shell/", "https://beauty-shell.vercel.app/shell/"),
-        ("Conext", "conext-preview.webp", "https://www.conext.lat/en", "https://www.conext.lat/"),
-    ];
+    // The search box shows the chosen engine's icon, embedded so nothing is downloaded. Other engines get the magnifier.
+    private const string Magnifier =
+        "<svg width=\"17\" height=\"17\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"><circle cx=\"11\" cy=\"11\" r=\"7\"/><path d=\"m20 20-3.5-3.5\"/></svg>";
 
-    private static readonly Dictionary<string, string> Assets = [];
-
-    /// <summary>An image embedded in BeautyKit (Assets\StartPage) as a data: address.</summary>
-    private static string Asset(string file)
+    private static string EngineIcon(string engine) => engine switch
     {
-        lock (Assets)
-        {
-            if (Assets.TryGetValue(file, out var cached)) return cached;
-            using var stream = typeof(StartPage).Assembly.GetManifestResourceStream("BeautyKit.StartPage." + file);
-            var uri = "";
-            if (stream is not null)
-            {
-                using var memory = new MemoryStream();
-                stream.CopyTo(memory);
-                uri = "data:image/webp;base64," + Convert.ToBase64String(memory.ToArray());
-            }
-            return Assets[file] = uri;
-        }
-    }
+        "Google" => "<svg width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path fill=\"#4285F4\" d=\"M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z\"/><path fill=\"#34A853\" d=\"M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z\"/><path fill=\"#FBBC05\" d=\"M5.84 14.09a6.6 6.6 0 0 1 0-4.18V7.07H2.18a11 11 0 0 0 0 9.86l3.66-2.84z\"/><path fill=\"#EA4335\" d=\"M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84C6.71 7.31 9.14 5.38 12 5.38z\"/></svg>",
+        "Bing" => "<svg width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path fill=\"#008373\" d=\"M5 2l4 1.4v13.5l5.6-3.3-2.7-1.3-1.8-4.4L19 11v4.3L9 21.1 5 18.8z\"/></svg>",
+        "DuckDuckGo" => "<svg width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><circle cx=\"12\" cy=\"12\" r=\"11\" fill=\"#DE5833\"/><ellipse cx=\"12\" cy=\"11.5\" rx=\"6.6\" ry=\"7\" fill=\"#fff\"/><circle cx=\"9.6\" cy=\"9.8\" r=\"1.3\" fill=\"#2d4f8e\"/><circle cx=\"14.4\" cy=\"9.8\" r=\"1.3\" fill=\"#2d4f8e\"/><path fill=\"#fdd20a\" d=\"M10.2 12.6h3.6l-1.8 3.2z\"/></svg>",
+        "Ecosia" => "<svg width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><circle cx=\"12\" cy=\"12\" r=\"11\" fill=\"#3C8C3A\"/><circle cx=\"12\" cy=\"9.6\" r=\"4.8\" fill=\"#fff\"/><path fill=\"#fff\" d=\"M11.2 13h1.6v6.6h-1.6z\"/></svg>",
+        "Brave" => "<svg width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path fill=\"#FB542B\" d=\"M12 1.8l5.2 1.6 3.1.1.7 1.2-1.9 2.4.7 2.3-.1 4.4-1.9 3.2L12 22.2l-5.8-5.2-1.9-3.2-.1-4.4.7-2.3L3 4.7l.7-1.2 3.1-.1z\"/><path fill=\"#fff\" d=\"M12 8.2l2.6.9v3.2L12 15.8 9.4 12.3V9.1z\"/></svg>",
+        _ => Magnifier,
+    };
 
     private static string Html(bool isPrivate)
     {
         var template = BrowserTab.SearchUrlTemplate;
         var engine = EngineName(template);
-        var apps = Apps.Where(_ => !isPrivate).Select(a => new { name = a.Name, image = Asset(a.Preview), url = L.T(a.UrlEnglish, a.UrlSpanish) }).ToArray();
         return Page
             .Replace("__LANG__", L.T("en", "es"))
             .Replace("__CLASS__", isPrivate ? "private" : Dark ? "dark" : "")
@@ -99,15 +99,33 @@ public static class StartPage
                 "No se guardan el historial, las cookies, los datos de los sitios ni lo que escribís en formularios: se borran al cerrar la última pestaña privada. Las descargas sí quedan en tu PC."))
             .Replace("__TITLE__", isPrivate ? L.T("Private tab", "Pestaña privada") : L.T("New tab", "Nueva pestaña"))
             .Replace("__PLACEHOLDER__", L.T($"Search {engine} or type an address", $"Buscá en {engine} o escribí una dirección"))
-            .Replace("__ENTER__", L.T("to search with", "para buscar con"))
             .Replace("__SEARCH_LABEL__", L.T("Search", "Buscar"))
             .Replace("__GREETINGS__", Json(L.Spanish
                 ? new[] { "Buenos días.", "Buenas tardes.", "Buenas noches.", "¿Qué buscamos hoy?" }
                 : new[] { "Good morning.", "Good afternoon.", "Good evening.", "What are we looking for today?" }))
-            .Replace("__ENGINE__", engine)
-            .Replace("__SEARCH__", Json(template))
-            .Replace("__APPS__", Json(apps));
+            .Replace("__ENGINE_ICON__", EngineIcon(engine))
+            .Replace("__CONTRIBUTORS_TITLE__", L.T("Contributors", "Contribuidores"))
+            .Replace("__CONTRIBUTORS__", Json(isPrivate ? Array.Empty<StartPageContributor>() : Contributors))
+            .Replace("__SEARCH__", Json(template));
     }
+
+    private static string SettingsHtml(bool dark) =>
+        $$"""
+        <!doctype html>
+        <html lang="{{L.T("en", "es")}}">
+        <head>
+        <meta charset="utf-8">
+        <title>{{L.T("Settings", "Ajustes")}}</title>
+        <link rel="icon" href="data:image/svg+xml,{{Uri.EscapeDataString(GearIcon)}}">
+        <style>html, body { height: 100%; margin: 0; background: {{(dark ? "#202026" : "#f3f3f5")}}; }</style>
+        </head>
+        <body></body>
+        </html>
+        """;
+
+    // Fluent's gear (Settings), drawn as a path so it renders the same everywhere.
+    private const string GearIcon =
+        "<svg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 24 24' fill='none' stroke='#6b6b76' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='12' r='3'/><path d='M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z'/></svg>";
 
     private const string Page = """
         <!doctype html>
@@ -136,47 +154,24 @@ public static class StartPage
           .mark path { filter: drop-shadow(0 4px 6px rgba(80, 56, 200, .25)); }
 
           form {
-            width: 100%; background: #fff; border-radius: 12px; padding: 18px 14px 12px 20px;
+            width: 100%; background: #fff; border-radius: 12px; padding: 14px 14px 14px 20px;
             border: 1px solid rgba(0, 0, 0, .06);
             box-shadow: 0 1px 2px rgba(0, 0, 0, .04), 0 10px 32px rgba(20, 20, 30, .06);
             transition: box-shadow .25s, border-color .25s;
           }
           form:focus-within { border-color: rgba(0, 0, 0, .1); box-shadow: 0 1px 2px rgba(0, 0, 0, .05), 0 14px 40px rgba(20, 20, 30, .09); }
           .row { display: flex; align-items: center; gap: 10px; }
-          .row svg { flex: none; color: var(--soft); }
+          .row > svg { flex: none; color: var(--soft); }
           input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; font: inherit; font-size: 16.5px; color: var(--text); }
           input::placeholder { color: var(--soft); }
-          .foot { display: flex; align-items: center; justify-content: space-between; margin-top: 34px; font-size: 14px; color: var(--soft); }
-          .foot b { color: #6e6e76; font-weight: 600; }
-          kbd { font: inherit; font-size: 12px; padding: 1px 6px; border-radius: 5px; background: #f2f2f4; color: #6e6e76; border: 1px solid rgba(0,0,0,.05); }
           button {
-            width: 32px; height: 32px; border: 1px solid rgba(0, 0, 0, .06); border-radius: 8px; background: #f2f2f4; color: #a3a3ab;
+            flex: none; width: 32px; height: 32px; border: 1px solid rgba(0, 0, 0, .06); border-radius: 8px; background: #f2f2f4; color: #a3a3ab;
             display: grid; place-items: center; cursor: pointer; transition: background .15s, color .15s, transform .15s;
           }
           button.on { background: var(--text); color: #fff; border-color: transparent; }
           button:active { transform: scale(.94); }
 
           h1 { margin: 44px 0 0; font-size: 29px; line-height: 1.3; font-weight: 600; letter-spacing: -.015em; text-align: center; }
-
-          /* The app cards rise from the bottom edge, tilted, and lift under the pointer. */
-          .showcase { position: fixed; left: 50%; bottom: 0; width: min(720px, 94vw); height: 200px; transform: translateX(-50%); pointer-events: none; }
-          .card {
-            position: absolute; display: block; padding: 5px; background: #fff; border-radius: 13px; pointer-events: auto;
-            box-shadow: 0 0 0 1px rgba(0, 0, 0, .05), 0 10px 28px rgba(20, 20, 35, .11);
-            transition: transform .45s cubic-bezier(.2, .8, .2, 1), box-shadow .45s;
-            animation: rise .9s cubic-bezier(.2, .8, .2, 1) both;
-          }
-          .card img { display: block; width: 100%; border-radius: 9px; }
-          .card:hover { box-shadow: 0 0 0 1px rgba(0, 0, 0, .05), 0 16px 36px rgba(20, 20, 35, .16); }
-          .c0 { left: 5%; width: 30%; top: 92px; transform: rotate(-7deg); animation-delay: .2s; }
-          .c0:hover { transform: translateY(-10px) rotate(-7deg); }
-          .c1 { left: 34%; width: 32%; top: 62px; transform: rotate(-2deg); z-index: 2; padding: 10px 6px 6px; border-radius: 15px; animation-delay: .1s; }
-          .c1::before { content: ""; position: absolute; top: 3px; left: 50%; width: 4px; height: 4px; margin-left: -2px; border-radius: 50%; background: #1d1d20; }
-          .c1:hover { transform: translateY(-10px) rotate(-2deg); }
-          .c2 { right: 5%; width: 30%; top: 86px; transform: rotate(8deg); animation-delay: .3s; }
-          .c2:hover { transform: translateY(-10px) rotate(8deg); }
-          @keyframes rise { from { opacity: 0; translate: 0 90px; } to { opacity: 1; translate: 0 0; } }
-          @media (max-height: 660px) { .showcase { display: none; } main { margin-top: 0; } }
 
           .in { animation: in .55s cubic-bezier(.2, .8, .2, 1) both; }
           @keyframes in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
@@ -190,16 +185,28 @@ public static class StartPage
             background: radial-gradient(1400px 900px at 50% 0%, #2a2a31 0%, #202026 55%, #1a1a1f 100%);
           }
           :is(.private, .dark)::after { opacity: 1; }
-          .showcase { z-index: 1; }
-          body, form, input, kbd, button, .card { transition: color .3s, background-color .3s, border-color .3s, box-shadow .3s; transition-timing-function: cubic-bezier(.4, 0, .2, 1); }
+          body, form, input, button { transition: color .3s, background-color .3s, border-color .3s, box-shadow .3s; transition-timing-function: cubic-bezier(.4, 0, .2, 1); }
           :is(.private, .dark) body::before { opacity: .05; }
           :is(.private, .dark) form { background: #2c2c33; border-color: rgba(255, 255, 255, .08); box-shadow: 0 10px 32px rgba(0, 0, 0, .35); }
           :is(.private, .dark) form:focus-within { border-color: rgba(255, 255, 255, .16); box-shadow: 0 14px 40px rgba(0, 0, 0, .45); }
-          :is(.private, .dark) :is(.foot b, kbd) { color: #b4b4be; }
-          :is(.private, .dark) :is(kbd, button) { background: #38383f; border-color: rgba(255, 255, 255, .06); color: #8e8e99; }
+          :is(.private, .dark) button { background: #38383f; border-color: rgba(255, 255, 255, .06); color: #8e8e99; }
           :is(.private, .dark) button.on { background: #ececf1; color: #1d1d20; }
-          .dark .card { background: #2c2c33; box-shadow: 0 0 0 1px rgba(255, 255, 255, .06), 0 10px 28px rgba(0, 0, 0, .4); }
-          .dark .c1::before { background: #ececf1; }
+          /* Contributors: round photos under the greeting; the GitHub name shows on hover. */
+          .people { display: none; margin-top: 40px; flex-direction: column; align-items: center; gap: 12px; }
+          .people.on { display: flex; }
+          .people h2 { margin: 0; font-size: 12px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--soft); }
+          .faces { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; max-width: 520px; }
+          .face { position: relative; display: block; width: 38px; height: 38px; border-radius: 50%; transition: transform .2s cubic-bezier(.2, .8, .2, 1); }
+          .face img { width: 100%; height: 100%; border-radius: 50%; display: block; border: 2px solid #fff; box-shadow: 0 2px 8px rgba(20, 20, 30, .12); background: #e6e6ea; }
+          .face:hover { transform: translateY(-3px) scale(1.06); }
+          .face::after {
+            content: attr(data-name); position: absolute; left: 50%; top: calc(100% + 8px); transform: translate(-50%, -4px);
+            padding: 5px 9px; border-radius: 7px; font-size: 12.5px; font-weight: 500; white-space: nowrap;
+            background: var(--text); color: #fff; opacity: 0; pointer-events: none; transition: opacity .15s, transform .15s;
+          }
+          .face:hover::after { opacity: 1; transform: translate(-50%, 0); }
+          :is(.private, .dark) .face img { border-color: #2c2c33; box-shadow: 0 2px 8px rgba(0, 0, 0, .4); background: #38383f; }
+          :is(.private, .dark) .face::after { color: #1d1d20; }
           .private .note { display: block; max-width: 470px; margin: 12px 0 0; font-size: 14.5px; line-height: 1.55; color: var(--soft); text-align: center; }
         </style>
         </head>
@@ -211,11 +218,8 @@ public static class StartPage
           </svg>
           <form class="in" style="animation-delay:.05s" autocomplete="off">
             <div class="row">
-              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+              __ENGINE_ICON__
               <input id="q" placeholder="__PLACEHOLDER__" spellcheck="false" autofocus>
-            </div>
-            <div class="foot">
-              <div><kbd>Enter</kbd> __ENTER__ <b>__ENGINE__</b></div>
               <button id="go" type="submit" aria-label="__SEARCH_LABEL__">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
               </button>
@@ -223,17 +227,36 @@ public static class StartPage
           </form>
           <h1 class="in" style="animation-delay:.1s"></h1>
           <p class="note in" style="animation-delay:.15s">__PRIVATE_NOTE__</p>
+          <section class="people in" style="animation-delay:.15s">
+            <h2>__CONTRIBUTORS_TITLE__</h2>
+            <div class="faces"></div>
+          </section>
         </main>
-        <div class="showcase"></div>
         <script>
           const SEARCH = __SEARCH__;
-          const APPS = __APPS__;
           const TEXT = __GREETINGS__;
 
           const hour = new Date().getHours();
           const hello = hour >= 5 && hour < 12 ? TEXT[0] : hour >= 12 && hour < 20 ? TEXT[1] : TEXT[2];
           document.querySelector('h1').textContent = document.documentElement.classList.contains('private')
             ? '__PRIVATE_TITLE__' : hello + ' ' + TEXT[3];
+
+          const PEOPLE = __CONTRIBUTORS__;
+          const faces = document.querySelector('.faces');
+          for (const p of PEOPLE) {
+            const a = document.createElement('a');
+            a.className = 'face';
+            a.href = p.Profile;
+            a.dataset.name = p.Login;
+            a.setAttribute('aria-label', p.Login);
+            const img = document.createElement('img');
+            img.src = p.Avatar + (p.Avatar.includes('?') ? '&' : '?') + 's=96';
+            img.alt = '';
+            img.loading = 'lazy';
+            a.appendChild(img);
+            faces.appendChild(a);
+          }
+          document.querySelector('.people').classList.toggle('on', PEOPLE.length > 0);
 
           const q = document.getElementById('q');
           const go = document.getElementById('go');
@@ -252,19 +275,6 @@ public static class StartPage
             location.href = looksLikeAddress(v)
               ? (/^[a-z][a-z0-9+.-]*:\/\//i.test(v) ? v : 'https://' + v)
               : SEARCH.replace('{0}', encodeURIComponent(v));
-          });
-
-          const showcase = document.querySelector('.showcase');
-          APPS.forEach((app, i) => {
-            const a = document.createElement('a');
-            a.className = 'card c' + i;
-            a.href = app.url;
-            a.title = app.name;
-            const img = document.createElement('img');
-            img.src = app.image;
-            img.alt = app.name;
-            a.appendChild(img);
-            showcase.appendChild(a);
           });
         </script>
         </body>

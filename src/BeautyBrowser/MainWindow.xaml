@@ -77,6 +77,9 @@
 
             <kit:BrowserView x:Name="WebView" CornerRadius="{StaticResource BeautyContentCornerRadius}" />
 
+            <!-- The settings tab: drawn over its empty page while it is the current tab (MainWindow.Settings). -->
+            <controls:SettingsPanel x:Name="SettingsPage" Visibility="Collapsed" />
+
             <!-- The zoom, for a moment, whenever it changes (Ctrl+wheel, Ctrl+plus/minus), with a button to reset it. -->
             <Border
                 x:Name="ZoomToast"
@@ -104,6 +107,39 @@
                         Click="ZoomToastReset_Click"
                         FontSize="12" />
                 </StackPanel>
+            </Border>
+
+            <!-- A link opened in the background (middle click, Ctrl+click): a tap on it goes to that tab. -->
+            <Border
+                x:Name="NewTabToast"
+                Margin="0,14,0,0"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Top"
+                Background="#E6202020"
+                CornerRadius="16"
+                IsHitTestVisible="False"
+                Opacity="0"
+                PointerEntered="NewTabToast_PointerEntered"
+                PointerExited="NewTabToast_PointerExited">
+                <Border.OpacityTransition>
+                    <ScalarTransition Duration="0:0:0.15" />
+                </Border.OpacityTransition>
+                <Button
+                    x:Name="NewTabToastButton"
+                    Padding="14,7"
+                    Background="Transparent"
+                    AutomationProperties.AutomationId="NewTabToast"
+                    BorderThickness="0"
+                    Click="NewTabToast_Click"
+                    CornerRadius="16">
+                    <StackPanel Orientation="Horizontal" Spacing="10">
+                        <FontIcon FontSize="14" Foreground="White" Glyph="&#xE8A7;" />
+                        <StackPanel MaxWidth="300">
+                            <TextBlock x:Name="NewTabToastText" FontSize="13" Foreground="White" TextTrimming="CharacterEllipsis" />
+                            <TextBlock x:Name="NewTabToastTitle" FontSize="12" Foreground="#B3FFFFFF" TextTrimming="CharacterEllipsis" />
+                        </StackPanel>
+                    </StackPanel>
+                </Button>
             </Border>
 
             <local:ResizeHandle
@@ -549,6 +585,12 @@
             Height="8"
             VerticalAlignment="Top"
             Background="Transparent" />
+
+        <!-- Tabs on top (Settings → Sidebar and tabs): the strip and toolbar above the page. -->
+        <controls:TopBar
+            x:Name="TopBar"
+            VerticalAlignment="Top"
+            Visibility="Collapsed" />
 
         <!-- The sidebar sits on the window edge, sharing Windows' corners; it shows when the mouse reaches the left. -->
         <controls:Sidebar

@@ -103,9 +103,8 @@
                     <Button
                         x:Name="SettingsTab"
                         AutomationProperties.Name="{local:T En='Settings', Es='Ajustes'}"
-                        Click="Rail_Click"
+                        Click="Settings_Click"
                         Style="{StaticResource BeautyRailButton}"
-                        Tag="Settings"
                         ToolTipService.ToolTip="{local:T En='Settings', Es='Ajustes'}">
                         <StackPanel Spacing="7">
                             <FontIcon FontSize="22" Glyph="&#xE713;" />
@@ -141,7 +140,6 @@
             <Grid x:Name="DownloadsHost" Visibility="Collapsed" />
             <controls:SpacesPanel x:Name="SpacesView" Visibility="Collapsed" />
             <controls:HistoryPanel x:Name="HistoryView" />
-            <controls:SettingsPanel x:Name="SettingsView" Visibility="Collapsed" />
             <controls:ExtensionsPanel x:Name="ExtensionsView" Visibility="Collapsed" />
         </Grid>
     </Grid>

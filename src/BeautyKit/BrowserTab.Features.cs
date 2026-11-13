@@ -69,9 +69,17 @@ public sealed partial class BrowserTab
     }
 
 
-    internal void OpenInNewTab(string url)
+    internal void OpenInNewTab(string url, bool background = false)
     {
-        if (IsPopupUrlAllowed(url)) NewTabRequested?.Invoke(this, url);
+        if (!IsPopupUrlAllowed(url)) return;
+        if (background) OpenInBackground(url);
+        else NewTabRequested?.Invoke(this, url);
+    }
+
+    private void OpenInBackground(string url)
+    {
+        if (BackgroundTabRequested is { } handler) handler(this, url);
+        else NewTabRequested?.Invoke(this, url);
     }
 
     internal void ViewSource() => NewTabRequested?.Invoke(this, "view-source:" + Url);

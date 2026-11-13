@@ -101,9 +101,27 @@ public sealed partial class Sidebar : UserControl
         }
     }
 
+    /// <summary>Room left at the top on the right edge, where Windows draws minimize, maximize and close.</summary>
+    private const double CaptionInset = 32;
+
+    /// <summary>
+    /// On the right edge the panel is mirrored: the glass border goes on its left side and the content starts below the
+    /// caption buttons (the glass still fills the whole height, sharing the window's corners).
+    /// </summary>
+    public bool IsOnRight
+    {
+        set
+        {
+            Panel.BorderThickness = value ? new Thickness(1, 0, 0, 0) : new Thickness(0, 0, 1, 0);
+            Panel.Padding = value ? new Thickness(8, 10 + CaptionInset, 10, 8) : new Thickness(10, 10, 8, 8);
+            PanelNoise.Margin = new Thickness(-Panel.Padding.Left, -Panel.Padding.Top, -Panel.Padding.Right, -Panel.Padding.Bottom);
+        }
+    }
+
     public void Attach(BrowserShell shell)
     {
         _shell = shell;
+        SitePanel.Attach(shell);
 
         shell.Favorites.Items.CollectionChanged += (_, _) => BuildFavorites();
         shell.Favorites.IconChanged += (_, _) =>
@@ -209,8 +227,9 @@ public sealed partial class Sidebar : UserControl
 
 
     /// <summary>"https://www.google.com/search?q=x" → "google.com".</summary>
-    private static string ShortUrl(string? url) =>
+    internal static string ShortUrl(string? url) =>
         StartPage.Is(url) ? L.T("New tab", "Nueva pestaña")
+        : StartPage.IsSettings(url) ? L.T("Settings", "Ajustes")
         : Uri.TryCreate(url, UriKind.Absolute, out var uri) && uri.Scheme is "http" or "https"
             ? HostName.WithoutWww(uri.Host)
             : url ?? "";
@@ -249,45 +268,13 @@ public sealed partial class Sidebar : UserControl
     }
 
 
-    private void SiteFlyout_Opening(object sender, object e)
-    {
-        RefreshZoom();
-        RefreshSiteBlocker();
-    }
+    private void SiteFlyout_Opening(object sender, object e) => SitePanel.Refresh();
 
 
-    private void RefreshSiteBlocker()
-    {
-        var tab = _shell?.CurrentTab;
-        var site = tab is null ? "" : BeautyKit.Blocking.ContentBlocker.SiteOf(tab.Url);
-        var enabled = BeautyKit.Blocking.ContentBlocker.Enabled;
-        var on = enabled && site.Length > 0 && !BeautyKit.Blocking.ContentBlocker.IsSiteAllowed(tab!.Url);
-
-        SiteBlockerRow.IsEnabled = enabled && site.Length > 0;
-        SiteBlockerHint.Text = !enabled ? L.T("Off on every site (Extensions)", "Apagado en todos los sitios (Extensiones)")
-            : site.Length == 0 ? L.T("Not used on this page", "No se usa en esta página")
-            : on ? L.T($"{tab!.BlockedCount} blocked on this page", $"{tab!.BlockedCount} bloqueados en esta página")
-            : L.T($"Off on {site}", $"Apagado en {site}");
-        SiteBlockerState.Text = on ? L.T("On", "Activado") : L.T("Off", "Apagado");
-        SiteBlockerState.Foreground = (Brush)Application.Current.Resources[on ? "BeautyAccentBrush" : "BeautyTextSecondaryBrush"];
-        SiteBlockerIcon.Foreground = SiteBlockerState.Foreground;
-    }
-
-    private void SiteBlocker_Click(object sender, RoutedEventArgs e)
-    {
-        if (_shell?.CurrentTab is not { } tab) return;
-        var allowed = BeautyKit.Blocking.ContentBlocker.IsSiteAllowed(tab.Url);
-        BeautyKit.Blocking.ContentBlocker.SetSiteAllowed(tab.Url, !allowed);
-        RefreshSiteBlocker();
-        tab.Reload(); // the change shows right away
-    }
-    private void ZoomIn_Click(object sender, RoutedEventArgs e) { _shell?.CurrentTab?.ZoomIn(); RefreshZoom(); }
-    private void ZoomOut_Click(object sender, RoutedEventArgs e) { _shell?.CurrentTab?.ZoomOut(); RefreshZoom(); }
     private void ZoomReset_Click(object sender, RoutedEventArgs e) { _shell?.CurrentTab?.ResetZoom(); RefreshZoom(); }
     private void RefreshZoom()
     {
         var percent = _shell?.CurrentTab?.ZoomPercent ?? BrowserTab.DefaultZoomPercent;
-        ZoomText.Text = $"{percent} %";
         ZoomBadgeText.Text = $"{percent} %";
         ZoomBadge.Visibility = percent == BrowserTab.DefaultZoomPercent ? Visibility.Collapsed : Visibility.Visible;
     }

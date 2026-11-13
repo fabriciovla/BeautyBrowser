@@ -67,6 +67,12 @@ public sealed partial class MainWindow : Window
 
     private bool _sidebarShown;
     private bool _sidebarDocked;
+
+    // Below this width (DIP) a pinned sidebar would leave too little page: it floats instead, and goes back to pinned
+    // when the window grows. The saved preference is not touched.
+    private const double DockMinWidth = 900;
+    private bool _narrow;
+    private bool DockWanted => _shell.Settings.SidebarDocked && !_narrow && !TabsOnTop;
     private bool _libraryShown;
     private bool _captionShown;
     private bool _fullscreen;
@@ -98,6 +104,7 @@ public sealed partial class MainWindow : Window
         SetupOverlays();
 
         _shell = new BrowserShell(_engine, DispatcherQueue, database);
+        _ = Services.ContributorsService.LoadAsync(); // the start page's contributors, from GitHub (cached a day)
         _updates = _shell.Updates;
         Title = "Beauty Browser";
 
@@ -106,7 +113,7 @@ public sealed partial class MainWindow : Window
         Preview.Attach(_shell);
         Preview.ActionInvoked += (_, _) => HidePreview();
         Sidebar.PaletteRequested += (_, mode) => OpenPalette(mode);
-        Sidebar.DockToggled += (_, _) => _shell.Settings.SidebarDocked = !_sidebarDocked; // saved; SettingsChanged applies it
+        Sidebar.DockToggled += (_, _) => _shell.Settings.SidebarDocked = !_shell.Settings.SidebarDocked; // saved; SettingsChanged applies it
         Sidebar.LibraryRequested += (_, section) => OpenLibrary(section);
         Sidebar.NewSpaceRequested += (_, _) =>
         {
@@ -118,6 +125,7 @@ public sealed partial class MainWindow : Window
         SetupPermissions();
         SetupPasswords();
         SetupZoomToast();
+        SetupNewTabToast();
         SetupNotices();
         SetupUpdates();
         // Links other apps send while BeautyBrowser is open: a new tab, with the window brought to the front.
@@ -135,7 +143,12 @@ public sealed partial class MainWindow : Window
         Activated += (_, e) => { if (e.WindowActivationState == WindowActivationState.Deactivated && Switcher.IsOpen) CancelSwitcher(); };
         Library.Attach(_shell);
         Library.CloseRequested += (_, _) => CloseLibrary(returnToSidebar: true);
-        Palette.Closed += (_, _) => WebView.Focus(FocusState.Programmatic);
+        InitSettingsTab();
+        Palette.Closed += (_, _) =>
+        {
+            // With tabs on top the cursor may already be back in the address bar (Ctrl+T while the list was closing).
+            if (!(TabsOnTop && TopBar.AddressHasFocus)) WebView.Focus(FocusState.Programmatic);
+        };
         DevToolsSplitter.Dragged += (_, dx) => ResizeDevTools(_devToolsWidth - dx);
 
         _shell.CurrentTabChanged += (_, _) =>
@@ -162,6 +175,7 @@ public sealed partial class MainWindow : Window
         // when the window leaves full screen.
         ApplyMinimumSize();
         AppWindow.Changed += (_, change) => { if (change.DidPresenterChange) ApplyMinimumSize(); };
+        Root.SizeChanged += (_, e) => UpdateNarrow(e.NewSize.Width);
 
         // Drag the window from the top of the page (a strip as tall as YouTube's bar) without opening the caption
         // buttons, only from empty spots so links, buttons and text keep working.
@@ -204,6 +218,7 @@ public sealed partial class MainWindow : Window
         _previewHideTimer.IsRepeating = false;
         _previewHideTimer.Interval = TimeSpan.FromMilliseconds(PreviewHideMs);
         _previewHideTimer.Tick += (_, _) => { if (!_previewHovered) HidePreview(); };
+        InitPosition(); // after the timers it uses
 
         // Glass texture and sidebar options from settings, applied live when they change.
         ThemeTint.Background = new SolidColorBrush(AppTheme.WindowTint);
@@ -228,7 +243,9 @@ public sealed partial class MainWindow : Window
         _shell.Settings.SettingsChanged += (_, _) =>
         {
             ReadShellSettings();
-            if (_shell.Settings.SidebarDocked != _sidebarDocked) SetDocked(_shell.Settings.SidebarDocked);
+            RefreshPosition();
+            Sidebar.IsDocked = _shell.Settings.SidebarDocked; // the button shows the preference, even when the window is too narrow to pin
+            if (DockWanted != _sidebarDocked) SetDocked(DockWanted);
             if (!_tabPreviews) HidePreview();
             if (!_showLoadBar) LoadBar.Opacity = 0;
         };
@@ -244,7 +261,9 @@ public sealed partial class MainWindow : Window
             else if (!restored && _shell.CurrentTab is null) _shell.NewTab();
             // First run (or --welcome): onboarding on top of everything.
             if (!_shell.Settings.OnboardingDone || Environment.GetCommandLineArgs().Contains("--welcome")) ShowOnboarding();
-            if (_shell.Settings.SidebarDocked) SetDocked(true, animate: false);
+            _narrow = Root.ActualWidth is > 0 and < DockMinWidth;
+            Sidebar.IsDocked = _shell.Settings.SidebarDocked;
+            if (DockWanted) SetDocked(true, animate: false);
             UpdateMaximized();
             ApplyLayout();
         };
@@ -320,7 +339,7 @@ public sealed partial class MainWindow : Window
             IsHitTestVisible = false,
             HorizontalAlignment = HorizontalAlignment.Left,
             VerticalAlignment = VerticalAlignment.Top,
-            Clip = new RectangleGeometry { Rect = new Rect(0, 0, edge, Root.ActualHeight) },
+            Clip = new RectangleGeometry { Rect = PanelsRect(edge) },
         };
         _themeStill = image;
         Root.Children.Add(image);
@@ -342,6 +361,15 @@ public sealed partial class MainWindow : Window
             Root.Children.Remove(image);
             if (_themeStill == image) _themeStill = null;
         });
+    }
+
+    /// <summary>The part of the window with panels (not the page) for the theme crossfade still.</summary>
+    private Rect PanelsRect(double leftEdge)
+    {
+        if (TabsOnTop) return new Rect(0, 0, Root.ActualWidth, PageTop);
+        if (!SidebarRight) return new Rect(0, 0, leftEdge, Root.ActualHeight);
+        var pageRight = WebView.TransformToVisual(Root).TransformPoint(new Point(WebView.ActualWidth, 0)).X;
+        return new Rect(pageRight, 0, Math.Max(0, Root.ActualWidth - pageRight), Root.ActualHeight);
     }
 
     private static readonly Windows.UI.ViewManagement.UISettings WindowsColors = new();
@@ -377,7 +405,7 @@ public sealed partial class MainWindow : Window
         var titleBar = AppWindow.TitleBar;
         titleBar.ButtonBackgroundColor = Colors.Transparent;
         titleBar.ButtonInactiveBackgroundColor = Colors.Transparent;
-        titleBar.PreferredHeightOption = _captionShown ? TitleBarHeightOption.Standard : TitleBarHeightOption.Collapsed;
+        titleBar.PreferredHeightOption = _captionShown || TabsOnTop ? TitleBarHeightOption.Standard : TitleBarHeightOption.Collapsed;
     }
 
     /// <summary>
@@ -386,7 +414,7 @@ public sealed partial class MainWindow : Window
     /// </summary>
     private void SetupOverlays()
     {
-        Sidebar.Translation = new Vector3(SidebarHiddenOffset, 0, ShadowDepth);
+        Sidebar.Translation = new Vector3(SidebarHiddenX, 0, ShadowDepth);
         Sidebar.Shadow = new ThemeShadow();
         Sidebar.OpacityTransition = _sidebarFade;
         Sidebar.TranslationTransition = new Vector3Transition { Duration = SidebarSlide };
@@ -461,10 +489,10 @@ public sealed partial class MainWindow : Window
     private bool _maximized;
 
     /// <summary>The glass frame around the page; none while maximized.</summary>
-    private double Edge => _maximized ? 0 : Frame;
+    private double Edge => _maximized || TabsOnTop ? 0 : Frame; // tabs on top: no glass, the page reaches the edges
 
     /// <summary>Where the page starts: at the frame or after the pinned sidebar.</summary>
-    private double TargetPageLeft() => _sidebarDocked ? SidebarWidth + Edge : Edge;
+    private double TargetPageLeft() => _sidebarDocked && !SidebarRight ? SidebarWidth + Edge : Edge;
 
     /// <summary>
     /// Maximized, the page reaches the screen edges with square corners, like a full screen app. Restored, the glass
@@ -477,7 +505,7 @@ public sealed partial class MainWindow : Window
         _maximized = maximized;
         ApplyPageCorners();
         ApplyLayout();
-        if (_captionShown) AnimatePageTopClip(StripHeight - Edge);
+        if (_captionShown && !TabsOnTop) AnimatePageTopClip(StripHeight - Edge);
         UpdateDragZone();
         LayoutLoadBar();
     }
@@ -485,7 +513,7 @@ public sealed partial class MainWindow : Window
     /// <summary>Page corners: rounded with the frame, square when maximized or in full screen.</summary>
     private void ApplyPageCorners()
     {
-        var square = _fullscreen || _maximized;
+        var square = _fullscreen || _maximized || TabsOnTop;
         var radius = new Vector2(square ? 0 : (float)ContentRadius);
         _pageClip.TopLeftRadius = _pageClip.TopRightRadius = _pageClip.BottomLeftRadius = _pageClip.BottomRightRadius = radius;
         WebView.CornerRadius = square ? new CornerRadius(0) : (CornerRadius)Application.Current.Resources["BeautyContentCornerRadius"];
@@ -599,7 +627,7 @@ public sealed partial class MainWindow : Window
 
     private void SetPageLeft(double left)
     {
-        var margin = new Thickness(left, Edge, Edge, Edge);
+        var margin = new Thickness(left, PageTop, PageRight, Edge);
         if (Math.Abs(left - _pageLeft) < 0.5 && PageArea.Margin == margin) return;
         _pageLeft = left;
         PageArea.Margin = margin;
@@ -682,7 +710,7 @@ public sealed partial class MainWindow : Window
         var track = Math.Max(0, PageArea.ActualWidth * LoadBarTrack);
         var width = track * _loadValue;
         // On the top frame; when maximized (no frame), over the top edge of the page.
-        LoadBar.Margin = new Thickness(_pageLeft + _pageShift + (PageArea.ActualWidth - width) / 2, _maximized ? 0 : 2.5, 0, 0);
+        LoadBar.Margin = new Thickness(_pageLeft + _pageShift + (PageArea.ActualWidth - width) / 2, TabsOnTop ? PageTop : _maximized ? 0 : 2.5, 0, 0);
         LoadBar.Width = width;
     }
 
@@ -705,7 +733,7 @@ public sealed partial class MainWindow : Window
     /// </summary>
     private void SetCaptionShown(bool shown)
     {
-        if (_captionShown == shown) return;
+        if (_captionShown == shown || TabsOnTop) return;
         _captionShown = shown;
         _captionHideAt = 0;
         AppWindow.TitleBar.PreferredHeightOption = shown ? TitleBarHeightOption.Standard : TitleBarHeightOption.Collapsed;
@@ -719,10 +747,13 @@ public sealed partial class MainWindow : Window
     /// </summary>
     private void UpdateDragZone()
     {
+        if (TabsOnTop) { PlaceTopDragZone(); return; }
+        AppTitleBar.HorizontalAlignment = HorizontalAlignment.Stretch;
+        AppTitleBar.Width = double.NaN;
         // Maximized there is no top frame, so the strip does not cover the page (it drags from the page, PageDragZone).
         AppTitleBar.Height = _captionShown ? StripHeight : _maximized ? 0 : DragZoneHeight;
         var left = _libraryShown ? LibraryListEdge
-            : _sidebarShown || _sidebarDocked ? SidebarWidth
+            : (_sidebarShown || _sidebarDocked) && !SidebarRight ? SidebarWidth
             : 0;
         AppTitleBar.Margin = new Thickness(left, 0, 0, 0);
     }
@@ -783,7 +814,7 @@ public sealed partial class MainWindow : Window
         // It appears whole at once on open (no fade, so it never "arrives late") and fades on close.
         Sidebar.OpacityTransition = shown ? null : _sidebarFade;
         Sidebar.Opacity = shown ? 1 : 0;
-        Sidebar.Translation = new Vector3(shown ? 0 : SidebarHiddenOffset, 0, SidebarDepth);
+        Sidebar.Translation = new Vector3(shown ? 0 : SidebarHiddenX, 0, SidebarDepth);
         UpdateDragZone();
     }
 
@@ -791,11 +822,19 @@ public sealed partial class MainWindow : Window
     /// Pinned, the sidebar lands (its shadow goes away) and the page shifts right once. Unpinned it floats again and
     /// the page grows underneath.
     /// </summary>
+    private void UpdateNarrow(double width)
+    {
+        if (_fullscreen) return; // the screen is wide; leaving full screen reports the real size again
+        var narrow = width < DockMinWidth;
+        if (narrow == _narrow) return;
+        _narrow = narrow;
+        if (Root.IsLoaded && DockWanted != _sidebarDocked) SetDocked(DockWanted);
+    }
+
     private void SetDocked(bool docked, bool animate = true)
     {
         if (_sidebarDocked == docked && _sidebarShown) return;
         _sidebarDocked = docked;
-        Sidebar.IsDocked = docked;
         SetSidebarShown(true);
         Sidebar.Translation = new Vector3(0, 0, SidebarDepth);
         _sidebarArmed = true;
@@ -810,6 +849,7 @@ public sealed partial class MainWindow : Window
         Point Point,          // negative when the mouse is outside, left or above
         bool OverWindow,      // over this window
         bool AtScreenLeft,    // touching the monitor's left edge (maximized window)
+        bool AtScreenRight,   // touching the monitor's right edge
         bool AtScreenTop);    // touching the monitor's top edge
 
     private CursorState _previous;
@@ -844,9 +884,9 @@ public sealed partial class MainWindow : Window
     private bool ReachedLeftEdge(CursorState now, CursorState before)
     {
         if (!before.OverWindow) return false;
-        if (now.AtScreenLeft && !before.AtScreenLeft) return true; // maximized: the monitor edge
+        if (SidebarRight ? now.AtScreenRight && !before.AtScreenRight : now.AtScreenLeft && !before.AtScreenLeft) return true; // maximized: the monitor edge
 
-        var (a, b) = (before.Point, now.Point);
+        var (a, b) = (FromSidebarEdge(before.Point), FromSidebarEdge(now.Point));
         if (!(a.X >= EdgeMargin && b.X < EdgeMargin)) return false;
         var yAtLine = a.Y + (b.Y - a.Y) * ((a.X - EdgeMargin) / (a.X - b.X));
         return yAtLine >= 0 && yAtLine <= Root.ActualHeight;
@@ -866,7 +906,7 @@ public sealed partial class MainWindow : Window
 
     private void UpdateSidebarHover(CursorState cursor, CursorState previous, bool idle, long now)
     {
-        if (_sidebarDocked || _libraryShown || _onboardingOpen) return;
+        if (_sidebarDocked || _libraryShown || _onboardingOpen || TabsOnTop) return;
 
         if (!_sidebarShown)
         {
@@ -876,7 +916,7 @@ public sealed partial class MainWindow : Window
 
         // Open, it stays while the mouse is outside to the left or over the sidebar. It goes away when the mouse returns
         // to the page (past the sidebar), goes far up or down, or rests.
-        var p = cursor.Point;
+        var p = FromSidebarEdge(cursor.Point);
         var height = Root.ActualHeight;
         var away = p.X > SidebarWidth + 24 || p.Y < -OutsideZone || p.Y > height + OutsideZone;
         var overSidebar = cursor.OverWindow && p.X >= 0 && p.X <= SidebarWidth;
@@ -902,6 +942,7 @@ public sealed partial class MainWindow : Window
 
     private void UpdateCaptionHover(CursorState cursor, CursorState previous, bool idle, long now)
     {
+        if (TabsOnTop) return;
         if (!_captionShown)
         {
             if (_captionArmed && ReachedTopEdge(cursor, previous)) SetCaptionShown(true);
@@ -949,6 +990,7 @@ public sealed partial class MainWindow : Window
         cursor = new CursorState(
             point, overWindow,
             hasMonitor && screen.X <= monitor.Monitor.Left + 1,
+            hasMonitor && screen.X >= monitor.Monitor.Right - 2,
             hasMonitor && screen.Y <= monitor.Monitor.Top + 1);
         return true;
     }
@@ -1036,7 +1078,7 @@ public sealed partial class MainWindow : Window
         _windowSettings.WindowMaximized = _wasMaximized;
     }
 
-    private const int MinWindowWidth = 400, MinWindowHeight = 500; // DIP
+    private const int MinWindowWidth = 720, MinWindowHeight = 480; // DIP
 
     private void ApplyMinimumSize()
     {
@@ -1070,6 +1112,7 @@ public sealed partial class MainWindow : Window
             CloseLibrary(returnToSidebar: false);
             SetCaptionShown(false);
             SetSidebarShown(false);
+            TopBar.Visibility = Visibility.Collapsed;
             LoadBar.Opacity = 0;
         }
     }
@@ -1099,6 +1142,7 @@ public sealed partial class MainWindow : Window
         else
         {
             if (_sidebarDocked) SetSidebarShown(true);
+            if (TabsOnTop) TopBar.Visibility = Visibility.Visible;
             ApplyLayout();
             UpdateLoadBar();
         }
@@ -1130,7 +1174,7 @@ public sealed partial class MainWindow : Window
     private void ShowPreview()
     {
         if (_previewTab is not { } tab || _previewRow is not { } row) return;
-        if (_fullscreen || _libraryShown || Palette.IsOpen || !(_sidebarShown || _sidebarDocked) || !row.IsLoaded) return;
+        if (_fullscreen || _libraryShown || Palette.IsOpen || TabsOnTop || !(_sidebarShown || _sidebarDocked) || !row.IsLoaded) return;
 
         Preview.Show(tab);
         Preview.Measure(new Size(TabPreview.CardWidth, double.PositiveInfinity));
@@ -1140,7 +1184,7 @@ public sealed partial class MainWindow : Window
         var rowTop = row.TransformToVisual(Root).TransformPoint(new Point(0, 0)).Y;
         var top = rowTop + row.ActualHeight / 2 - height * 0.5;
         top = Math.Clamp(top, Frame, Math.Max(Frame, Root.ActualHeight - height - Frame));
-        var left = Sidebar.ActualWidth + PreviewGap;
+        var left = SidebarRight ? Root.ActualWidth - Sidebar.ActualWidth - PreviewGap - TabPreview.CardWidth : Sidebar.ActualWidth + PreviewGap;
 
         if (_previewShown)
         {
@@ -1197,6 +1241,7 @@ public sealed partial class MainWindow : Window
         if (!_sidebarDocked) SetSidebarShown(false);
         var current = _shell.CurrentTab?.Url;
         var initial = mode == PaletteMode.Navigate && !search && !StartPage.Is(current) ? current ?? "" : "";
+        if (TryOpenTopAddress(mode, initial)) return;
         Palette.Open(_shell, mode, initial);
     }
 
@@ -1215,6 +1260,11 @@ public sealed partial class MainWindow : Window
         {
             target = Library.DownloadsTarget;
             arrive = Library.PlayDownloadsBounce;
+        }
+        else if (TabsOnTop)
+        {
+            target = TopBar.LibraryTarget;
+            arrive = TopBar.PlayLibraryBounce;
         }
         else if (_sidebarShown || _sidebarDocked)
         {
@@ -1701,7 +1751,7 @@ public sealed partial class MainWindow : Window
     private void ToggleDock()
     {
         if (_fullscreen) return;
-        _shell.Settings.SidebarDocked = !_sidebarDocked;
+        _shell.Settings.SidebarDocked = !_shell.Settings.SidebarDocked;
     }
 
     private void PrivateTab_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)

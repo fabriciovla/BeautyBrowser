@@ -169,6 +169,16 @@ public sealed class SettingsService
         set => Save("sidebar_docked", value);
     }
 
+    /// <summary>
+    /// Where the tabs live: "left" (the sidebar), "right" (the same sidebar on the other edge) or "top" (a tab strip
+    /// and toolbar above the page, as in Chrome).
+    /// </summary>
+    public string SidebarPosition
+    {
+        get => _db.GetSetting("sidebar_position", "left") switch { "right" => "right", "top" => "top", _ => "left" };
+        set => Save("sidebar_position", value);
+    }
+
     /// <summary>Seconds with the mouse still before the floating sidebar hides; 0 means never.</summary>
     public static readonly IReadOnlyList<(string Name, int Seconds)> SidebarIdleOptions =
     [
