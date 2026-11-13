@@ -69,6 +69,7 @@ public sealed class BlockerStats
 [JsonSerializable(typeof(PageRules))]
 [JsonSerializable(typeof(BlockerState))]
 [JsonSerializable(typeof(BlockerStats))]
+[JsonSerializable(typeof(BoostsData))]
 [JsonSerializable(typeof(List<string>))]
 [JsonSerializable(typeof(string))]
 internal sealed partial class BlockingJson : JsonSerializerContext;

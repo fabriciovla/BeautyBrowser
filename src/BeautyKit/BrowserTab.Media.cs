@@ -97,6 +97,14 @@ public sealed partial class BrowserTab
             OnUi(() => ReceiveLogin(message, origin)); // the password manager (BrowserTab.Passwords)
             return;
         }
+        if (message.TryGetValue("type", out var boostType) && boostType as string == "bb-boost")
+        {
+            // From the "Hide elements" picker: the page itself, with the run's token (see BrowserTab.Boosts).
+            if (!e.FromMainFrame) return;
+            if (!(message.TryGetValue("token", out var boostToken) && boostToken is string t && t == BrowserEngine.PageToken)) return;
+            ReceiveBoostMessage(message);
+            return;
+        }
         if (!(message.TryGetValue("type", out var type) && type as string == "bb-media")) return;
         if (!(message.TryGetValue("token", out var token) && token is string { Length: > 0 and < 64 } frameId)) return;
         if (frameId.Any(c => !char.IsAsciiLetterOrDigit(c))) return; // it is embedded in a script: letters and digits only
