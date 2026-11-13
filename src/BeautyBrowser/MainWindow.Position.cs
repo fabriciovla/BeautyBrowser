@@ -34,6 +34,8 @@ public sealed partial class MainWindow
         };
         // The strip's free part drags the window; it moves as tabs open and close.
         TopBar.DragArea.SizeChanged += (_, _) => UpdateDragZone();
+        // Tabs on top: the search (Ctrl+T, Ctrl+L, a click on the address) opens over the address bar.
+        Palette.AnchorProvider = () => TabsOnTop && TopBar.Visibility == Visibility.Visible ? TopBar.AddressBounds(Root) : null;
         _position = _shell.Settings.SidebarPosition;
         ApplyPosition(animate: false);
     }

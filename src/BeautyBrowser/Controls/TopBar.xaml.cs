@@ -13,6 +13,7 @@ using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Windows.ApplicationModel.DataTransfer;
+using Windows.Foundation;
 
 namespace BeautyBrowser.Controls;
 
@@ -54,6 +55,13 @@ public sealed partial class TopBar : UserControl
 
     /// <summary>The free part of the tab strip, which drags the window.</summary>
     public FrameworkElement DragArea => DragZone;
+
+    /// <summary>The address bar's place relative to <paramref name="root"/>, for the palette to open over it.</summary>
+    public Rect AddressBounds(UIElement root)
+    {
+        var origin = UrlButton.TransformToVisual(root).TransformPoint(new Point(0, 0));
+        return new Rect(origin.X, origin.Y, UrlButton.ActualWidth, UrlButton.ActualHeight);
+    }
 
     /// <summary>Where the download animation lands.</summary>
     public FrameworkElement LibraryTarget => DownloadsButton;
@@ -119,7 +127,9 @@ public sealed partial class TopBar : UserControl
         var wanted = new List<object>();
         foreach (var site in _shell.Favorites.Items)
             if (_shell.FavoriteTabOf(site) is not null) wanted.Add(site);
-        wanted.AddRange(_space);
+        // The space keeps its newest tab first (the sidebar shows it on top); here it goes last, on the right, as in
+        // Chrome.
+        wanted.AddRange(_space.Reverse());
 
         // Gone: they shrink away (or leave at once).
         foreach (var (key, item) in _items.ToList())
@@ -282,10 +292,17 @@ public sealed partial class TopBar : UserControl
         {
             var point = e.GetCurrentPoint(item).Properties;
             if (point.IsMiddleButtonPressed) { e.Handled = true; _middlePressed = tab; }
-            else if (point.IsLeftButtonPressed) _shell?.SelectTab(tab);
+            else if (point.IsLeftButtonPressed)
+            {
+                _shell?.SelectTab(tab);
+                _drag = new TabDrag(item, tab, e.GetCurrentPoint(Tabs).Position.X);
+            }
         };
+        item.PointerMoved += (_, e) => DragMove(item, e);
+        item.PointerCaptureLost += (_, _) => DragEnd(item);
         item.PointerReleased += (_, e) =>
         {
+            if (_drag?.Item == item) { DragEnd(item); return; }
             if (e.GetCurrentPoint(item).Properties.PointerUpdateKind != PointerUpdateKind.MiddleButtonReleased) return;
             e.Handled = true;
             var pressed = _middlePressed;
@@ -298,6 +315,83 @@ public sealed partial class TopBar : UserControl
     }
 
     private BrowserTab? _middlePressed;
+
+    // ---- dragging a tab ----
+
+    private sealed class TabDrag(Grid item, BrowserTab tab, double startX)
+    {
+        public Grid Item { get; } = item;
+        public BrowserTab Tab { get; } = tab;
+        public double StartX { get; } = startX;  // where it was pressed, in strip coordinates
+        public double Grab { get; set; }         // pointer to the tab's left edge
+        public bool Moving { get; set; }
+    }
+
+    private const double DragThreshold = 6;
+    private TabDrag? _drag;
+
+    /// <summary>
+    /// Past a few pixels the tab follows the mouse along the strip; crossing a neighbor's middle swaps them, and the
+    /// neighbor slides into the freed place.
+    /// </summary>
+    private void DragMove(Grid item, PointerRoutedEventArgs e)
+    {
+        if (_drag is not { } drag || drag.Item != item) return;
+        var x = e.GetCurrentPoint(Tabs).Position.X;
+        if (!drag.Moving)
+        {
+            if (Math.Abs(x - drag.StartX) < DragThreshold) return;
+            if (!item.CapturePointer(e.Pointer)) return;
+            drag.Moving = true;
+            drag.Grab = drag.StartX - item.ActualOffset.X;
+            Canvas.SetZIndex(item, 1);
+        }
+
+        var left = x - drag.Grab;
+        var regular = Tabs.Children.OfType<Grid>().Where(c => c.Tag is BrowserTab && !_closing.Contains(c)).ToList();
+        var index = regular.IndexOf(item);
+        var center = left + item.ActualWidth / 2;
+        if (index > 0 && center < regular[index - 1].ActualOffset.X + regular[index - 1].ActualWidth / 2)
+            Swap(item, regular[index - 1]);
+        else if (index < regular.Count - 1 && center > regular[index + 1].ActualOffset.X + regular[index + 1].ActualWidth / 2)
+            Swap(item, regular[index + 1]);
+
+        item.Translation = new System.Numerics.Vector3((float)(left - item.ActualOffset.X), 0, 0);
+    }
+
+    /// <summary>Swaps the dragged tab with a neighbor; the neighbor glides from where it was.</summary>
+    private void Swap(Grid item, Grid neighbor)
+    {
+        var neighborBefore = neighbor.ActualOffset.X;
+        var from = Tabs.Children.IndexOf(item);
+        var to = Tabs.Children.IndexOf(neighbor);
+        Tabs.Children.Move((uint)from, (uint)to);
+        Tabs.UpdateLayout();
+        var shift = (float)(neighborBefore - neighbor.ActualOffset.X);
+        Motion.Animate("topbar-swap-" + neighbor.GetHashCode(), TimeSpan.FromMilliseconds(160),
+            t => neighbor.Translation = new System.Numerics.Vector3((float)Motion.Lerp(shift, 0, t), 0, 0));
+    }
+
+    /// <summary>Dropped: the tab settles in its slot and the space takes the new order.</summary>
+    private void DragEnd(Grid item)
+    {
+        if (_drag is not { } drag || drag.Item != item) return;
+        _drag = null;
+        if (!drag.Moving) return;
+        item.ReleasePointerCaptures();
+        var offset = item.Translation.X;
+        Motion.Animate("topbar-drop", TimeSpan.FromMilliseconds(160),
+            t => item.Translation = new System.Numerics.Vector3((float)Motion.Lerp(offset, 0, t), 0, 0),
+            completed: () => Canvas.SetZIndex(item, 0));
+
+        if (_space is null) return;
+        // The strip shows the space backwards (newest on the right).
+        var shown = Tabs.Children.OfType<Grid>().Where(c => c.Tag is BrowserTab && !_closing.Contains(c))
+            .Select(c => (BrowserTab)c.Tag).ToList();
+        var target = shown.Count - 1 - shown.IndexOf(drag.Tab);
+        var current = _space.IndexOf(drag.Tab);
+        if (current >= 0 && target >= 0 && target < _space.Count && current != target) _space.Move(current, target);
+    }
 
     private static void FillTab(Grid item, BrowserTab tab)
     {
