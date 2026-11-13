@@ -59,8 +59,58 @@ public sealed partial class TopBar : UserControl
     /// <summary>The address bar's place relative to <paramref name="root"/>, for the palette to open over it.</summary>
     public Rect AddressBounds(UIElement root)
     {
-        var origin = UrlButton.TransformToVisual(root).TransformPoint(new Point(0, 0));
-        return new Rect(origin.X, origin.Y, UrlButton.ActualWidth, UrlButton.ActualHeight);
+        var origin = AddressBar.TransformToVisual(root).TransformPoint(new Point(0, 0));
+        return new Rect(origin.X, origin.Y, AddressBar.ActualWidth, AddressBar.ActualHeight);
+    }
+
+    /// <summary>The address bar's box, which the palette searches from.</summary>
+    public TextBox AddressInput => AddressBox;
+
+    /// <summary>Typing in the address bar started (it got the focus) or ended.</summary>
+    public event EventHandler? AddressFocused;
+    public event EventHandler? AddressBlurred;
+
+    private string? _addressText; // what to put in the box when it gets the focus (null: the current address)
+    private bool _editing;
+
+    /// <summary>Puts the cursor in the address bar with this text (Ctrl+T empty, Ctrl+L the address, selected).</summary>
+    public void FocusAddress(string text)
+    {
+        _addressText = text;
+        if (_editing)
+        {
+            ShowEditingText();
+            AddressFocused?.Invoke(this, EventArgs.Empty);
+        }
+        else AddressBox.Focus(FocusState.Programmatic);
+    }
+
+    private void AddressBox_GotFocus(object sender, RoutedEventArgs e)
+    {
+        if (_editing) return;
+        _editing = true;
+        ShowEditingText();
+        AddressFocused?.Invoke(this, EventArgs.Empty);
+    }
+
+    private void AddressBox_LostFocus(object sender, RoutedEventArgs e)
+    {
+        _editing = false;
+        _addressText = null;
+        AddressBlurred?.Invoke(this, EventArgs.Empty);
+        RefreshNavigation(); // back to the short address
+    }
+
+    /// <summary>While typing: the full address, readable and selected, so typing replaces it.</summary>
+    private void ShowEditingText()
+    {
+        var url = _watchedTab?.Url;
+        var text = _addressText ?? (StartPage.Is(url) || StartPage.IsSettings(url) ? "" : AddressDisplay.ToDisplay(url ?? ""));
+        _addressText = null;
+        AddressBox.Text = text;
+        AddressBox.SelectAll();
+        UrlSearchIcon.Visibility = Visibility.Visible;
+        UrlSecureIcon.Visibility = UrlInsecureIcon.Visibility = Visibility.Collapsed;
     }
 
     /// <summary>Where the download animation lands.</summary>
@@ -610,7 +660,10 @@ public sealed partial class TopBar : UserControl
         var tab = _watchedTab;
         BackButton.IsEnabled = tab?.CanGoBack ?? false;
         ForwardButton.IsEnabled = tab?.CanGoForward ?? false;
-        UrlText.Text = Sidebar.ShortUrl(tab?.Url);
+        if (_editing) return; // the user is typing: the box is theirs
+        var url = tab?.Url;
+        AddressBox.Text = StartPage.Is(url) ? "" : Sidebar.ShortUrl(url);
+        UrlSearchIcon.Visibility = StartPage.Is(url) ? Visibility.Visible : Visibility.Collapsed;
         var scheme = Uri.TryCreate(tab?.Url, UriKind.Absolute, out var uri) ? uri.Scheme : "";
         UrlInsecureIcon.Visibility = scheme == "http" ? Visibility.Visible : Visibility.Collapsed;
         UrlSecureIcon.Visibility = scheme == "https" ? Visibility.Visible : Visibility.Collapsed;
@@ -647,7 +700,6 @@ public sealed partial class TopBar : UserControl
     private void Back_Click(object sender, RoutedEventArgs e) => _shell?.CurrentTab?.GoBack();
     private void Forward_Click(object sender, RoutedEventArgs e) => _shell?.CurrentTab?.GoForward();
     private void Reload_Click(object sender, RoutedEventArgs e) => _shell?.CurrentTab?.Reload();
-    private void Url_Click(object sender, RoutedEventArgs e) => PaletteRequested?.Invoke(this, PaletteMode.Navigate);
     private void NewTab_Click(object sender, RoutedEventArgs e) => PaletteRequested?.Invoke(this, PaletteMode.NewTab);
     private void Library_Click(object sender, RoutedEventArgs e) => LibraryRequested?.Invoke(this, LibrarySection.History);
     private void Downloads_Click(object sender, RoutedEventArgs e) => LibraryRequested?.Invoke(this, LibrarySection.Downloads);

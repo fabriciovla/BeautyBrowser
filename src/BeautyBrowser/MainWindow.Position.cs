@@ -1,4 +1,5 @@
 using BeautyBrowser.Controls;
+using BeautyKit;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Windows.Foundation;
@@ -34,8 +35,16 @@ public sealed partial class MainWindow
         };
         // The strip's free part drags the window; it moves as tabs open and close.
         TopBar.DragArea.SizeChanged += (_, _) => UpdateDragZone();
-        // Tabs on top: the search (Ctrl+T, Ctrl+L, a click on the address) opens over the address bar.
-        Palette.AnchorProvider = () => TabsOnTop && TopBar.Visibility == Visibility.Visible ? TopBar.AddressBounds(Root) : null;
+        // Tabs on top: the address bar is the search box and the results drop below it.
+        TopBar.AddressFocused += (_, _) =>
+        {
+            var mode = _topAddressMode;
+            _topAddressMode = PaletteMode.Navigate;
+            HidePreview();
+            CloseLibrary(returnToSidebar: false);
+            Palette.OpenAttached(_shell, mode, TopBar.AddressInput, TopBar.AddressBounds(Root));
+        };
+        TopBar.AddressBlurred += (_, _) => { if (Palette.IsAttached) Palette.Close(); };
         _position = _shell.Settings.SidebarPosition;
         ApplyPosition(animate: false);
     }
@@ -84,6 +93,20 @@ public sealed partial class MainWindow
         UpdateDragZone();
         ApplyLayout(animateWidth: animate);
         LayoutLoadBar();
+    }
+
+    private PaletteMode _topAddressMode = PaletteMode.Navigate;
+
+    /// <summary>
+    /// With tabs on top the search goes in the address bar: Ctrl+T leaves it empty (Enter opens a new tab), Ctrl+L
+    /// selects the address. False when the bar is not there (another layout, full screen).
+    /// </summary>
+    private bool TryOpenTopAddress(PaletteMode mode, string initial)
+    {
+        if (!TabsOnTop || TopBar.Visibility != Visibility.Visible) return false;
+        _topAddressMode = mode;
+        TopBar.FocusAddress(initial.Length > 0 ? AddressDisplay.ToDisplay(initial) : "");
+        return true;
     }
 
     /// <summary>With tabs on top, only the strip's free part drags the window (the tabs must stay clickable).</summary>
