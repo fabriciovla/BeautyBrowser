@@ -55,6 +55,59 @@ public sealed class BrowserShell
     public FavoritesService Favorites { get; } = new();
     public DownloadsService Downloads { get; } = new();
     public SitePermissionsService SitePermissions { get; } = new();
+
+    /// <summary>Sites installed as apps (their own window and taskbar icon).</summary>
+    public WebAppsService WebApps { get; } = new();
+
+    /// <summary>A page asked to be installed as an app (tab menu); the window installs it and opens the app.</summary>
+    public event EventHandler<BrowserTab>? InstallAppRequested;
+
+    public void RequestInstallApp(BrowserTab tab) => InstallAppRequested?.Invoke(this, tab);
+
+    /// <summary>Open an installed app's window (from Settings → Installed apps).</summary>
+    public event EventHandler<string>? OpenAppRequested;
+
+    public void RequestOpenApp(string id) => OpenAppRequested?.Invoke(this, id);
+
+    /// <summary>Something in an app window belongs in the browser (a link to another site): show the browser.</summary>
+    public event EventHandler? BrowserWindowRequested;
+
+    /// <summary>Opens a page from an app window as a browser tab and brings the browser forward.</summary>
+    public void OpenInBrowserFromApp(string url)
+    {
+        if (_sessionReady) NewTab(url);
+        else _pendingUrls.Add(url); // after the session loads (MarkSessionReady), or it would be cleared by the restore
+        BrowserWindowRequested?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>
+    /// The page of an app window. It shares the profile (sessions, cookies) but is no browser tab: new tabs, popups
+    /// and peeks it asks for open in the browser; downloads go to the usual list. The window handles permissions.
+    /// </summary>
+    public BrowserTab CreateAppTab(WebApp app, string url)
+    {
+        var tab = _engine.CreateTab(url);
+        tab.NewTabRequested += (_, target) => OpenInBrowserFromApp(target);
+        tab.BackgroundTabRequested += (_, target) => OpenInBrowserFromApp(target);
+        tab.PeekRequested += (_, target) => OpenInBrowserFromApp(target);
+        tab.PopupOpened += (_, popup) =>
+        {
+            Wire(popup);
+            if (_sessionReady) AdoptTab(popup);
+            else _pendingPopups.Add(popup);
+            BrowserWindowRequested?.Invoke(this, EventArgs.Empty);
+        };
+        tab.DownloadStarted += (_, download) => DownloadStarted?.Invoke(this, Downloads.Start(download, false));
+        tab.DownloadUpdated += (_, download) => Downloads.Update(download);
+        // Links to other apps (mailto:, zoommtg:…) are not offered from app windows yet: the browser's notice belongs
+        // to its own tabs.
+        tab.DownloadApprovalRequested += (_, approval) =>
+        {
+            if (DownloadApprovalRequested is { } handler) { handler(this, (tab, approval)); BrowserWindowRequested?.Invoke(this, EventArgs.Empty); }
+            else approval.Decide(false);
+        };
+        return tab;
+    }
     public PasswordsService Passwords { get; } = new();
 
     /// <summary>A login field got focus (the field) or lost it (null), in a tab.</summary>
@@ -620,9 +673,27 @@ public sealed class BrowserShell
 
     private void TrackSpace(Space space) => space.Tabs.CollectionChanged += (_, _) => ScheduleSessionSave();
 
+    // The session is only written once the browser window has loaded it. Started for an app (browser hidden), saving
+    // before that would replace the user's tabs with whatever the app opened.
+    private bool _sessionReady;
+    private readonly List<string> _pendingUrls = [];
+    private readonly List<BrowserTab> _pendingPopups = [];
+
+    /// <summary>The window restored (or started) the session: saving is safe, and what apps sent meanwhile opens.</summary>
+    public void MarkSessionReady()
+    {
+        if (_sessionReady) return;
+        _sessionReady = true;
+        foreach (var url in _pendingUrls) NewTab(url);
+        foreach (var popup in _pendingPopups) AdoptTab(popup);
+        _pendingUrls.Clear();
+        _pendingPopups.Clear();
+        ScheduleSessionSave();
+    }
+
     private void ScheduleSessionSave()
     {
-        if (_restoring) return;
+        if (_restoring || !_sessionReady) return;
         _sessionTimer.Stop();
         _sessionTimer.Start();
     }
@@ -630,6 +701,7 @@ public sealed class BrowserShell
     private void SaveSession()
     {
         _sessionTimer.Stop();
+        if (!_sessionReady) return;
         var saved = Spaces.Where(s => !s.IsPrivate).ToList(); // the private space is never written down
         JsonStore.Save(SessionFile, new SessionData
         {

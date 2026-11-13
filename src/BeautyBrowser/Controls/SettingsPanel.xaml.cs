@@ -112,6 +112,7 @@ public sealed partial class SettingsPanel : UserControl
 
         _toggleRefreshers.Clear();
         _toggleRefreshers.Add(FillTheme); // the ring follows the theme, also when it changes from onboarding
+        BuildApps(_shell);
         PositionChoice(s);
         ToggleRows(SidebarToggles,
             [(L.T("Keep the sidebar pinned", "Mantener la barra fija"), L.T("The page shifts over and the sidebar stays in view", "La página se corre y la barra queda siempre a la vista"),
@@ -350,6 +351,48 @@ public sealed partial class SettingsPanel : UserControl
             host.Children.Add(chip);
         }
         RefreshGroup();
+    }
+
+    private bool _appsWatched;
+
+    /// <summary>Installed apps: icon, name and site, with Open and Uninstall. Rebuilt when the list changes.</summary>
+    private void BuildApps(BrowserShell shell)
+    {
+        if (!_appsWatched)
+        {
+            _appsWatched = true;
+            shell.WebApps.Apps.CollectionChanged += (_, _) => BuildApps(shell);
+        }
+        AppRows.Children.Clear();
+        var apps = shell.WebApps.Apps.ToList();
+        AppsBox.Visibility = apps.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        AppsEmpty.Visibility = apps.Count > 0 ? Visibility.Collapsed : Visibility.Visible;
+        for (var i = 0; i < apps.Count; i++)
+        {
+            var app = apps[i];
+            if (i > 0) AppRows.Children.Add(new Rectangle { Height = 1, Fill = Brush("BeautyDividerBrush") });
+            var icon = new Image { Width = 24, Height = 24, VerticalAlignment = VerticalAlignment.Center };
+            try { icon.Source = new Microsoft.UI.Xaml.Media.Imaging.BitmapImage(new Uri(app.IconPath)); } catch { }
+            var site = Uri.TryCreate(app.Scope, UriKind.Absolute, out var uri) ? HostName.WithoutWww(uri.Host) : app.Scope;
+            var texts = new StackPanel { Spacing = 1, VerticalAlignment = VerticalAlignment.Center };
+            texts.Children.Add(new TextBlock { Text = app.Name, FontSize = 15, TextTrimming = TextTrimming.CharacterEllipsis });
+            texts.Children.Add(new TextBlock { Text = site, FontSize = 13, Foreground = Brush("BeautyTextSecondaryBrush") });
+            var open = new Button { Content = L.T("Open", "Abrir"), Style = (Style)Application.Current.Resources["BeautyChipButton"], Padding = new Thickness(14, 0, 14, 0), FontSize = 14 };
+            open.Click += (_, _) => shell.RequestOpenApp(app.Id);
+            var remove = new Button { Content = L.T("Uninstall", "Desinstalar"), Style = (Style)Application.Current.Resources["BeautyChipButton"], Padding = new Thickness(14, 0, 14, 0), FontSize = 14 };
+            remove.Click += (_, _) => shell.WebApps.Uninstall(app);
+            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(remove, L.T($"Uninstall {app.Name}", $"Desinstalar {app.Name}"));
+            var row = new Grid { MinHeight = 56, Padding = new Thickness(14, 8, 10, 8), ColumnSpacing = 12 };
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            row.ColumnDefinitions.Add(new ColumnDefinition());
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            row.Children.Add(icon);
+            row.Children.Add(Column(texts, 1));
+            row.Children.Add(Column(open, 2));
+            row.Children.Add(Column(remove, 3));
+            AppRows.Children.Add(row);
+        }
     }
 
     /// <summary>

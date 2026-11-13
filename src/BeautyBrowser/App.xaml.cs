@@ -30,14 +30,18 @@ public partial class App : Application
         // bring it to the front and exit.
         _singleInstance = new Mutex(initiallyOwned: true, @"Local\BeautyBrowser.SingleInstance", out var firstInstance);
         var link = ExternalLinks.FromCommandLine();
+        var appId = Services.WebAppsService.IdFromCommandLine();
         // The running one may be closing (its window already hidden while Chromium shuts down): wait for it to finish
         // and open normally, rather than bringing back a window that is going away.
         if (!firstInstance && !OtherWindowVisible()) firstInstance = WaitForPreviousToExit();
         if (!firstInstance)
         {
-            // A link from another app: the running window opens it as a new tab.
-            if (link is not null) ExternalLinks.SendToRunning(link);
-            BringExistingToFront();
+            // A link from another app: the running window opens it as a new tab. An installed app: its window. Otherwise
+            // the browser comes forward (it may be hidden while only app windows are open).
+            var sent = appId is not null ? ExternalLinks.SendToRunning(ExternalLinks.AppMessage + appId)
+                : link is not null ? ExternalLinks.SendToRunning(link)
+                : ExternalLinks.SendToRunning(ExternalLinks.ShowMessage);
+            if (!sent) BringExistingToFront();
             Exit();
             return;
         }
@@ -45,7 +49,10 @@ public partial class App : Application
 
         try
         {
-            _window = new MainWindow();
+            var main = new MainWindow();
+            _window = main;
+            // Started from an app's shortcut: only the app shows; the browser stays hidden until asked for.
+            if (appId is not null && main.OpenWebApp(appId)) return;
             _window.Activate();
         }
         catch (Exception ex)

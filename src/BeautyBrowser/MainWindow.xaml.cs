@@ -127,6 +127,7 @@ public sealed partial class MainWindow : Window
         SetupZoomToast();
         SetupNewTabToast();
         SetupNotices();
+        SetupWebApps();
         SetupUpdates();
         // Links other apps send while BeautyBrowser is open: a new tab, with the window brought to the front.
         ExternalLinks.Listen(url => DispatcherQueue.TryEnqueue(() =>
@@ -134,8 +135,9 @@ public sealed partial class MainWindow : Window
             if (_fullscreen) _shell.CurrentTab?.ExitFullscreen();
             _shell.NewTab(url);
             if (AppWindow.Presenter is OverlappedPresenter { State: OverlappedPresenterState.Minimized } window) window.Restore();
+            AppWindow.Show(); // it may be hidden while only app windows are open
             Activate();
-        }));
+        }), message => DispatcherQueue.TryEnqueue(() => OnInstanceCommand(message)));
         SetupPeek();
         Switcher.Attach(_shell);
         Switcher.CommitRequested += (_, _) => CommitSwitcher();
@@ -259,6 +261,7 @@ public sealed partial class MainWindow : Window
             App.PendingLink = null;
             if (link is not null) _shell.NewTab(link);
             else if (!restored && _shell.CurrentTab is null) _shell.NewTab();
+            _shell.MarkSessionReady(); // from here the session may be saved
             // First run (or --welcome): onboarding on top of everything.
             if (!_shell.Settings.OnboardingDone || Environment.GetCommandLineArgs().Contains("--welcome")) ShowOnboarding();
             _narrow = Root.ActualWidth is > 0 and < DockMinWidth;
