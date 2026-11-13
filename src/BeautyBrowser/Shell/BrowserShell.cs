@@ -303,9 +303,60 @@ public sealed class BrowserShell
     /// </summary>
     public void CloseTab(BrowserTab tab) => tab.RequestClose();
 
+    // Split view: pairs of tabs shown side by side, in screen order (left, right). Selecting either shows both;
+    // selecting a tab outside the pair shows that tab alone, and the pair comes back when one of its tabs is chosen.
+    private readonly List<(BrowserTab Left, BrowserTab Right)> _splits = [];
+
+    public event EventHandler? SplitChanged;
+
+    /// <summary>The pair the tab is in (left and right), if any.</summary>
+    public (BrowserTab Left, BrowserTab Right)? SplitOf(BrowserTab? tab) =>
+        tab is null ? null : _splits.FirstOrDefault(p => p.Left == tab || p.Right == tab) is { Left: not null } pair ? pair : null;
+
+    public BrowserTab? SplitPartner(BrowserTab? tab) =>
+        SplitOf(tab) is { } pair ? (pair.Left == tab ? pair.Right : pair.Left) : null;
+
+    /// <summary>Shows <paramref name="other"/> next to <paramref name="current"/> (current on the left).</summary>
+    public void Split(BrowserTab current, BrowserTab other)
+    {
+        if (current == other) return;
+        RemoveSplit(current);
+        RemoveSplit(other);
+        _splits.Add((current, other));
+        current.IsInSplit = other.IsInSplit = true;
+        if (CurrentTab != current) SelectTab(current);
+        SplitChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>Ends the split the tab is in; both stay open as normal tabs.</summary>
+    public void Unsplit(BrowserTab tab)
+    {
+        if (RemoveSplit(tab)) SplitChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>Swaps the two sides of the tab's split.</summary>
+    public void SwapSplit(BrowserTab tab)
+    {
+        var index = _splits.FindIndex(p => p.Left == tab || p.Right == tab);
+        if (index < 0) return;
+        _splits[index] = (_splits[index].Right, _splits[index].Left);
+        SplitChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    private bool RemoveSplit(BrowserTab tab)
+    {
+        var index = _splits.FindIndex(p => p.Left == tab || p.Right == tab);
+        if (index < 0) return false;
+        var (left, right) = _splits[index];
+        _splits.RemoveAt(index);
+        left.IsInSplit = right.IsInSplit = false;
+        return true;
+    }
+
     /// <summary>Removes a tab right away, without asking the page.</summary>
     public void RemoveTab(BrowserTab tab)
     {
+        Unsplit(tab); // the other one stays as a normal tab
         if (IsFavoriteTab(tab))
         {
             CloseFavoriteTab(tab);

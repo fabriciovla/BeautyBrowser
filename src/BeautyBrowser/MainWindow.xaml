@@ -75,7 +75,32 @@
                 <ColumnDefinition x:Name="DevToolsColumn" Width="0" />
             </Grid.ColumnDefinitions>
 
-            <kit:BrowserView x:Name="WebView" CornerRadius="{StaticResource BeautyContentCornerRadius}" />
+            <!--
+                The page, or two side by side (split view, MainWindow.Split): the current tab is always in WebView, the
+                other one in SplitView; each keeps its side, and the one in use has an accent ring.
+            -->
+            <Grid x:Name="Panes">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition x:Name="LeftPane" Width="*" />
+                    <ColumnDefinition x:Name="PaneGap" Width="0" />
+                    <ColumnDefinition x:Name="RightPane" Width="0" />
+                </Grid.ColumnDefinitions>
+                <kit:BrowserView x:Name="WebView" CornerRadius="{StaticResource BeautyContentCornerRadius}" />
+                <local:ResizeHandle x:Name="SplitHandle" Grid.Column="1" Visibility="Collapsed" />
+                <kit:BrowserView
+                    x:Name="SplitView"
+                    Grid.Column="2"
+                    CornerRadius="{StaticResource BeautyContentCornerRadius}"
+                    Visibility="Collapsed" />
+                <Border
+                    x:Name="ActivePaneRing"
+                    BorderBrush="{StaticResource BeautyAccentBrush}"
+                    BorderThickness="2"
+                    CornerRadius="{StaticResource BeautyContentCornerRadius}"
+                    IsHitTestVisible="False"
+                    Opacity="0.85"
+                    Visibility="Collapsed" />
+            </Grid>
 
             <!-- The settings tab: drawn over its empty page while it is the current tab (MainWindow.Settings). -->
             <controls:SettingsPanel x:Name="SettingsPage" Visibility="Collapsed" />

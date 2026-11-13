@@ -231,6 +231,11 @@ public sealed partial class BrowserTab : INotifyPropertyChanged, IDisposable
     private double _loadProgress = 1;
 
     public bool CanGoBack { get => _canGoBack; private set => Set(ref _canGoBack, value); }
+
+    private bool _isInSplit;
+
+    /// <summary>Shown side by side with another tab (split view); the tab lists mark it.</summary>
+    public bool IsInSplit { get => _isInSplit; set => Set(ref _isInSplit, value); }
     public bool CanGoForward { get => _canGoForward; private set => Set(ref _canGoForward, value); }
 
 

@@ -127,6 +127,7 @@ public sealed partial class MainWindow : Window
         SetupZoomToast();
         SetupNewTabToast();
         SetupNotices();
+        SetupSplit();
         SetupUpdates();
         // Links other apps send while BeautyBrowser is open: a new tab, with the window brought to the front.
         ExternalLinks.Listen(url => DispatcherQueue.TryEnqueue(() =>
@@ -155,7 +156,9 @@ public sealed partial class MainWindow : Window
         {
             if (_findTab is not null && _findTab != _shell.CurrentTab) CloseFindBar(focusPage: false); // another tab
             if (PeekOpen) ClosePeek(); // the tab changed: Peek closes
+            ReleaseSplitTab();
             WebView.Tab = _shell.CurrentTab;
+            UpdateSplit();
             RefreshDevTools();
             WatchLoading(_shell.CurrentTab);
             // Start page: focus goes to the page so its search box can be typed into right away.

@@ -762,6 +762,14 @@ public sealed partial class Sidebar : UserControl
         if (_shell.Favorites.Contains(tab.Url)) Add(L.T("Remove from favorites", "Quitar de favoritos"), () => _shell.Unpin(tab.Url));
         else Add(L.T("Add to favorites", "Agregar a favoritos"), () => _shell.Pin(tab));
         Add(L.T("Duplicate tab", "Duplicar pestaña"), () => _shell.DuplicateTab(tab));
+        // Split view: this tab beside the current one, or out of its pair.
+        if (_shell.SplitPartner(tab) is not null)
+        {
+            Add(L.T("Swap sides", "Cambiar de lado"), () => _shell.SwapSplit(tab));
+            Add(L.T("Exit split view", "Salir de vista dividida"), () => _shell.Unsplit(tab));
+        }
+        else if (_shell.CurrentTab is { } current && current != tab)
+            Add(L.T("Open in split view", "Abrir en vista dividida"), () => _shell.Split(current, tab));
         Add(L.T("Copy link", "Copiar enlace"), () =>
         {
             var package = new DataPackage();
