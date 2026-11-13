@@ -104,6 +104,7 @@ public sealed partial class MainWindow : Window
         SetupOverlays();
 
         _shell = new BrowserShell(_engine, DispatcherQueue, database);
+        _ = Services.ContributorsService.LoadAsync(); // the start page's contributors, from GitHub (cached a day)
         _updates = _shell.Updates;
         Title = "Beauty Browser";
 
