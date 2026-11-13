@@ -98,14 +98,22 @@ public sealed partial class MainWindow
     private PaletteMode _topAddressMode = PaletteMode.Navigate;
 
     /// <summary>
-    /// With tabs on top the search goes in the address bar: Ctrl+T leaves it empty (Enter opens a new tab), Ctrl+L
-    /// selects the address. False when the bar is not there (another layout, full screen).
+    /// With tabs on top the search goes in the address bar: Ctrl+T and + open a new tab and leave the bar empty for
+    /// it, Ctrl+L selects the address. False when the bar is not there (another layout, full screen).
     /// </summary>
     private bool TryOpenTopAddress(PaletteMode mode, string initial)
     {
         if (!TabsOnTop || TopBar.Visibility != Visibility.Visible) return false;
+        if (mode == PaletteMode.NewTab)
+        {
+            // As in Chrome: the new tab opens right away (our start page) and typing goes to its address bar.
+            _shell.OpenStartPage();
+            mode = PaletteMode.Navigate;
+        }
         _topAddressMode = mode;
-        TopBar.FocusAddress(initial.Length > 0 ? AddressDisplay.ToDisplay(initial) : "");
+        var text = initial.Length > 0 ? AddressDisplay.ToDisplay(initial) : "";
+        // After the tab switch settles: a new start page would otherwise take the focus for its own search box.
+        DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, () => TopBar.FocusAddress(text));
         return true;
     }
 

@@ -89,6 +89,7 @@ public sealed partial class TopBar : UserControl
     {
         if (_editing) return;
         _editing = true;
+        AddressBar.BorderBrush = Res("BeautyAccentBrush");
         ShowEditingText();
         AddressFocused?.Invoke(this, EventArgs.Empty);
     }
@@ -96,6 +97,7 @@ public sealed partial class TopBar : UserControl
     private void AddressBox_LostFocus(object sender, RoutedEventArgs e)
     {
         _editing = false;
+        AddressBar.BorderBrush = Res("BeautyTileBorderBrush");
         _addressText = null;
         AddressBlurred?.Invoke(this, EventArgs.Empty);
         RefreshNavigation(); // back to the short address
@@ -286,28 +288,43 @@ public sealed partial class TopBar : UserControl
         _ => false,
     };
 
+    // An item is a transparent hit target as tall as the strip (so the top edge of the window still lands on it)
+    // holding the visible tab: a card whose content is a grid (icon, title, close).
+    private static Border CardOf(Grid item) => (Border)item.Children[0];
+    private static Grid ContentOf(Grid item) => (Grid)CardOf(item).Child;
+
     /// <summary>The current tab is a white card; the rest are plain, with a light fill under the mouse.</summary>
     private void Style(Grid item)
     {
         var current = IsCurrent(item);
-        item.Background = current ? Res("BeautyCardBrush")
-            : item == _hovered ? Res("BeautySubtleFillBrush")
+        var hovered = item == _hovered;
+        var card = CardOf(item);
+        card.Background = current ? Res("BeautyCardBrush")
+            : hovered ? Res("BeautySubtleFillBrush")
             : Res("BeautyTransparentBrush");
-        item.BorderBrush = current ? Res("BeautyFillLowBrush") : Res("BeautyTransparentBrush");
-        if (item.Tag is BrowserTab && item.Children[^1] is Button close) close.Opacity = current || item == _hovered ? 1 : 0;
+        card.BorderBrush = current ? Res("BeautyFillLowBrush") : Res("BeautyTransparentBrush");
+        if (item.Tag is BrowserTab && ContentOf(item).Children[^1] is Button close) close.Opacity = current || hovered ? 1 : 0;
     }
 
     private Grid NewItem(object key, double padLeft)
     {
-        var item = new Grid
+        var content = new Grid { ColumnSpacing = 8 };
+        var card = new Border
         {
-            Tag = key,
             Height = 32,
+            Margin = new Thickness(0, 4, 0, 0),
             Padding = new Thickness(padLeft, 0, 4, 0),
-            ColumnSpacing = 8,
             CornerRadius = (CornerRadius)Application.Current.Resources["BeautyItemCornerRadius"],
             BorderThickness = new Thickness(1),
             BackgroundTransition = new BrushTransition { Duration = TimeSpan.FromMilliseconds(140) },
+            Child = content,
+        };
+        var item = new Grid
+        {
+            Tag = key,
+            Height = 40,
+            Background = Res("BeautyTransparentBrush"),
+            Children = { card },
         };
         item.PointerEntered += (_, _) => { _hovered = item; Style(item); };
         item.PointerExited += (_, _) => { if (_hovered == item) _hovered = null; Style(item); };
@@ -317,9 +334,10 @@ public sealed partial class TopBar : UserControl
     private Grid TabItem(BrowserTab tab)
     {
         var item = NewItem(tab, 10);
-        item.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(16) });
-        item.ColumnDefinitions.Add(new ColumnDefinition());
-        item.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        var content = ContentOf(item);
+        content.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(16) });
+        content.ColumnDefinitions.Add(new ColumnDefinition());
+        content.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
         var title = new TextBlock { VerticalAlignment = VerticalAlignment.Center, FontSize = 13, TextTrimming = TextTrimming.CharacterEllipsis };
         Grid.SetColumn(title, 1);
@@ -333,9 +351,9 @@ public sealed partial class TopBar : UserControl
         ToolTipService.SetToolTip(close, L.T("Close tab (Ctrl+W)", "Cerrar pestaña (Ctrl+W)"));
         close.Click += (_, _) => _shell?.CloseTab(tab);
         Grid.SetColumn(close, 2);
-        item.Children.Add(new Grid()); // icon (FillTab)
-        item.Children.Add(title);
-        item.Children.Add(close);
+        content.Children.Add(new Grid { VerticalAlignment = VerticalAlignment.Center }); // icon (FillTab)
+        content.Children.Add(title);
+        content.Children.Add(close);
         FillTab(item, tab);
 
         item.PointerPressed += (_, e) =>
@@ -445,7 +463,7 @@ public sealed partial class TopBar : UserControl
 
     private static void FillTab(Grid item, BrowserTab tab)
     {
-        var slot = (Grid)item.Children[0];
+        var slot = (Grid)ContentOf(item).Children[0];
         slot.Children.Clear();
         if (tab.IsLoading && tab.Favicon is null)
             slot.Children.Add(new ProgressRing { Width = 14, Height = 14, IsActive = true });
@@ -457,7 +475,7 @@ public sealed partial class TopBar : UserControl
         var text = StartPage.Is(tab.Url) || StartPage.IsSettings(tab.Url) || string.IsNullOrEmpty(tab.Title)
             ? Sidebar.ShortUrl(tab.Url)
             : tab.Title;
-        ((TextBlock)item.Children[1]).Text = text;
+        ((TextBlock)ContentOf(item).Children[1]).Text = text;
         ToolTipService.SetToolTip(item, text);
         Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(item, text);
     }
@@ -466,8 +484,8 @@ public sealed partial class TopBar : UserControl
     private Grid FavoriteTab(FavoriteSite site)
     {
         var item = NewItem(site, 0);
-        item.Padding = new Thickness(0);
-        item.Children.Add(FavoriteIcon(site, 16));
+        CardOf(item).Padding = new Thickness(0);
+        ContentOf(item).Children.Add(FavoriteIcon(site, 16));
         var name = string.IsNullOrWhiteSpace(site.Title) ? site.Host : site.Title;
         ToolTipService.SetToolTip(item, name);
         Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(item, name);
