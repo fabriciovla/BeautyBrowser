@@ -668,6 +668,14 @@ public sealed partial class TopBar : UserControl
         if (shell.Favorites.Contains(tab.Url)) Add(L.T("Remove from favorites", "Quitar de favoritos"), () => shell.Unpin(tab.Url));
         else Add(L.T("Add to favorites", "Agregar a favoritos"), () => shell.Pin(tab));
         Add(L.T("Duplicate tab", "Duplicar pestaña"), () => shell.DuplicateTab(tab));
+        // Split view: this tab beside the current one, or out of its pair.
+        if (shell.SplitPartner(tab) is not null)
+        {
+            Add(L.T("Swap sides", "Cambiar de lado"), () => shell.SwapSplit(tab));
+            Add(L.T("Exit split view", "Salir de vista dividida"), () => shell.Unsplit(tab));
+        }
+        else if (shell.CurrentTab is { } current && current != tab)
+            Add(L.T("Open in split view", "Abrir en vista dividida"), () => shell.Split(current, tab));
         Add(L.T("Copy link", "Copiar enlace"), () =>
         {
             var package = new DataPackage();
