@@ -111,6 +111,7 @@ public sealed partial class BrowserTab : INotifyPropertyChanged, IDisposable
         _browser.FrameLoadEnd += (_, e) =>
         {
             if (!e.Frame.IsMain) return;
+            OnUi(ReaderPageLoaded);
             OnUi(() =>
             {
                 if (_faviconPending || !Uri.TryCreate(Url, UriKind.Absolute, out var uri) || uri.Scheme is not ("http" or "https")) return;
@@ -131,6 +132,7 @@ public sealed partial class BrowserTab : INotifyPropertyChanged, IDisposable
                 }
                 Host()?.SetZoomLevel(_zoomLevel);
                 ResetBlockedCount(); // another page: the blocked counter starts over
+                ReaderPageStarted();
                 ClearMedia();        // and whatever played on the previous one stopped
             });
         };

@@ -191,6 +191,13 @@ public sealed class SettingsService
         set => Save("sidebar_idle_seconds", value.ToString(CultureInfo.InvariantCulture));
     }
 
+    /// <summary>Text size of the reading mode, in px.</summary>
+    public int ReaderFontSize
+    {
+        get => GetInt("reader_font_size", ReaderMode.DefaultFontSize);
+        set => Save("reader_font_size", value.ToString(CultureInfo.InvariantCulture));
+    }
+
     /// <summary>Preview when hovering a tab.</summary>
     public bool TabPreviews
     {

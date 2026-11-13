@@ -18,6 +18,7 @@
             <KeyboardAccelerator Key="W" Invoked="CloseTab_Invoked" Modifiers="Control" />
             <KeyboardAccelerator Key="L" Invoked="FocusAddress_Invoked" Modifiers="Control" />
             <KeyboardAccelerator Key="H" Invoked="History_Invoked" Modifiers="Control" />
+            <KeyboardAccelerator Key="R" Invoked="Reader_Invoked" Modifiers="Control,Menu" />
             <KeyboardAccelerator Key="R" Invoked="Reload_Invoked" Modifiers="Control" />
             <KeyboardAccelerator Key="F5" Invoked="Reload_Invoked" />
             <KeyboardAccelerator Key="F12" Invoked="DevTools_Invoked" />

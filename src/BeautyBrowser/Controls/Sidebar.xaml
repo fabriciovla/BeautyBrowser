@@ -130,6 +130,22 @@
                     </StackPanel>
                 </Button>
                 <Button
+                    x:Name="ReaderButton"
+                    Width="28"
+                    Height="28"
+                    Padding="0"
+                    AutomationProperties.AutomationId="SidebarReader"
+                    Click="Reader_Click"
+                    Style="{StaticResource BeautyIconButton}"
+                    Visibility="Collapsed">
+                    <Button.Resources>
+                        <SolidColorBrush x:Key="ButtonBackground" Color="Transparent" />
+                        <StaticResource x:Key="ButtonBackgroundPointerOver" ResourceKey="BeautyFillHoverBrush" />
+                        <StaticResource x:Key="ButtonBackgroundPressed" ResourceKey="BeautyFillPressedBrush" />
+                    </Button.Resources>
+                    <FontIcon x:Name="ReaderIcon" FontSize="14" Glyph="&#xE736;" />
+                </Button>
+                <Button
                     Width="28"
                     Height="28"
                     Padding="0"
