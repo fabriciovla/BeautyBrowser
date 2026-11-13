@@ -209,6 +209,12 @@ public sealed partial class BrowserTab : INotifyPropertyChanged, IDisposable
     public event EventHandler<string>? NewTabRequested;
 
     /// <summary>
+    /// A middle or Ctrl+click on a link, or "Open link in new tab": the page opens in a tab behind the current one, which
+    /// stays in view. Without a listener it opens as a regular tab.
+    /// </summary>
+    public event EventHandler<string>? BackgroundTabRequested;
+
+    /// <summary>
     /// A plain click on a link that opens another tab. The app shows it in a mini window over the page, like Arc's
     /// Peek; without a listener it opens as a tab.
     /// </summary>
@@ -720,6 +726,7 @@ public sealed partial class BrowserTab : INotifyPropertyChanged, IDisposable
         OnUi(() =>
         {
             if (peek && PeekRequested is { } handler) handler(this, targetUrl);
+            else if (disposition == WindowOpenDisposition.NewBackgroundTab) OpenInBackground(targetUrl);
             else NewTabRequested?.Invoke(this, targetUrl);
         });
     }
