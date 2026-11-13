@@ -484,7 +484,7 @@ public sealed partial class MainWindow : Window
     private bool _maximized;
 
     /// <summary>The glass frame around the page; none while maximized.</summary>
-    private double Edge => _maximized ? 0 : Frame;
+    private double Edge => _maximized || TabsOnTop ? 0 : Frame; // tabs on top: no glass, the page reaches the edges
 
     /// <summary>Where the page starts: at the frame or after the pinned sidebar.</summary>
     private double TargetPageLeft() => _sidebarDocked && !SidebarRight ? SidebarWidth + Edge : Edge;
@@ -498,7 +498,6 @@ public sealed partial class MainWindow : Window
         var maximized = !_fullscreen && AppWindow.Presenter is OverlappedPresenter { State: OverlappedPresenterState.Maximized };
         if (maximized == _maximized) return;
         _maximized = maximized;
-        TopBar.Rounded = !maximized;
         ApplyPageCorners();
         ApplyLayout();
         if (_captionShown && !TabsOnTop) AnimatePageTopClip(StripHeight - Edge);
@@ -509,7 +508,7 @@ public sealed partial class MainWindow : Window
     /// <summary>Page corners: rounded with the frame, square when maximized or in full screen.</summary>
     private void ApplyPageCorners()
     {
-        var square = _fullscreen || _maximized;
+        var square = _fullscreen || _maximized || TabsOnTop;
         var radius = new Vector2(square ? 0 : (float)ContentRadius);
         _pageClip.TopLeftRadius = _pageClip.TopRightRadius = _pageClip.BottomLeftRadius = _pageClip.BottomRightRadius = radius;
         WebView.CornerRadius = square ? new CornerRadius(0) : (CornerRadius)Application.Current.Resources["BeautyContentCornerRadius"];
@@ -706,7 +705,7 @@ public sealed partial class MainWindow : Window
         var track = Math.Max(0, PageArea.ActualWidth * LoadBarTrack);
         var width = track * _loadValue;
         // On the top frame; when maximized (no frame), over the top edge of the page.
-        LoadBar.Margin = new Thickness(_pageLeft + _pageShift + (PageArea.ActualWidth - width) / 2, (TabsOnTop ? TopBarHeight : 0) + (_maximized ? 0 : 2.5), 0, 0);
+        LoadBar.Margin = new Thickness(_pageLeft + _pageShift + (PageArea.ActualWidth - width) / 2, TabsOnTop ? PageTop : _maximized ? 0 : 2.5, 0, 0);
         LoadBar.Width = width;
     }
 

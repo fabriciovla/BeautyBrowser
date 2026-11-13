@@ -55,12 +55,6 @@ public sealed partial class TopBar : UserControl
     /// <summary>The free part of the tab strip, which drags the window.</summary>
     public FrameworkElement DragArea => DragZone;
 
-    /// <summary>Rounded top corners like the window's; square when maximized.</summary>
-    public bool Rounded
-    {
-        set => Panel.CornerRadius = value ? new CornerRadius(8, 8, 0, 0) : new CornerRadius(0);
-    }
-
     /// <summary>Where the download animation lands.</summary>
     public FrameworkElement LibraryTarget => DownloadsButton;
 
@@ -315,7 +309,10 @@ public sealed partial class TopBar : UserControl
             slot.Children.Add(new Image { Width = 16, Height = 16, Source = icon });
         else
             slot.Children.Add(new FontIcon { Glyph = "", FontSize = 14, Foreground = Res("BeautyTextSecondaryBrush") });
-        var text = string.IsNullOrEmpty(tab.Title) ? Sidebar.ShortUrl(tab.Url) : tab.Title;
+        // Internal pages by their name (a restored tab that has not loaded yet only knows its address).
+        var text = StartPage.Is(tab.Url) || StartPage.IsSettings(tab.Url) || string.IsNullOrEmpty(tab.Title)
+            ? Sidebar.ShortUrl(tab.Url)
+            : tab.Title;
         ((TextBlock)item.Children[1]).Text = text;
         ToolTipService.SetToolTip(item, text);
         Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(item, text);

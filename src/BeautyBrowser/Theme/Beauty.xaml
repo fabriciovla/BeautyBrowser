@@ -37,6 +37,7 @@
     <SolidColorBrush x:Key="BeautySurfaceAltBrush" Color="#ECEEF3" />
     <!-- The settings tab's page, behind its white cards. -->
     <SolidColorBrush x:Key="BeautySettingsPageBrush" Color="#F5F5F7" />
+    <SolidColorBrush x:Key="BeautyTopBarBrush" Color="#ECECEF" />  <!-- tabs on top: solid, no glass -->
     <SolidColorBrush x:Key="BeautyPopupHoverBrush" Color="#F4F4F6" />
     <SolidColorBrush x:Key="BeautyPopupPressedBrush" Color="#EAEAEE" />
 
