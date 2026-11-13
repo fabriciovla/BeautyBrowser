@@ -6,6 +6,9 @@ namespace BeautyKit;
 
 public sealed record StartPageSite(string Title, string Url, string? Icon);
 
+/// <summary>Someone who contributed to the project on GitHub: shown on the start page under the search box.</summary>
+public sealed record StartPageContributor(string Login, string Avatar, string Profile);
+
 /// <summary>
 /// The new tab page (beauty://newtab), laid out like Dia's: the ⌘ mark, a large search box with the chosen engine's icon
 /// and a greeting. It is served by the browser itself, so it works offline.
@@ -50,6 +53,9 @@ public static class StartPage
         public IResourceHandler Create(IBrowser browser, IFrame frame, string schemeName, IRequest request) =>
             ResourceHandler.FromString(IsSettings(request.Url) ? SettingsHtml(isPrivate || Dark) : Html(isPrivate), Encoding.UTF8, mimeType: "text/html");
     }
+
+    /// <summary>The project's contributors (filled by the app from GitHub, cached); empty hides the section.</summary>
+    public static IReadOnlyList<StartPageContributor> Contributors { get; set; } = [];
 
     /// <summary>The app is in dark mode: new tabs open with the dark page.</summary>
     public static bool Dark { get; set; }
@@ -98,6 +104,8 @@ public static class StartPage
                 ? new[] { "Buenos días.", "Buenas tardes.", "Buenas noches.", "¿Qué buscamos hoy?" }
                 : new[] { "Good morning.", "Good afternoon.", "Good evening.", "What are we looking for today?" }))
             .Replace("__ENGINE_ICON__", EngineIcon(engine))
+            .Replace("__CONTRIBUTORS_TITLE__", L.T("Contributors", "Contribuidores"))
+            .Replace("__CONTRIBUTORS__", Json(isPrivate ? Array.Empty<StartPageContributor>() : Contributors))
             .Replace("__SEARCH__", Json(template));
     }
 
@@ -183,6 +191,22 @@ public static class StartPage
           :is(.private, .dark) form:focus-within { border-color: rgba(255, 255, 255, .16); box-shadow: 0 14px 40px rgba(0, 0, 0, .45); }
           :is(.private, .dark) button { background: #38383f; border-color: rgba(255, 255, 255, .06); color: #8e8e99; }
           :is(.private, .dark) button.on { background: #ececf1; color: #1d1d20; }
+          /* Contributors: round photos under the greeting; the GitHub name shows on hover. */
+          .people { display: none; margin-top: 40px; flex-direction: column; align-items: center; gap: 12px; }
+          .people.on { display: flex; }
+          .people h2 { margin: 0; font-size: 12px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--soft); }
+          .faces { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; max-width: 520px; }
+          .face { position: relative; display: block; width: 38px; height: 38px; border-radius: 50%; transition: transform .2s cubic-bezier(.2, .8, .2, 1); }
+          .face img { width: 100%; height: 100%; border-radius: 50%; display: block; border: 2px solid #fff; box-shadow: 0 2px 8px rgba(20, 20, 30, .12); background: #e6e6ea; }
+          .face:hover { transform: translateY(-3px) scale(1.06); }
+          .face::after {
+            content: attr(data-name); position: absolute; left: 50%; top: calc(100% + 8px); transform: translate(-50%, -4px);
+            padding: 5px 9px; border-radius: 7px; font-size: 12.5px; font-weight: 500; white-space: nowrap;
+            background: var(--text); color: #fff; opacity: 0; pointer-events: none; transition: opacity .15s, transform .15s;
+          }
+          .face:hover::after { opacity: 1; transform: translate(-50%, 0); }
+          :is(.private, .dark) .face img { border-color: #2c2c33; box-shadow: 0 2px 8px rgba(0, 0, 0, .4); background: #38383f; }
+          :is(.private, .dark) .face::after { color: #1d1d20; }
           .private .note { display: block; max-width: 470px; margin: 12px 0 0; font-size: 14.5px; line-height: 1.55; color: var(--soft); text-align: center; }
         </style>
         </head>
@@ -203,6 +227,10 @@ public static class StartPage
           </form>
           <h1 class="in" style="animation-delay:.1s"></h1>
           <p class="note in" style="animation-delay:.15s">__PRIVATE_NOTE__</p>
+          <section class="people in" style="animation-delay:.15s">
+            <h2>__CONTRIBUTORS_TITLE__</h2>
+            <div class="faces"></div>
+          </section>
         </main>
         <script>
           const SEARCH = __SEARCH__;
@@ -212,6 +240,23 @@ public static class StartPage
           const hello = hour >= 5 && hour < 12 ? TEXT[0] : hour >= 12 && hour < 20 ? TEXT[1] : TEXT[2];
           document.querySelector('h1').textContent = document.documentElement.classList.contains('private')
             ? '__PRIVATE_TITLE__' : hello + ' ' + TEXT[3];
+
+          const PEOPLE = __CONTRIBUTORS__;
+          const faces = document.querySelector('.faces');
+          for (const p of PEOPLE) {
+            const a = document.createElement('a');
+            a.className = 'face';
+            a.href = p.Profile;
+            a.dataset.name = p.Login;
+            a.setAttribute('aria-label', p.Login);
+            const img = document.createElement('img');
+            img.src = p.Avatar + (p.Avatar.includes('?') ? '&' : '?') + 's=96';
+            img.alt = '';
+            img.loading = 'lazy';
+            a.appendChild(img);
+            faces.appendChild(a);
+          }
+          document.querySelector('.people').classList.toggle('on', PEOPLE.length > 0);
 
           const q = document.getElementById('q');
           const go = document.getElementById('go');
