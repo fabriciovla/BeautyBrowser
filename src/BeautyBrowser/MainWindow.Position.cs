@@ -54,9 +54,7 @@ public sealed partial class MainWindow
 
         Sidebar.Visibility = top ? Visibility.Collapsed : Visibility.Visible;
         Sidebar.HorizontalAlignment = SidebarRight ? HorizontalAlignment.Right : HorizontalAlignment.Left;
-        // On the right the caption buttons would cover the sidebar's top row: it starts below them.
-        Sidebar.Margin = new Thickness(0, SidebarRight ? StripHeight : 0, 0, 0);
-        Sidebar.IsOnRight = SidebarRight;
+        Sidebar.IsOnRight = SidebarRight; // its content starts below the caption buttons
         TopBar.Visibility = top && !_fullscreen ? Visibility.Visible : Visibility.Collapsed;
 
         // Tabs on top keep the caption buttons visible, at the strip's right end; the page is not dragged from.

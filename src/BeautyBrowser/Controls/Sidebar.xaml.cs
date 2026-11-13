@@ -101,10 +101,21 @@ public sealed partial class Sidebar : UserControl
         }
     }
 
-    /// <summary>On the right edge the glass border goes on the other side.</summary>
+    /// <summary>Room left at the top on the right edge, where Windows draws minimize, maximize and close.</summary>
+    private const double CaptionInset = 32;
+
+    /// <summary>
+    /// On the right edge the panel is mirrored: the glass border goes on its left side and the content starts below the
+    /// caption buttons (the glass still fills the whole height, sharing the window's corners).
+    /// </summary>
     public bool IsOnRight
     {
-        set => Panel.BorderThickness = value ? new Thickness(1, 0, 0, 0) : new Thickness(0, 0, 1, 0);
+        set
+        {
+            Panel.BorderThickness = value ? new Thickness(1, 0, 0, 0) : new Thickness(0, 0, 1, 0);
+            Panel.Padding = value ? new Thickness(8, 10 + CaptionInset, 10, 8) : new Thickness(10, 10, 8, 8);
+            PanelNoise.Margin = new Thickness(-Panel.Padding.Left, -Panel.Padding.Top, -Panel.Padding.Right, -Panel.Padding.Bottom);
+        }
     }
 
     public void Attach(BrowserShell shell)
