@@ -13,6 +13,7 @@ public sealed partial class MainWindow
     private Action? _toastAction; // what a tap does when the notice is not about a tab
     private int _toastCount;
     private DispatcherTimer? _newTabToastTimer;
+    private const double ToastSeconds = 3;
 
     private void SetupNewTabToast()
     {
@@ -48,11 +49,12 @@ public sealed partial class MainWindow
 
         _newTabToastTimer ??= CreateNewTabToastTimer();
         _newTabToastTimer.Stop();
+        _newTabToastTimer.Interval = TimeSpan.FromSeconds(ToastSeconds);
         _newTabToastTimer.Start();
     }
 
     /// <summary>The same small notice for anything else (a screenshot): a title, a detail and what a tap does, if anything.</summary>
-    private void ShowInfoToast(string text, string detail, string glyph, Action? tap)
+    private void ShowInfoToast(string text, string detail, string glyph, Action? tap, double seconds = ToastSeconds)
     {
         HideNewTabToast();
         _toastCount = 0;
@@ -67,6 +69,7 @@ public sealed partial class MainWindow
 
         _newTabToastTimer ??= CreateNewTabToastTimer();
         _newTabToastTimer.Stop();
+        _newTabToastTimer.Interval = TimeSpan.FromSeconds(seconds); // an undo stays longer than a plain notice
         _newTabToastTimer.Start();
     }
 
@@ -113,7 +116,7 @@ public sealed partial class MainWindow
 
     private DispatcherTimer CreateNewTabToastTimer()
     {
-        var timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(3) };
+        var timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(ToastSeconds) };
         timer.Tick += (_, _) => HideNewTabToast();
         return timer;
     }

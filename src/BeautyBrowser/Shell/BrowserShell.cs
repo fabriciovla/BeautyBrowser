@@ -46,6 +46,12 @@ public sealed class BrowserShell
             ScheduleSessionSave();
         };
         CurrentTabChanged += (_, _) => ScheduleSessionSave();
+        CurrentTabChanged += (_, _) =>
+        {
+            if (CurrentTab is not { } tab) return;
+            _recent.Remove(tab);
+            _recent.Insert(0, tab);
+        };
         CurrentSpaceChanged += (_, _) => ScheduleSessionSave();
         SpaceRenamed += (_, _) => ScheduleSessionSave();
 
@@ -76,6 +82,7 @@ public sealed class BrowserShell
         var hours = Settings.ArchiveAfterHours;
         if (hours <= 0) return;
         var limit = DateTime.UtcNow - TimeSpan.FromHours(hours);
+        var archived = 0;
 
         foreach (var space in Spaces.Where(s => !s.IsPrivate).ToList())
         {
@@ -88,9 +95,14 @@ public sealed class BrowserShell
 
                 Archive.Add(tab.Url, tab.Title, tab.FaviconUrl, space.Name, tab.LastActiveUtc);
                 RemoveTab(tab, remember: false); // not in "reopen closed tab": it is in the library
+                archived++;
             }
         }
+        if (archived > 0) TabsArchived?.Invoke(this, archived);
     }
+
+    /// <summary>Tabs nobody used were archived on their own (how many), so the window can say where they went.</summary>
+    public event EventHandler<int>? TabsArchived;
 
     /// <summary>Opens an archived tab again in the current space and takes it out of the archive.</summary>
     public void ReopenArchived(ArchivedTab archived)
@@ -210,10 +222,28 @@ public sealed class BrowserShell
 
     public BrowserTab NewTab(string? url = null, bool activate = true) => NewTabIn(CurrentSpace, url, activate);
 
-    private BrowserTab NewTabIn(Space space, string? url, bool activate)
+    // The tab each tab was opened from, as in Chrome: closing it goes back there instead of to its neighbor in the
+    // list (new tabs go to the top, far from the page the link was on). Moving to another tab on purpose ends it.
+    private readonly Dictionary<BrowserTab, BrowserTab> _openers = [];
+
+    // Tabs in the order they were last looked at, the current one first (Ctrl+Tab).
+    private readonly List<BrowserTab> _recent = [];
+
+    /// <summary>A tab is going away: nothing points at it any more.</summary>
+    private void ForgetTab(BrowserTab tab)
+    {
+        _recent.Remove(tab);
+        _openers.Remove(tab);
+        foreach (var child in _openers.Where(p => p.Value == tab).Select(p => p.Key).ToList()) _openers.Remove(child);
+    }
+
+    /// <param name="opener">The tab whose link opened this one; by default, the tab in view when it opens in front.</param>
+    private BrowserTab NewTabIn(Space space, string? url, bool activate, BrowserTab? opener = null)
     {
         var tab = _engine.CreateTab(url, isPrivate: space.IsPrivate);
         Wire(tab);
+        opener ??= activate && space == CurrentSpace ? CurrentTab : null;
+        if (opener is not null) _openers[tab] = opener;
 
         // New tabs go to the top of the list, as in Arc.
         space.Tabs.Insert(0, tab);
@@ -243,8 +273,8 @@ public sealed class BrowserShell
     // A link a private tab opens in a new tab stays private, even when another space is in view.
     private BrowserTab NewTabFrom(BrowserTab source, string url, bool activate = true) =>
         source.IsPrivate != CurrentSpace.IsPrivate && Spaces.FirstOrDefault(s => s.IsPrivate == source.IsPrivate) is { } space
-            ? NewTabIn(space, url, activate)
-            : NewTab(url, activate);
+            ? NewTabIn(space, url, activate, opener: source)
+            : NewTabIn(CurrentSpace, url, activate, opener: source);
 
     /// <summary>A link opened in a tab behind the current one (middle click, Ctrl+click, "Open link in new tab").</summary>
     public event EventHandler<BrowserTab>? BackgroundTabOpened;
@@ -269,6 +299,7 @@ public sealed class BrowserShell
         }
 
         if (previous == tab && space.ActiveTab == tab) return;
+        if (previous is not null) _openers.Remove(previous); // left on purpose: closing it later goes to its neighbor
         if (previous is not null) previous.LastActiveUtc = DateTime.UtcNow; // it was in use until now
         tab.LastActiveUtc = DateTime.UtcNow;
         if (previous is { IsFullscreen: true }) previous.ExitFullscreen();
@@ -289,6 +320,13 @@ public sealed class BrowserShell
         shown.AddRange(TabsReversed ? CurrentSpace.Tabs.Reverse() : CurrentSpace.Tabs);
         return shown;
     }
+
+    /// <summary>
+    /// The same tabs by how recently each was looked at, the current one first: Ctrl+Tab once goes back to the
+    /// previous tab, like Alt+Tab between windows. Tabs not looked at yet keep their shown order, at the end.
+    /// </summary>
+    public List<BrowserTab> TabsByRecentUse() =>
+        TabsInShownOrder().OrderBy(tab => _recent.IndexOf(tab) is var at && at >= 0 ? at : int.MaxValue).ToList();
 
     /// <summary>The next (+1) or previous (-1) tab of the current space, wrapping around (Ctrl+PgDn / Ctrl+PgUp).</summary>
     public void SelectRelativeTab(int delta)
@@ -428,6 +466,8 @@ public sealed class BrowserShell
 
         var index = space.Tabs.IndexOf(tab);
         var wasActive = space.ActiveTab == tab;
+        var opener = _openers.GetValueOrDefault(tab);
+        ForgetTab(tab);
         if (remember && !StartPage.Is(tab.Url) && !space.IsPrivate) RememberClosed(tab.Url, space, tab.GetHistory());
         space.Tabs.RemoveAt(index);
         if (wasActive) space.ActiveTab = null;
@@ -442,8 +482,11 @@ public sealed class BrowserShell
         }
         else if (wasActive)
         {
-            var next = space.Tabs[Math.Min(index, space.Tabs.Count - 1)];
-            if (space == CurrentSpace) SelectTab(next);
+            // Back to the tab it was opened from (in this space, or a favorite); otherwise the one that takes its place.
+            var next = opener is not null && (space.Tabs.Contains(opener) || IsFavoriteTab(opener))
+                ? opener
+                : space.Tabs[Math.Min(index, space.Tabs.Count - 1)];
+            if (space == CurrentSpace) ActivateTab(next);
             else space.ActiveTab = next;
         }
 
@@ -455,11 +498,38 @@ public sealed class BrowserShell
 
     public void DuplicateTab(BrowserTab tab) => NewTab(tab.Url);
 
-    /// <summary>"Clear": closes every tab in the space except the one in view.</summary>
+    /// <summary>"Clear": closes every tab in the space except the one in view, and says how many so it can be undone.</summary>
     public void ClearSpace()
     {
-        foreach (var tab in CurrentSpace.Tabs.Where(t => t != CurrentTab).ToList())
-            CloseTab(tab);
+        var space = CurrentSpace;
+        var tabs = space.Tabs.Where(t => t != CurrentTab).ToList();
+        foreach (var tab in tabs) CloseTab(tab);
+        if (tabs.Count > 0 && !space.IsPrivate) SpaceCleared?.Invoke(this, (space, tabs.Count)); // private tabs are not remembered
+    }
+
+    /// <summary>"Clear" closed these many tabs of a space (see <see cref="UndoClear"/>).</summary>
+    public event EventHandler<(Space Space, int Count)>? SpaceCleared;
+
+    /// <summary>
+    /// Brings back the tabs "Clear" closed in that space, behind the current one and in their order. Like restored
+    /// tabs, each loads when it is first shown.
+    /// </summary>
+    public void UndoClear(Space space, int count)
+    {
+        if (!Spaces.Contains(space)) return;
+        for (; count > 0; count--)
+        {
+            var at = _closedTabs.FindLastIndex(closed => closed.Space == space);
+            if (at < 0) return;
+            var (url, _, history) = _closedTabs[at];
+            _closedTabs.RemoveAt(at);
+
+            var tab = _engine.CreateTab(url, TabCreation.WhenShown);
+            tab.SetRestoredHistory(history.Urls, history.Index);
+            if (History.Lookup(url) is { } entry) tab.SetPlaceholder(entry.Title, entry.FaviconUrl);
+            Wire(tab);
+            space.Tabs.Insert(0, tab);
+        }
     }
 
     /// <summary>Navigates the current tab, or opens a new one.</summary>
@@ -520,6 +590,7 @@ public sealed class BrowserShell
 
         foreach (var tab in space.Tabs.ToList())
         {
+            ForgetTab(tab);
             CloseDevTools(tab);
             tab.Dispose();
         }
@@ -635,6 +706,7 @@ public sealed class BrowserShell
     private void Show(BrowserTab tab)
     {
         if (CurrentTab == tab) return;
+        if (CurrentTab is { } left) _openers.Remove(left); // left on purpose, as in SelectTab
         if (CurrentTab is { IsFullscreen: true } previous) previous.ExitFullscreen();
         CurrentSpace.ActiveTab = tab;
         CurrentTabChanged?.Invoke(this, EventArgs.Empty);
@@ -645,6 +717,7 @@ public sealed class BrowserShell
     {
         var site = _favoriteTabs.First(p => p.Value == tab).Key;
         _favoriteTabs.Remove(site);
+        ForgetTab(tab);
         foreach (var space in Spaces.Where(s => s.ActiveTab == tab))
             space.ActiveTab = space.Tabs.FirstOrDefault();
 

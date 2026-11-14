@@ -66,9 +66,9 @@ public sealed partial class TabSwitcher : UserControl
             return true;
         }
 
-        // Open favorite tabs first, in their order, then the space's tabs (as the strip shows them, with tabs on top).
+        // By how recently each was looked at, the current one first: one Ctrl+Tab goes back to the previous tab.
         _tabs.Clear();
-        _tabs.AddRange(_shell.TabsInShownOrder());
+        _tabs.AddRange(_shell.TabsByRecentUse());
         if (_tabs.Count < 2) return false;
 
         var current = _shell.CurrentTab is { } tab ? _tabs.IndexOf(tab) : -1;
