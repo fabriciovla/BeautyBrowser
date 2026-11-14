@@ -70,6 +70,13 @@ public sealed class SettingsService
         set => Save("search_engine", value);
     }
 
+    /// <summary>Ask the search engine for suggestions while typing in the address bar (what is typed leaves the browser).</summary>
+    public bool SearchSuggestions
+    {
+        get => GetBool("search_suggestions", true);
+        set => Save("search_suggestions", value);
+    }
+
     public string HomePage
     {
         get => _db.GetSetting("home_url", DefaultHomePage);

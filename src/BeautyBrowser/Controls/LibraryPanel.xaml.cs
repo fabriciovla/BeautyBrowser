@@ -45,6 +45,7 @@ public sealed partial class LibraryPanel : UserControl
         HistoryView.Attach(shell.History);
         // Whatever is picked opens in the page on the right; the library stays open.
         HistoryView.UrlSelected += (_, url) => _shell?.Open(url, inNewTab: false);
+        HistoryView.UrlOpenedInBackground += (_, url) => _shell?.OpenInBackground(url);
         DownloadsHost.Children.Add(new DownloadsPanel(shell.Downloads));
         SpacesView.Attach(shell);
         ExtensionsView.Attach(shell);

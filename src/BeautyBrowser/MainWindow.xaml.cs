@@ -125,6 +125,7 @@ public sealed partial class MainWindow : Window
         SetupPermissions();
         SetupPasswords();
         SetupZoomToast();
+        SetupWindowTitle();
         SetupNewTabToast();
         SetupScreenshots();
         SetupNotices();
