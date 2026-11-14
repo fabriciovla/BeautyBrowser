@@ -168,6 +168,310 @@
                 </Button>
             </Border>
 
+            <!--
+                Cards over the page. They live inside the page area so they follow it: clear of a pinned sidebar, under
+                the top bar with tabs on top, and beside docked DevTools.
+            -->
+            <!-- Top right: find in page and, below it, the offer to save a login. -->
+            <StackPanel
+                Margin="0,12,20,0"
+                HorizontalAlignment="Right"
+                VerticalAlignment="Top"
+                Spacing="8">
+                <!-- Find in page (Ctrl+F): a floating card at the top right of the page. -->
+                <Border
+                    x:Name="FindBar"
+                    Width="340"
+                    Height="44"
+                    Padding="12,0,4,0"
+                    HorizontalAlignment="Right"
+                    Background="{StaticResource BeautyCardBrush}"
+                    BorderBrush="{StaticResource BeautyPanelBorderBrush}"
+                    BorderThickness="1"
+                    CornerRadius="{StaticResource BeautyItemCornerRadius}"
+                    Visibility="Collapsed">
+                    <Border.Resources>
+                        <ResourceDictionary Source="ms-appx:///Theme/BeautySurface.xaml" />
+                    </Border.Resources>
+                    <Grid ColumnSpacing="2">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <FontIcon
+                            Margin="0,0,8,0"
+                            VerticalAlignment="Center"
+                            FontSize="13"
+                            Foreground="{StaticResource BeautyTextSecondaryBrush}"
+                            Glyph="&#xE721;" />
+                        <TextBox
+                            x:Name="FindBox"
+                            Grid.Column="1"
+                            Padding="0,10"
+                            VerticalAlignment="Center"
+                            FontSize="13"
+                            IsSpellCheckEnabled="False"
+                            KeyDown="FindBox_KeyDown"
+                            PlaceholderText="{local:T En='Find in page', Es='Buscar en la página'}"
+                            TextChanged="FindBox_TextChanged" />
+                        <TextBlock
+                            x:Name="FindCount"
+                            Grid.Column="2"
+                            Margin="6,0,6,0"
+                            VerticalAlignment="Center"
+                            FontSize="12"
+                            Foreground="{StaticResource BeautyTextSecondaryBrush}" />
+                        <Button
+                            Grid.Column="3"
+                            Width="30"
+                            Height="30"
+                            Padding="0"
+                            Click="FindPrevious_Click"
+                            Style="{StaticResource BeautyIconButton}"
+                            ToolTipService.ToolTip="{local:T En='Previous (Shift+Enter)', Es='Anterior (Mayús+Enter)'}">
+                            <FontIcon FontSize="11" Glyph="&#xE70E;" />
+                        </Button>
+                        <Button
+                            Grid.Column="4"
+                            Width="30"
+                            Height="30"
+                            Padding="0"
+                            Click="FindNext_Click"
+                            Style="{StaticResource BeautyIconButton}"
+                            ToolTipService.ToolTip="{local:T En='Next (Enter)', Es='Siguiente (Enter)'}">
+                            <FontIcon FontSize="11" Glyph="&#xE70D;" />
+                        </Button>
+                        <Button
+                            Grid.Column="5"
+                            Width="30"
+                            Height="30"
+                            Padding="0"
+                            Click="FindClose_Click"
+                            Style="{StaticResource BeautyIconButton}"
+                            ToolTipService.ToolTip="{local:T En='Close (Esc)', Es='Cerrar (Esc)'}">
+                            <FontIcon FontSize="10" Glyph="&#xE711;" />
+                        </Button>
+                    </Grid>
+                </Border>
+
+                <!-- A login was sent: offer to save it, at the top right of the page, like Chrome's key bubble. -->
+                <Border
+                    x:Name="SaveLoginBar"
+                    MaxWidth="380"
+                    Padding="14,12,12,12"
+                    HorizontalAlignment="Right"
+                    Background="{StaticResource BeautyCardBrush}"
+                    BorderBrush="{StaticResource BeautyPanelBorderBrush}"
+                    BorderThickness="1"
+                    CornerRadius="{StaticResource BeautyItemCornerRadius}"
+                    Visibility="Collapsed">
+                    <Border.Resources>
+                        <ResourceDictionary Source="ms-appx:///Theme/BeautySurface.xaml" />
+                    </Border.Resources>
+                    <StackPanel Spacing="10">
+                        <Grid ColumnSpacing="10">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <FontIcon
+                                Margin="0,2,0,0"
+                                VerticalAlignment="Top"
+                                FontSize="14"
+                                Foreground="{StaticResource BeautyTextSecondaryBrush}"
+                                Glyph="&#xE8D7;" />
+                            <TextBlock
+                                x:Name="SaveLoginText"
+                                Grid.Column="1"
+                                FontSize="13"
+                                Foreground="{StaticResource BeautyTextBrush}"
+                                TextWrapping="Wrap" />
+                        </Grid>
+                        <StackPanel HorizontalAlignment="Right" Orientation="Horizontal" Spacing="6">
+                            <Button
+                                Click="SaveLoginNever_Click"
+                                Content="{local:T En='Never for this site', Es='Nunca en este sitio'}"
+                                Style="{StaticResource BeautyChipButton}" />
+                            <Button
+                                Click="SaveLoginDismiss_Click"
+                                Content="{local:T En='Not now', Es='Ahora no'}"
+                                Style="{StaticResource BeautyChipButton}" />
+                            <Button
+                                Click="SaveLogin_Click"
+                                Content="{local:T En='Save', Es='Guardar'}"
+                                Style="{StaticResource BeautyChipButton}" />
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+
+            <!-- A site asks for the microphone, camera, location…: a card at the top left of the page, like Chrome's. -->
+            <Border
+                x:Name="PermissionBar"
+                MaxWidth="420"
+                Margin="20,12,0,0"
+                Padding="14,12,12,12"
+                HorizontalAlignment="Left"
+                VerticalAlignment="Top"
+                Background="{StaticResource BeautyCardBrush}"
+                BorderBrush="{StaticResource BeautyPanelBorderBrush}"
+                BorderThickness="1"
+                CornerRadius="{StaticResource BeautyItemCornerRadius}"
+                Visibility="Collapsed">
+                <Border.Resources>
+                    <ResourceDictionary Source="ms-appx:///Theme/BeautySurface.xaml" />
+                </Border.Resources>
+                <StackPanel Spacing="10">
+                    <Grid ColumnSpacing="10">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <FontIcon
+                            x:Name="PermissionIcon"
+                            VerticalAlignment="Top"
+                            Margin="0,2,0,0"
+                            FontSize="14"
+                            Foreground="{StaticResource BeautyTextSecondaryBrush}"
+                            Glyph="&#xE720;" />
+                        <TextBlock
+                            x:Name="PermissionText"
+                            Grid.Column="1"
+                            FontSize="13"
+                            Foreground="{StaticResource BeautyTextBrush}"
+                            TextWrapping="Wrap" />
+                    </Grid>
+                    <StackPanel HorizontalAlignment="Right" Orientation="Horizontal" Spacing="6">
+                        <Button
+                            x:Name="PermissionBlock"
+                            Click="PermissionBlock_Click"
+                            Content="{local:T En='Block', Es='Bloquear'}"
+                            Style="{StaticResource BeautyChipButton}" />
+                        <Button
+                            x:Name="PermissionAllow"
+                            Click="PermissionAllow_Click"
+                            Content="{local:T En='Allow', Es='Permitir'}"
+                            Style="{StaticResource BeautyChipButton}" />
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
+            <!-- A notice with two choices (a blocked popup, a dangerous download): a card at the bottom left of the page. -->
+            <Border
+                x:Name="NoticeBar"
+                MaxWidth="420"
+                Margin="20,0,0,12"
+                Padding="14,12,12,12"
+                HorizontalAlignment="Left"
+                VerticalAlignment="Bottom"
+                Background="{StaticResource BeautyCardBrush}"
+                BorderBrush="{StaticResource BeautyPanelBorderBrush}"
+                BorderThickness="1"
+                CornerRadius="{StaticResource BeautyItemCornerRadius}"
+                Visibility="Collapsed">
+                <Border.Resources>
+                    <ResourceDictionary Source="ms-appx:///Theme/BeautySurface.xaml" />
+                </Border.Resources>
+                <StackPanel Spacing="10">
+                    <Grid ColumnSpacing="10">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <FontIcon
+                            x:Name="NoticeIcon"
+                            Margin="0,2,0,0"
+                            VerticalAlignment="Top"
+                            FontSize="14"
+                            Foreground="{StaticResource BeautyTextSecondaryBrush}"
+                            Glyph="&#xE7BA;" />
+                        <StackPanel Grid.Column="1" Spacing="2">
+                            <TextBlock
+                                x:Name="NoticeText"
+                                FontSize="13"
+                                Foreground="{StaticResource BeautyTextBrush}"
+                                TextWrapping="Wrap" />
+                            <TextBlock
+                                x:Name="NoticeDetail"
+                                FontSize="12"
+                                Foreground="{StaticResource BeautyTextSecondaryBrush}"
+                                TextWrapping="Wrap"
+                                Visibility="Collapsed" />
+                        </StackPanel>
+                    </Grid>
+                    <StackPanel HorizontalAlignment="Right" Orientation="Horizontal" Spacing="6">
+                        <Button
+                            x:Name="NoticeSecondary"
+                            Click="NoticeSecondary_Click"
+                            Style="{StaticResource BeautyChipButton}" />
+                        <Button
+                            x:Name="NoticePrimary"
+                            Click="NoticePrimary_Click"
+                            Style="{StaticResource BeautyChipButton}" />
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
+            <!-- A new version was downloaded: a card at the bottom right of the page. It installs when the browser closes. -->
+            <Border
+                x:Name="UpdateBar"
+                MaxWidth="380"
+                Margin="0,0,20,12"
+                Padding="14,12,12,12"
+                HorizontalAlignment="Right"
+                VerticalAlignment="Bottom"
+                Background="{StaticResource BeautyCardBrush}"
+                BorderBrush="{StaticResource BeautyPanelBorderBrush}"
+                BorderThickness="1"
+                CornerRadius="{StaticResource BeautyItemCornerRadius}"
+                Visibility="Collapsed">
+                <Border.Resources>
+                    <ResourceDictionary Source="ms-appx:///Theme/BeautySurface.xaml" />
+                </Border.Resources>
+                <StackPanel Spacing="10">
+                    <Grid ColumnSpacing="10">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <FontIcon
+                            Margin="0,2,0,0"
+                            VerticalAlignment="Top"
+                            FontSize="14"
+                            Foreground="{StaticResource BeautyTextSecondaryBrush}"
+                            Glyph="&#xE896;" />
+                        <StackPanel Grid.Column="1" Spacing="2">
+                            <TextBlock
+                                x:Name="UpdateTitle"
+                                FontSize="13"
+                                Foreground="{StaticResource BeautyTextBrush}"
+                                TextWrapping="Wrap" />
+                            <TextBlock
+                                FontSize="12"
+                                Foreground="{StaticResource BeautyTextSecondaryBrush}"
+                                Text="{local:T En='It installs by itself when you close the browser.', Es='Se instala sola cuando cerrás el navegador.'}"
+                                TextWrapping="Wrap" />
+                        </StackPanel>
+                    </Grid>
+                    <StackPanel HorizontalAlignment="Right" Orientation="Horizontal" Spacing="6">
+                        <Button
+                            x:Name="UpdateLater"
+                            Click="UpdateLater_Click"
+                            Content="{local:T En='Later', Es='Después'}"
+                            Style="{StaticResource BeautyChipButton}" />
+                        <Button
+                            x:Name="UpdateRestart"
+                            Click="UpdateRestart_Click"
+                            Content="{local:T En='Restart now', Es='Reiniciar ahora'}"
+                            Style="{StaticResource BeautyChipButton}" />
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
             <!-- Screenshot of an area: the page dims, except the rectangle dragged over it (MainWindow.Screenshots). -->
             <Grid
                 x:Name="CaptureOverlay"
@@ -270,113 +574,6 @@
             IsHitTestVisible="False"
             Opacity="0" />
 
-        <!-- A site asks for the microphone, camera, location…: a card at the top left of the page, like Chrome's. -->
-        <Border
-            x:Name="PermissionBar"
-            MaxWidth="420"
-            Margin="28,20,0,0"
-            Padding="14,12,12,12"
-            HorizontalAlignment="Left"
-            VerticalAlignment="Top"
-            Background="{StaticResource BeautyCardBrush}"
-            BorderBrush="{StaticResource BeautyPanelBorderBrush}"
-            BorderThickness="1"
-            CornerRadius="{StaticResource BeautyItemCornerRadius}"
-            Visibility="Collapsed">
-            <Border.Resources>
-                <ResourceDictionary Source="ms-appx:///Theme/BeautySurface.xaml" />
-            </Border.Resources>
-            <StackPanel Spacing="10">
-                <Grid ColumnSpacing="10">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="*" />
-                    </Grid.ColumnDefinitions>
-                    <FontIcon
-                        x:Name="PermissionIcon"
-                        VerticalAlignment="Top"
-                        Margin="0,2,0,0"
-                        FontSize="14"
-                        Foreground="{StaticResource BeautyTextSecondaryBrush}"
-                        Glyph="&#xE720;" />
-                    <TextBlock
-                        x:Name="PermissionText"
-                        Grid.Column="1"
-                        FontSize="13"
-                        Foreground="{StaticResource BeautyTextBrush}"
-                        TextWrapping="Wrap" />
-                </Grid>
-                <StackPanel HorizontalAlignment="Right" Orientation="Horizontal" Spacing="6">
-                    <Button
-                        x:Name="PermissionBlock"
-                        Click="PermissionBlock_Click"
-                        Content="{local:T En='Block', Es='Bloquear'}"
-                        Style="{StaticResource BeautyChipButton}" />
-                    <Button
-                        x:Name="PermissionAllow"
-                        Click="PermissionAllow_Click"
-                        Content="{local:T En='Allow', Es='Permitir'}"
-                        Style="{StaticResource BeautyChipButton}" />
-                </StackPanel>
-            </StackPanel>
-        </Border>
-
-        <!-- A notice with two choices (a blocked popup, a dangerous download): a card at the bottom left of the page. -->
-        <Border
-            x:Name="NoticeBar"
-            MaxWidth="420"
-            Margin="28,0,0,20"
-            Padding="14,12,12,12"
-            HorizontalAlignment="Left"
-            VerticalAlignment="Bottom"
-            Background="{StaticResource BeautyCardBrush}"
-            BorderBrush="{StaticResource BeautyPanelBorderBrush}"
-            BorderThickness="1"
-            CornerRadius="{StaticResource BeautyItemCornerRadius}"
-            Visibility="Collapsed">
-            <Border.Resources>
-                <ResourceDictionary Source="ms-appx:///Theme/BeautySurface.xaml" />
-            </Border.Resources>
-            <StackPanel Spacing="10">
-                <Grid ColumnSpacing="10">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="*" />
-                    </Grid.ColumnDefinitions>
-                    <FontIcon
-                        x:Name="NoticeIcon"
-                        Margin="0,2,0,0"
-                        VerticalAlignment="Top"
-                        FontSize="14"
-                        Foreground="{StaticResource BeautyTextSecondaryBrush}"
-                        Glyph="&#xE7BA;" />
-                    <StackPanel Grid.Column="1" Spacing="2">
-                        <TextBlock
-                            x:Name="NoticeText"
-                            FontSize="13"
-                            Foreground="{StaticResource BeautyTextBrush}"
-                            TextWrapping="Wrap" />
-                        <TextBlock
-                            x:Name="NoticeDetail"
-                            FontSize="12"
-                            Foreground="{StaticResource BeautyTextSecondaryBrush}"
-                            TextWrapping="Wrap"
-                            Visibility="Collapsed" />
-                    </StackPanel>
-                </Grid>
-                <StackPanel HorizontalAlignment="Right" Orientation="Horizontal" Spacing="6">
-                    <Button
-                        x:Name="NoticeSecondary"
-                        Click="NoticeSecondary_Click"
-                        Style="{StaticResource BeautyChipButton}" />
-                    <Button
-                        x:Name="NoticePrimary"
-                        Click="NoticePrimary_Click"
-                        Style="{StaticResource BeautyChipButton}" />
-                </StackPanel>
-            </StackPanel>
-        </Border>
-
         <!-- Saved accounts for the login field with focus, right under it (see MainWindow.Passwords). -->
         <Canvas x:Name="LoginLayer" Canvas.ZIndex="5">
             <Border
@@ -395,196 +592,6 @@
             </Border>
         </Canvas>
 
-        <!-- A login was sent: offer to save it, at the top right of the page, like Chrome's key bubble. -->
-        <Border
-            x:Name="SaveLoginBar"
-            MaxWidth="380"
-            Margin="0,20,28,0"
-            Padding="14,12,12,12"
-            HorizontalAlignment="Right"
-            VerticalAlignment="Top"
-            Background="{StaticResource BeautyCardBrush}"
-            BorderBrush="{StaticResource BeautyPanelBorderBrush}"
-            BorderThickness="1"
-            CornerRadius="{StaticResource BeautyItemCornerRadius}"
-            Visibility="Collapsed">
-            <Border.Resources>
-                <ResourceDictionary Source="ms-appx:///Theme/BeautySurface.xaml" />
-            </Border.Resources>
-            <StackPanel Spacing="10">
-                <Grid ColumnSpacing="10">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="*" />
-                    </Grid.ColumnDefinitions>
-                    <FontIcon
-                        Margin="0,2,0,0"
-                        VerticalAlignment="Top"
-                        FontSize="14"
-                        Foreground="{StaticResource BeautyTextSecondaryBrush}"
-                        Glyph="&#xE8D7;" />
-                    <TextBlock
-                        x:Name="SaveLoginText"
-                        Grid.Column="1"
-                        FontSize="13"
-                        Foreground="{StaticResource BeautyTextBrush}"
-                        TextWrapping="Wrap" />
-                </Grid>
-                <StackPanel HorizontalAlignment="Right" Orientation="Horizontal" Spacing="6">
-                    <Button
-                        Click="SaveLoginNever_Click"
-                        Content="{local:T En='Never for this site', Es='Nunca en este sitio'}"
-                        Style="{StaticResource BeautyChipButton}" />
-                    <Button
-                        Click="SaveLoginDismiss_Click"
-                        Content="{local:T En='Not now', Es='Ahora no'}"
-                        Style="{StaticResource BeautyChipButton}" />
-                    <Button
-                        Click="SaveLogin_Click"
-                        Content="{local:T En='Save', Es='Guardar'}"
-                        Style="{StaticResource BeautyChipButton}" />
-                </StackPanel>
-            </StackPanel>
-        </Border>
-
-        <!-- A new version was downloaded: a card at the bottom right of the page. It installs when the browser closes. -->
-        <Border
-            x:Name="UpdateBar"
-            MaxWidth="380"
-            Margin="0,0,28,20"
-            Padding="14,12,12,12"
-            HorizontalAlignment="Right"
-            VerticalAlignment="Bottom"
-            Background="{StaticResource BeautyCardBrush}"
-            BorderBrush="{StaticResource BeautyPanelBorderBrush}"
-            BorderThickness="1"
-            CornerRadius="{StaticResource BeautyItemCornerRadius}"
-            Visibility="Collapsed">
-            <Border.Resources>
-                <ResourceDictionary Source="ms-appx:///Theme/BeautySurface.xaml" />
-            </Border.Resources>
-            <StackPanel Spacing="10">
-                <Grid ColumnSpacing="10">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="*" />
-                    </Grid.ColumnDefinitions>
-                    <FontIcon
-                        Margin="0,2,0,0"
-                        VerticalAlignment="Top"
-                        FontSize="14"
-                        Foreground="{StaticResource BeautyTextSecondaryBrush}"
-                        Glyph="&#xE896;" />
-                    <StackPanel Grid.Column="1" Spacing="2">
-                        <TextBlock
-                            x:Name="UpdateTitle"
-                            FontSize="13"
-                            Foreground="{StaticResource BeautyTextBrush}"
-                            TextWrapping="Wrap" />
-                        <TextBlock
-                            FontSize="12"
-                            Foreground="{StaticResource BeautyTextSecondaryBrush}"
-                            Text="{local:T En='It installs by itself when you close the browser.', Es='Se instala sola cuando cerrás el navegador.'}"
-                            TextWrapping="Wrap" />
-                    </StackPanel>
-                </Grid>
-                <StackPanel HorizontalAlignment="Right" Orientation="Horizontal" Spacing="6">
-                    <Button
-                        x:Name="UpdateLater"
-                        Click="UpdateLater_Click"
-                        Content="{local:T En='Later', Es='Después'}"
-                        Style="{StaticResource BeautyChipButton}" />
-                    <Button
-                        x:Name="UpdateRestart"
-                        Click="UpdateRestart_Click"
-                        Content="{local:T En='Restart now', Es='Reiniciar ahora'}"
-                        Style="{StaticResource BeautyChipButton}" />
-                </StackPanel>
-            </StackPanel>
-        </Border>
-
-        <!-- Find in page (Ctrl+F): a floating card at the top right of the page. -->
-        <Border
-            x:Name="FindBar"
-            Width="340"
-            Height="44"
-            Margin="0,20,28,0"
-            Padding="12,0,4,0"
-            HorizontalAlignment="Right"
-            VerticalAlignment="Top"
-            Background="{StaticResource BeautyCardBrush}"
-            BorderBrush="{StaticResource BeautyPanelBorderBrush}"
-            BorderThickness="1"
-            CornerRadius="{StaticResource BeautyItemCornerRadius}"
-            Visibility="Collapsed">
-            <Border.Resources>
-                <ResourceDictionary Source="ms-appx:///Theme/BeautySurface.xaml" />
-            </Border.Resources>
-            <Grid ColumnSpacing="2">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="Auto" />
-                </Grid.ColumnDefinitions>
-                <FontIcon
-                    Margin="0,0,8,0"
-                    VerticalAlignment="Center"
-                    FontSize="13"
-                    Foreground="{StaticResource BeautyTextSecondaryBrush}"
-                    Glyph="&#xE721;" />
-                <TextBox
-                    x:Name="FindBox"
-                    Grid.Column="1"
-                    Padding="0,10"
-                    VerticalAlignment="Center"
-                    FontSize="13"
-                    IsSpellCheckEnabled="False"
-                    KeyDown="FindBox_KeyDown"
-                    PlaceholderText="{local:T En='Find in page', Es='Buscar en la página'}"
-                    TextChanged="FindBox_TextChanged" />
-                <TextBlock
-                    x:Name="FindCount"
-                    Grid.Column="2"
-                    Margin="6,0,6,0"
-                    VerticalAlignment="Center"
-                    FontSize="12"
-                    Foreground="{StaticResource BeautyTextSecondaryBrush}" />
-                <Button
-                    Grid.Column="3"
-                    Width="30"
-                    Height="30"
-                    Padding="0"
-                    Click="FindPrevious_Click"
-                    Style="{StaticResource BeautyIconButton}"
-                    ToolTipService.ToolTip="{local:T En='Previous (Shift+Enter)', Es='Anterior (Mayús+Enter)'}">
-                    <FontIcon FontSize="11" Glyph="&#xE70E;" />
-                </Button>
-                <Button
-                    Grid.Column="4"
-                    Width="30"
-                    Height="30"
-                    Padding="0"
-                    Click="FindNext_Click"
-                    Style="{StaticResource BeautyIconButton}"
-                    ToolTipService.ToolTip="{local:T En='Next (Enter)', Es='Siguiente (Enter)'}">
-                    <FontIcon FontSize="11" Glyph="&#xE70D;" />
-                </Button>
-                <Button
-                    Grid.Column="5"
-                    Width="30"
-                    Height="30"
-                    Padding="0"
-                    Click="FindClose_Click"
-                    Style="{StaticResource BeautyIconButton}"
-                    ToolTipService.ToolTip="{local:T En='Close (Esc)', Es='Cerrar (Esc)'}">
-                    <FontIcon FontSize="10" Glyph="&#xE711;" />
-                </Button>
-            </Grid>
-        </Border>
-
         <!--
             Peek: a link that would open another tab shows here over the page, growing from where it was clicked, with
             close and open-as-tab buttons beside it.
@@ -595,7 +602,7 @@
             <Grid x:Name="PeekHost" HorizontalAlignment="Left" VerticalAlignment="Top">
                 <Border
                     x:Name="PeekCard"
-                    Background="White"
+                    Background="{StaticResource BeautyCardBrush}"
                     BorderBrush="#29000000"
                     BorderThickness="1"
                     CornerRadius="12">
@@ -712,6 +719,7 @@
             RenderTransformOrigin="0.5,0.5"
             ToolTipService.ToolTip="{local:T En='Downloads', Es='Descargas'}">
             <Button.Resources>
+                <!-- Darker shades of the accent, set when the theme changes (ApplyAccentShades). -->
                 <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#2A63D4" />
                 <SolidColorBrush x:Key="ButtonBackgroundPressed" Color="#2558BD" />
             </Button.Resources>
