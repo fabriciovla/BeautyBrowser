@@ -52,6 +52,22 @@ public static class AddressDisplay
         return result.ToString();
     }
 
+    /// <summary>
+    /// The address without the scheme, the "www." and a bare root slash, readable like <see cref="ToDisplay"/>:
+    /// "https://www.youtube.com/watch?v=abc" gives "youtube.com/watch?v=abc", "https://example.com/" gives "example.com".
+    /// Anything that is not http or https comes back unchanged.
+    /// </summary>
+    public static string ToShort(string? url)
+    {
+        if (string.IsNullOrEmpty(url) || !Uri.TryCreate(url, UriKind.Absolute, out var uri) || uri.Scheme is not ("http" or "https")) return url ?? "";
+        var shown = ToDisplay(url);
+        var rest = shown[(shown.IndexOf("://", StringComparison.Ordinal) + 3)..];
+        if (rest.StartsWith("www.", StringComparison.OrdinalIgnoreCase)) rest = rest[4..];
+        var slash = rest.IndexOf('/');
+        if (slash >= 0 && slash == rest.Length - 1) rest = rest[..slash]; // "example.com/"
+        return rest;
+    }
+
     private static void AppendDecoded(StringBuilder result, string url, int escapesStart, List<byte> bytes)
     {
         var offset = 0; // position in bytes
