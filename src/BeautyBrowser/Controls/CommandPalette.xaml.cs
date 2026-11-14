@@ -310,23 +310,18 @@ public sealed partial class CommandPalette : UserControl
     private static bool SameRow(PaletteResult a, PaletteResult b) =>
         a.Kind == b.Kind && a.Title == b.Title && a.Subtitle == b.Subtitle && a.Url == b.Url && a.Tab == b.Tab;
 
-    /// <summary>Asks Google for suggestions (with a short pause between keystrokes) and refreshes when they arrive.</summary>
+    /// <summary>Asks the chosen engine for suggestions (with a short pause between keystrokes) and refreshes when they arrive.</summary>
     private async void RequestSuggestions(string query)
     {
         _suggestionsRequest?.Cancel();
-        if (query.Length == 0 || LooksLikeUrl(query)) return;
+        if (query.Length == 0 || LooksLikeUrl(query) || _shell is null || !_shell.Settings.SearchSuggestions) return; // off: nothing leaves the browser
 
         var request = _suggestionsRequest = new CancellationTokenSource();
         try
         {
             await Task.Delay(60, request.Token);
-            var url = "https://suggestqueries.google.com/complete/search?client=firefox&hl=" + L.T("en", "es") + "&ie=utf-8&oe=utf-8&q=" +
-                      Uri.EscapeDataString(query);
-            var json = await Http.GetStringAsync(url, request.Token);
-
-            // Format: ["query", ["suggestion 1", "suggestion 2", …]]
-            using var doc = JsonDocument.Parse(json);
-            var list = doc.RootElement[1].EnumerateArray().Select(e => e.GetString() ?? "").Where(s => s.Length > 0).ToList();
+            var json = await Http.GetStringAsync(SearchSuggestions.Url(_shell.Settings.SearchEngine, query, L.T("en", "es")), request.Token);
+            var list = SearchSuggestions.Parse(json);
 
             if (request.IsCancellationRequested || Input.Text.Trim() != query) return;
             _suggestions = list;

@@ -249,6 +249,10 @@ public sealed class BrowserShell
     /// <summary>A link opened in a tab behind the current one (middle click, Ctrl+click, "Open link in new tab").</summary>
     public event EventHandler<BrowserTab>? BackgroundTabOpened;
 
+    /// <summary>A tab behind the current one (Ctrl+click or middle click in the history), announced like any background tab.</summary>
+    public void OpenInBackground(string url) =>
+        BackgroundTabOpened?.Invoke(this, NewTab(BrowserTab.InputToUrl(url), activate: false));
+
     /// <summary>The start page (beauty://newtab). Opens when no tab is left, instead of loading a search engine.</summary>
     public BrowserTab OpenStartPage() => NewTab(StartPage.Url);
 

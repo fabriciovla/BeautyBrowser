@@ -92,6 +92,10 @@ public sealed partial class SettingsPanel : UserControl
                 (Action)(() => s.SearchEngine = engine.Name)))
             .ToList());
 
+        ToggleRows(SuggestionToggles,
+            [(L.T("Search suggestions", "Sugerencias de búsqueda"), L.T("Sends what you type to the search engine to suggest searches", "Envía lo que escribís al buscador para sugerirte búsquedas"),
+                 () => s.SearchSuggestions, v => s.SearchSuggestions = v)]);
+
         HomePageText.Text = s.HomePage;
 
         void FillTheme() => ThemeSwatches.Fill(ThemeRow, s.ThemeKey, key => s.ThemeKey = key);
