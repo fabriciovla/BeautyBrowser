@@ -1409,11 +1409,6 @@ public sealed partial class MainWindow : Window
     private bool CloseWithEscape()
     {
         if (CancelCapture()) return true;
-        if (_userFullscreen)
-        {
-            SetWindowFullscreen(false);
-            return true;
-        }
         if (PeekOpen)
         {
             ClosePeek();
@@ -1427,6 +1422,12 @@ public sealed partial class MainWindow : Window
         if (FindBar.Visibility == Visibility.Visible)
         {
             CloseFindBar();
+            return true;
+        }
+        // Leaving F11 comes after whatever was opened over the page in it (Peek, the tab switcher, find).
+        if (_userFullscreen)
+        {
+            SetWindowFullscreen(false);
             return true;
         }
         if (!_libraryShown) return false; // without the library open, Esc reaches the page
@@ -1451,6 +1452,12 @@ public sealed partial class MainWindow : Window
         if (_fullscreen && !_userFullscreen) _shell.CurrentTab?.ExitFullscreen();
         else SetWindowFullscreen(!_userFullscreen);
     }
+
+    /// <summary>
+    /// The find bar and the tab switcher need the window around the page, which full screen hides. With F11 they still
+    /// work (the window is just bigger); a page in HTML full screen (a video) has the whole screen.
+    /// </summary>
+    private bool OverlaysAllowed => !_fullscreen || (_userFullscreen && _shell.CurrentTab is not { IsFullscreen: true });
 
     private void SetWindowFullscreen(bool fullscreen)
     {
@@ -1498,7 +1505,7 @@ public sealed partial class MainWindow : Window
 
     private void StepSwitcher(int delta)
     {
-        if (_fullscreen || Palette.IsOpen) return;
+        if (!OverlaysAllowed || Palette.IsOpen) return;
         if (!Switcher.IsOpen) HidePreview();
         if (!Switcher.Step(delta)) return;
 
@@ -1874,7 +1881,7 @@ public sealed partial class MainWindow : Window
 
     private void OpenFindBar()
     {
-        if (_shell.CurrentTab is not { } tab || _fullscreen) return;
+        if (_shell.CurrentTab is not { } tab || !OverlaysAllowed) return;
         WatchFind(tab);
         FindBar.Visibility = Visibility.Visible;
         FindBox.Focus(FocusState.Programmatic);
