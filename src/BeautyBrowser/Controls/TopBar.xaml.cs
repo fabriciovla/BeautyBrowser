@@ -679,7 +679,7 @@ public sealed partial class TopBar : UserControl
         Add(L.T("Copy link", "Copiar enlace"), () =>
         {
             var package = new DataPackage();
-            package.SetText(tab.Url);
+            package.SetText(ReaderMode.PageUrl(tab.Url));
             Clipboard.SetContent(package);
         });
         Add(L.T("Reload", "Volver a cargar"), () => tab.Reload());
