@@ -152,6 +152,9 @@ public sealed partial class MainWindow : Window
             // With tabs on top the cursor may already be back in the address bar (Ctrl+T while the list was closing).
             if (!(TabsOnTop && TopBar.AddressHasFocus)) WebView.Focus(FocusState.Programmatic);
         };
+        // Tabs on top: Enter, Esc or a picked result in the address bar hand the focus to the page right away. Left in
+        // the bar, it kept showing what was typed and no longer searched until it lost the focus some other way.
+        Palette.Dismissed += (_, _) => WebView.Focus(FocusState.Programmatic);
         DevToolsSplitter.Dragged += (_, dx) => ResizeDevTools(_devToolsWidth - dx);
 
         _shell.CurrentTabChanged += (_, _) =>
@@ -288,7 +291,17 @@ public sealed partial class MainWindow : Window
         _showLoadBar = s.ShowLoadBar;
         Controls.NoiseLayer.Configure(s.GlassTexture, s.GlassGrain / 100.0, s.GlassSoftness / 100.0);
         AppTheme.Apply(s.ThemeKey);
+        ApplyAccentShades();
         ApplyPrivateLook();
+    }
+
+    /// <summary>The floating downloads button is the accent color: under the mouse and pressed, a darker shade of it.</summary>
+    private void ApplyAccentShades()
+    {
+        if (Application.Current.Resources["BeautyAccentBrush"] is not SolidColorBrush accent) return;
+        var black = Windows.UI.Color.FromArgb(255, 0, 0, 0);
+        if (FloatingLibrary.Resources["ButtonBackgroundPointerOver"] is SolidColorBrush hover) hover.Color = AppTheme.Mix(accent.Color, black, 0.10);
+        if (FloatingLibrary.Resources["ButtonBackgroundPressed"] is SolidColorBrush pressed) pressed.Color = AppTheme.Mix(accent.Color, black, 0.20);
     }
 
     /// <summary>
