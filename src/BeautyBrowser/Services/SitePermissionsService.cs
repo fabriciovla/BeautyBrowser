@@ -37,6 +37,12 @@ public sealed class SitePermissionsService
     public IEnumerable<string> OriginsAllowing(PagePermission permission) =>
         _decisions.Where(site => site.Value.TryGetValue(permission.ToString(), out var allowed) && allowed).Select(site => site.Key);
 
+    /// <summary>Whether an answer to this request would be kept (sharing the screen, for one, is asked every time).</summary>
+    public static bool Remembers(PagePermission permissions) => Kept(permissions) != PagePermission.None;
+
+    /// <summary>The part of a request whose answer can be kept.</summary>
+    public static PagePermission Kept(PagePermission permissions) => permissions & ~AlwaysAsk;
+
     public void Remember(string origin, PagePermission permissions, bool allowed)
     {
         permissions &= ~AlwaysAsk;

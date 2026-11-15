@@ -330,6 +330,7 @@
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto" />
                             <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
                         <FontIcon
                             x:Name="PermissionIcon"
@@ -344,6 +345,16 @@
                             FontSize="13"
                             Foreground="{StaticResource BeautyTextBrush}"
                             TextWrapping="Wrap" />
+                        <!-- Not now: the site gets a no this time and nothing is remembered. -->
+                        <Button
+                            Grid.Column="2"
+                            Margin="0,-3,-2,0"
+                            VerticalAlignment="Top"
+                            Click="PermissionDismiss_Click"
+                            Style="{StaticResource BeautyTabCloseButton}"
+                            ToolTipService.ToolTip="{local:T En='Not now', Es='Ahora no'}">
+                            <FontIcon FontSize="9" Glyph="&#xE711;" />
+                        </Button>
                     </Grid>
                     <StackPanel HorizontalAlignment="Right" Orientation="Horizontal" Spacing="6">
                         <Button
@@ -351,6 +362,12 @@
                             Click="PermissionBlock_Click"
                             Content="{local:T En='Block', Es='Bloquear'}"
                             Style="{StaticResource BeautyChipButton}" />
+                        <Button
+                            x:Name="PermissionOnce"
+                            Click="PermissionOnce_Click"
+                            Content="{local:T En='Only this time', Es='Solo esta vez'}"
+                            Style="{StaticResource BeautyChipButton}"
+                            ToolTipService.ToolTip="{local:T En='Until you close this tab', Es='Hasta que cierres esta pestaña'}" />
                         <Button
                             x:Name="PermissionAllow"
                             Click="PermissionAllow_Click"

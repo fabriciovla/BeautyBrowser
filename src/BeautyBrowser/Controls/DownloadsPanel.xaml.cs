@@ -47,6 +47,19 @@ public sealed partial class DownloadsPanel : UserControl
         var remove = new MenuFlyoutItem { Text = L.T("Remove from list", "Quitar de la lista") };
         remove.Click += (_, _) => { _downloads.Items.Remove(entry); _downloads.Save(); };
 
+        // What the row's buttons do, for whoever goes to the menu first.
+        void Add(string text, Action action)
+        {
+            var item = new MenuFlyoutItem { Text = text };
+            item.Click += (_, _) => action();
+            menu.Items.Add(item);
+        }
+        if (entry.IsRunning) Add(L.T("Pause", "Pausar"), () => _downloads.Pause(entry));
+        if (entry.IsHeld) Add(L.T("Resume", "Continuar"), () => _downloads.Resume(entry));
+        if (entry.IsInProgress) Add(L.T("Cancel", "Cancelar"), () => _downloads.Cancel(entry));
+        if (entry.CanRetry) Add(L.T("Try again", "Reintentar"), () => _downloads.Retry(entry));
+        if (menu.Items.Count > 0) menu.Items.Add(new MenuFlyoutSeparator());
+
         menu.Items.Add(open);
         menu.Items.Add(show);
         menu.Items.Add(new MenuFlyoutSeparator());
@@ -54,6 +67,13 @@ public sealed partial class DownloadsPanel : UserControl
         menu.ShowAt((FrameworkElement)sender, e.GetPosition((FrameworkElement)sender));
         e.Handled = true;
     }
+
+    private static DownloadEntry? EntryOf(object sender) => (sender as FrameworkElement)?.Tag as DownloadEntry;
+
+    private void Pause_Click(object sender, RoutedEventArgs e) { if (EntryOf(sender) is { } entry) _downloads.Pause(entry); }
+    private void Resume_Click(object sender, RoutedEventArgs e) { if (EntryOf(sender) is { } entry) _downloads.Resume(entry); }
+    private void Cancel_Click(object sender, RoutedEventArgs e) { if (EntryOf(sender) is { } entry) _downloads.Cancel(entry); }
+    private void Retry_Click(object sender, RoutedEventArgs e) { if (EntryOf(sender) is { } entry) _downloads.Retry(entry); }
 
     private void OpenFolder_Click(object sender, RoutedEventArgs e) =>
         Start("explorer.exe", $"\"{BrowserTab.DownloadsDirectory}\"");
