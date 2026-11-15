@@ -192,7 +192,7 @@ public sealed partial class TopBar : UserControl
 
         var wanted = new List<object>();
         foreach (var site in _shell.Favorites.Items)
-            if (_shell.FavoriteTabOf(site) is not null) wanted.Add(site);
+            if (!_shell.CurrentSpace.IsPrivate && _shell.FavoriteTabOf(site) is not null) wanted.Add(site); // not in the private space
         // The space keeps its newest tab first (the sidebar shows it on top); here it goes last, on the right, as in
         // Chrome.
         wanted.AddRange(_space.Reverse());

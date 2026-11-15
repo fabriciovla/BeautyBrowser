@@ -29,6 +29,16 @@ public sealed partial class MainWindow
             }
         };
         _shell.DownloadApprovalRequested += (_, item) => AddNotice(DangerousDownloadNotice(item.Approval));
+        _shell.TabsArchived += (_, count) =>
+        {
+            _archivedUnseen += count; // a notice still on screen counts the new ones too
+            AddNotice(ArchivedNotice(_archivedUnseen));
+        };
+        // "Clear" closes many tabs with one click: the notice at the top offers to bring them back.
+        _shell.SpaceCleared += (_, cleared) => ShowInfoToast(
+            cleared.Count == 1 ? L.T("1 tab closed", "Se cerró 1 pestaña") : L.T($"{cleared.Count} tabs closed", $"Se cerraron {cleared.Count} pestañas"),
+            L.T("Tap to undo", "Tocá para deshacer"), "\uE7A7",
+            () => _shell.UndoClear(cleared.Space, cleared.Count), seconds: 8);
         _shell.ExternalAppRequested += (_, item) =>
         {
             // While one is pending the new request is ignored: a page could swap the app right before the click.
@@ -99,6 +109,21 @@ public sealed partial class MainWindow
             SecondaryLabel: L.T("Dismiss", "Cerrar"),
             Secondary: () => { });
     }
+
+    private int _archivedUnseen;
+
+    // Tabs nobody used went to the library on their own: say so, or they seem to have vanished.
+    private Notice ArchivedNotice(int count) => new(
+        Key: "archived", Tab: null, Glyph: "\uE7B8",
+        Text: count == 1
+            ? L.T("1 tab you were not using was archived.", "Se archivó 1 pestaña que no usabas.")
+            : L.T($"{count} tabs you were not using were archived.", $"Se archivaron {count} pestañas que no usabas."),
+        Detail: L.T("They are in the library, under Archived. Settings lets you change when this happens.",
+            "Están en la biblioteca, en Archivadas. En Ajustes podés cambiar cuándo pasa."),
+        PrimaryLabel: L.T("See them", "Verlas"),
+        Primary: () => { _archivedUnseen = 0; OpenLibrary(Controls.LibrarySection.Archived); },
+        SecondaryLabel: L.T("Dismiss", "Cerrar"),
+        Secondary: () => _archivedUnseen = 0);
 
     private static Notice CrashNotice(BrowserTab tab) => new(
         Key: (tab, "crashed"), Tab: tab, Glyph: "",
