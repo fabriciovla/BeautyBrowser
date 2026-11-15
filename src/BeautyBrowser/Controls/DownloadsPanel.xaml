@@ -63,7 +63,47 @@
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="32" />
                                         <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
                                     </Grid.ColumnDefinitions>
+                                    <!-- Pause or continue and cancel while it downloads; try again once it was canceled or failed. -->
+                                    <StackPanel
+                                        Grid.Column="2"
+                                        VerticalAlignment="Center"
+                                        Orientation="Horizontal"
+                                        Spacing="2">
+                                        <Button
+                                            Click="Pause_Click"
+                                            Style="{StaticResource BeautyTabCloseButton}"
+                                            Tag="{x:Bind}"
+                                            ToolTipService.ToolTip="{local:T En='Pause', Es='Pausar'}"
+                                            Visibility="{x:Bind local:BindHelpers.VisibleIf(IsRunning), Mode=OneWay}">
+                                            <FontIcon FontSize="10" Glyph="&#xE769;" />
+                                        </Button>
+                                        <Button
+                                            Click="Resume_Click"
+                                            Style="{StaticResource BeautyTabCloseButton}"
+                                            Tag="{x:Bind}"
+                                            ToolTipService.ToolTip="{local:T En='Resume', Es='Continuar'}"
+                                            Visibility="{x:Bind local:BindHelpers.VisibleIf(IsHeld), Mode=OneWay}">
+                                            <FontIcon FontSize="10" Glyph="&#xE768;" />
+                                        </Button>
+                                        <Button
+                                            Click="Cancel_Click"
+                                            Style="{StaticResource BeautyTabCloseButton}"
+                                            Tag="{x:Bind}"
+                                            ToolTipService.ToolTip="{local:T En='Cancel', Es='Cancelar'}"
+                                            Visibility="{x:Bind local:BindHelpers.VisibleIf(IsInProgress), Mode=OneWay}">
+                                            <FontIcon FontSize="9" Glyph="&#xE711;" />
+                                        </Button>
+                                        <Button
+                                            Click="Retry_Click"
+                                            Style="{StaticResource BeautyTabCloseButton}"
+                                            Tag="{x:Bind}"
+                                            ToolTipService.ToolTip="{local:T En='Try again', Es='Reintentar'}"
+                                            Visibility="{x:Bind local:BindHelpers.VisibleIf(CanRetry), Mode=OneWay}">
+                                            <FontIcon FontSize="11" Glyph="&#xE72C;" />
+                                        </Button>
+                                    </StackPanel>
                                     <Border
                                         Width="32"
                                         Height="32"
@@ -99,6 +139,7 @@
                                         <ProgressBar
                                             Margin="0,4,0,0"
                                             IsIndeterminate="{x:Bind IsIndeterminate, Mode=OneWay}"
+                                            ShowPaused="{x:Bind IsPaused, Mode=OneWay}"
                                             Visibility="{x:Bind local:BindHelpers.VisibleIf(IsInProgress), Mode=OneWay}"
                                             Value="{x:Bind Progress, Mode=OneWay}" />
                                     </StackPanel>

@@ -15,6 +15,8 @@ public sealed class DownloadEntry : INotifyPropertyChanged
     private long _receivedBytes;
     private bool _isComplete;
     private bool _isCancelled;
+    private bool _isPaused;
+    private bool _isFailed;
 
     public int Id { get; set; }
     public string Url { get; set; } = "";
@@ -30,25 +32,41 @@ public sealed class DownloadEntry : INotifyPropertyChanged
     public bool IsComplete { get => _isComplete; set => Set(ref _isComplete, value); }
     public bool IsCancelled { get => _isCancelled; set => Set(ref _isCancelled, value); }
 
+    /// <summary>Paused by the user; it continues where it was.</summary>
+    [JsonIgnore] public bool IsPaused { get => _isPaused; set => Set(ref _isPaused, value); }
+
+    /// <summary>It ended on its own (network or disk error) instead of being canceled.</summary>
+    [JsonIgnore] public bool IsFailed { get => _isFailed; set => Set(ref _isFailed, value); }
+
+    /// <summary>The tab downloading it, which is the one that can cancel or pause it.</summary>
+    [JsonIgnore] internal BrowserTab? Tab { get; init; }
+
     /// <summary>The icon Windows uses for this file type; null (and <see cref="IconGlyph"/> shown) if the shell has none.</summary>
     [JsonIgnore] public Microsoft.UI.Xaml.Media.ImageSource? Icon => FileIcons.For(FileName);
     [JsonIgnore] public string IconGlyph => FileIcons.GlyphFor(FileName);
 
     [JsonIgnore] public bool IsInProgress => !IsComplete && !IsCancelled;
+
+    /// <summary>Canceled or failed, and there is an address to ask for it again.</summary>
+    [JsonIgnore] public bool CanRetry => IsCancelled && Url.StartsWith("http", StringComparison.OrdinalIgnoreCase);
+    [JsonIgnore] public bool IsRunning => IsInProgress && !IsPaused;
+    [JsonIgnore] public bool IsHeld => IsInProgress && IsPaused;
     [JsonIgnore] public double Progress => TotalBytes > 0 ? 100.0 * ReceivedBytes / TotalBytes : 0;
     [JsonIgnore] public bool IsIndeterminate => IsInProgress && TotalBytes <= 0;
 
-    /// <summary>"7.6 MB — github.com", "3.1 of 7.6 MB — github.com" or "Canceled".</summary>
+    /// <summary>"7.6 MB — github.com", "3.1 of 7.6 MB — github.com", "Paused — 3.1 of 7.6 MB — github.com" or "Canceled".</summary>
     [JsonIgnore]
     public string Detail
     {
         get
         {
             var host = Uri.TryCreate(Url, UriKind.Absolute, out var uri) ? HostName.WithoutWww(uri.Host) : "";
-            var size = IsCancelled ? L.T("Canceled", "Cancelada")
+            var size = IsFailed ? L.T("Failed", "Falló")
+                : IsCancelled ? L.T("Canceled", "Cancelada")
                 : IsComplete ? FormatSize(Math.Max(TotalBytes, ReceivedBytes))
                 : TotalBytes > 0 ? L.T($"{FormatSize(ReceivedBytes)} of {FormatSize(TotalBytes)}", $"{FormatSize(ReceivedBytes)} de {FormatSize(TotalBytes)}")
                 : FormatSize(ReceivedBytes);
+            if (IsHeld) size = L.T("Paused", "En pausa") + " — " + size;
             return string.IsNullOrEmpty(host) ? size : $"{size} — {host}";
         }
     }
@@ -60,7 +78,9 @@ public sealed class DownloadEntry : INotifyPropertyChanged
         TotalBytes = download.TotalBytes;
         ReceivedBytes = download.ReceivedBytes;
         IsComplete = download.IsComplete;
+        IsFailed = download.IsFailed;
         IsCancelled = download.IsCancelled;
+        if (!IsInProgress) IsPaused = false;
     }
 
     private static string FormatSize(long bytes) => bytes switch
@@ -77,7 +97,7 @@ public sealed class DownloadEntry : INotifyPropertyChanged
         field = value;
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
         // Derived properties change with any of the state properties.
-        foreach (var derived in new[] { nameof(IsInProgress), nameof(Progress), nameof(IsIndeterminate), nameof(Detail) })
+        foreach (var derived in new[] { nameof(IsInProgress), nameof(Progress), nameof(IsIndeterminate), nameof(Detail), nameof(CanRetry), nameof(IsRunning), nameof(IsHeld) })
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(derived));
     }
 }
@@ -100,8 +120,9 @@ public sealed class DownloadsService
     /// <summary>Newest first.</summary>
     public ObservableCollection<DownloadEntry> Items { get; } = [];
 
-    public DownloadEntry Start(BrowserDownload download, bool isPrivate = false)
+    public DownloadEntry Start(BrowserDownload download, BrowserTab? tab = null)
     {
+        var isPrivate = tab?.IsPrivate == true;
         var entry = new DownloadEntry
         {
             Id = download.Id,
@@ -110,6 +131,7 @@ public sealed class DownloadsService
             FullPath = download.FullPath,
             Started = DateTime.Now,
             IsPrivate = isPrivate,
+            Tab = tab,
         };
         entry.Apply(download);
 
@@ -129,6 +151,35 @@ public sealed class DownloadsService
             Save();
         }
     }
+
+    /// <summary>Stops a running download; Chromium deletes what it had so far.</summary>
+    public void Cancel(DownloadEntry entry)
+    {
+        if (entry.IsInProgress) entry.Tab?.CancelDownload(entry.Id);
+    }
+
+    public void Pause(DownloadEntry entry)
+    {
+        if (!entry.IsRunning || entry.Tab is not { } tab) return;
+        if (tab.PauseDownload(entry.Id)) entry.IsPaused = true;
+    }
+
+    public void Resume(DownloadEntry entry)
+    {
+        if (!entry.IsHeld || entry.Tab is not { } tab) return;
+        if (tab.ResumeDownload(entry.Id)) entry.IsPaused = false;
+    }
+
+    /// <summary>Asks again for a download that was canceled or failed: it leaves the list and a new one starts from zero.</summary>
+    public void Retry(DownloadEntry entry)
+    {
+        if (!entry.CanRetry) return;
+        Items.Remove(entry);
+        RetryRequested?.Invoke(this, entry);
+    }
+
+    /// <summary>A download has to be started again (the shell picks the tab that asks for it).</summary>
+    public event EventHandler<DownloadEntry>? RetryRequested;
 
     /// <summary>The private space closed: its downloads leave the list (the files stay on disk).</summary>
     public void RemovePrivate()

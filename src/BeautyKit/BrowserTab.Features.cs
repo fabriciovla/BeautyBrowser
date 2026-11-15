@@ -6,7 +6,9 @@ namespace BeautyKit;
 
 public sealed record BrowserDownload(
     int Id, string Url, string FileName, string FullPath,
-    long TotalBytes, long ReceivedBytes, bool IsComplete, bool IsCancelled);
+    long TotalBytes, long ReceivedBytes, bool IsComplete, bool IsCancelled,
+    // Over because of a network or disk error rather than because someone canceled it.
+    bool IsFailed = false);
 
 public sealed partial class BrowserTab
 {
@@ -84,12 +86,21 @@ public sealed partial class BrowserTab
 
     internal void ViewSource() => NewTabRequested?.Invoke(this, "view-source:" + Url);
     /// <summary>Downloads <paramref name="url"/>. With <paramref name="askWhere"/> the Save As dialog shows even if the setting is off.</summary>
-    internal void Download(string url, bool askWhere = false)
+    public void Download(string url, bool askWhere = false)
     {
         if (Host() is not { } host) return;
         if (askWhere) Interlocked.Increment(ref _askNext);
         host.StartDownload(url);
     }
+
+    /// <summary>Cancels a download of this tab that is still running (its id comes in <see cref="BrowserDownload"/>).</summary>
+    /// <returns>False when there was nothing to act on (the download is over, or has not reported progress yet).</returns>
+    public bool CancelDownload(int id) => _downloads.Control(id, control => control.Cancel());
+
+    /// <summary>Pauses a running download; <see cref="ResumeDownload"/> continues it where it was.</summary>
+    public bool PauseDownload(int id) => _downloads.Control(id, control => control.Pause());
+
+    public bool ResumeDownload(int id) => _downloads.Control(id, control => control.Resume());
 
     // Downloads started from a "Save … as" entry that still have to show the Save As dialog.
     private int _askNext;
@@ -263,10 +274,30 @@ public sealed partial class BrowserTab
         // until they are done (see BrowserTab.Dispose).
         private readonly System.Collections.Concurrent.ConcurrentDictionary<int, bool> _active = [];
 
+        // The handle Chromium gives with each progress report, to cancel, pause or resume that download later.
+        private readonly System.Collections.Concurrent.ConcurrentDictionary<int, IDownloadItemCallback> _controls = [];
+
         public bool HasActive => !_active.IsEmpty;
+
+        /// <summary>Acts on a running download; nothing happens if it is over or has not reported progress yet.</summary>
+        public bool Control(int id, Action<IDownloadItemCallback> action)
+        {
+            // A handle is spent once used: the next progress report (pausing and resuming send one) brings another.
+            if (!_controls.TryGetValue(id, out var control) || control.IsDisposed) return false;
+            try
+            {
+                action(control);
+                return true;
+            }
+            catch
+            {
+                return false; // the download or its browser went away meanwhile
+            }
+        }
 
         private void Finished(int id)
         {
+            if (_controls.TryRemove(id, out var control) && !control.IsDisposed) control.Dispose();
             if (_active.TryRemove(id, out _) && _active.IsEmpty) tab.OnDownloadsFinished();
         }
 
@@ -321,6 +352,12 @@ public sealed partial class BrowserTab
             }
             var info = ToInfo(downloadItem, path);
             var finished = info.IsComplete || info.IsCancelled;
+            if (!finished)
+            {
+                IDownloadItemCallback? previous = null;
+                _controls.AddOrUpdate(downloadItem.Id, callback, (_, old) => { previous = old; return callback; });
+                if (previous is not null && !ReferenceEquals(previous, callback) && !previous.IsDisposed) previous.Dispose();
+            }
             if (finished)
             {
                 _paths.TryRemove(downloadItem.Id, out _);
@@ -333,7 +370,8 @@ public sealed partial class BrowserTab
         private static BrowserDownload ToInfo(DownloadItem item, string path) => new(
             item.Id, item.Url ?? "", Path.GetFileName(path), path,
             // An interrupted download (network or disk error) is over too: Chromium does not resume it by itself.
-            item.TotalBytes, item.ReceivedBytes, item.IsComplete, item.IsCancelled || item.IsInterrupted);
+            item.TotalBytes, item.ReceivedBytes, item.IsComplete, item.IsCancelled || item.IsInterrupted,
+            IsFailed: item.IsInterrupted && !item.IsCancelled);
 
         // Paths handed out to downloads still in progress, across all tabs: the file may not exist on disk yet.
         private static readonly HashSet<string> Reserved = new(StringComparer.OrdinalIgnoreCase);

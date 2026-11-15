@@ -54,6 +54,16 @@ public sealed class BrowserShell
         };
         CurrentSpaceChanged += (_, _) => ScheduleSessionSave();
         SpaceRenamed += (_, _) => ScheduleSessionSave();
+        // A download asked for again: from the tab that had it if it is still open, else from one of the same kind
+        // (a private download never goes out through the normal session, nor the other way around).
+        Downloads.RetryRequested += (_, entry) =>
+        {
+            var open = Spaces.SelectMany(s => s.Tabs).Concat(_favoriteTabs.Values).ToList();
+            var tab = entry.Tab is { } own && open.Contains(own) ? own
+                : CurrentTab is { } current && current.IsPrivate == entry.IsPrivate ? current
+                : open.FirstOrDefault(t => t.IsPrivate == entry.IsPrivate);
+            tab?.Download(entry.Url);
+        };
 
         // Tabs nobody uses are archived: looked at every few minutes, and a little after the app starts.
         _archiveTimer = ui.CreateTimer();
@@ -905,7 +915,7 @@ public sealed class BrowserShell
             else NewTabFrom(tab, url);
         };
         tab.FullscreenChanged += (_, fullscreen) => { if (tab == CurrentTab) FullscreenChanged?.Invoke(this, fullscreen); };
-        tab.DownloadStarted += (_, download) => DownloadStarted?.Invoke(this, Downloads.Start(download, tab.IsPrivate));
+        tab.DownloadStarted += (_, download) => DownloadStarted?.Invoke(this, Downloads.Start(download, tab));
         tab.DownloadUpdated += (_, download) => Downloads.Update(download);
         tab.CrashChanged += (_, crashed) => TabCrashChanged?.Invoke(this, (tab, crashed));
         tab.PopupBlocked += (_, blocked) => PopupBlocked?.Invoke(this, (tab, blocked.Origin, blocked.Url));
