@@ -152,6 +152,9 @@ public sealed partial class MainWindow : Window
             // With tabs on top the cursor may already be back in the address bar (Ctrl+T while the list was closing).
             if (!(TabsOnTop && TopBar.AddressHasFocus)) WebView.Focus(FocusState.Programmatic);
         };
+        // Tabs on top: Enter, Esc or a picked result in the address bar hand the focus to the page right away. Left in
+        // the bar, it kept showing what was typed and no longer searched until it lost the focus some other way.
+        Palette.Dismissed += (_, _) => WebView.Focus(FocusState.Programmatic);
         DevToolsSplitter.Dragged += (_, dx) => ResizeDevTools(_devToolsWidth - dx);
 
         _shell.CurrentTabChanged += (_, _) =>
@@ -288,7 +291,17 @@ public sealed partial class MainWindow : Window
         _showLoadBar = s.ShowLoadBar;
         Controls.NoiseLayer.Configure(s.GlassTexture, s.GlassGrain / 100.0, s.GlassSoftness / 100.0);
         AppTheme.Apply(s.ThemeKey);
+        ApplyAccentShades();
         ApplyPrivateLook();
+    }
+
+    /// <summary>The floating downloads button is the accent color: under the mouse and pressed, a darker shade of it.</summary>
+    private void ApplyAccentShades()
+    {
+        if (Application.Current.Resources["BeautyAccentBrush"] is not SolidColorBrush accent) return;
+        var black = Windows.UI.Color.FromArgb(255, 0, 0, 0);
+        if (FloatingLibrary.Resources["ButtonBackgroundPointerOver"] is SolidColorBrush hover) hover.Color = AppTheme.Mix(accent.Color, black, 0.10);
+        if (FloatingLibrary.Resources["ButtonBackgroundPressed"] is SolidColorBrush pressed) pressed.Color = AppTheme.Mix(accent.Color, black, 0.20);
     }
 
     /// <summary>
@@ -1409,11 +1422,6 @@ public sealed partial class MainWindow : Window
     private bool CloseWithEscape()
     {
         if (CancelCapture()) return true;
-        if (_userFullscreen)
-        {
-            SetWindowFullscreen(false);
-            return true;
-        }
         if (PeekOpen)
         {
             ClosePeek();
@@ -1427,6 +1435,12 @@ public sealed partial class MainWindow : Window
         if (FindBar.Visibility == Visibility.Visible)
         {
             CloseFindBar();
+            return true;
+        }
+        // Leaving F11 comes after whatever was opened over the page in it (Peek, the tab switcher, find).
+        if (_userFullscreen)
+        {
+            SetWindowFullscreen(false);
             return true;
         }
         if (!_libraryShown) return false; // without the library open, Esc reaches the page
@@ -1451,6 +1465,12 @@ public sealed partial class MainWindow : Window
         if (_fullscreen && !_userFullscreen) _shell.CurrentTab?.ExitFullscreen();
         else SetWindowFullscreen(!_userFullscreen);
     }
+
+    /// <summary>
+    /// The find bar and the tab switcher need the window around the page, which full screen hides. With F11 they still
+    /// work (the window is just bigger); a page in HTML full screen (a video) has the whole screen.
+    /// </summary>
+    private bool OverlaysAllowed => !_fullscreen || (_userFullscreen && _shell.CurrentTab is not { IsFullscreen: true });
 
     private void SetWindowFullscreen(bool fullscreen)
     {
@@ -1498,7 +1518,7 @@ public sealed partial class MainWindow : Window
 
     private void StepSwitcher(int delta)
     {
-        if (_fullscreen || Palette.IsOpen) return;
+        if (!OverlaysAllowed || Palette.IsOpen) return;
         if (!Switcher.IsOpen) HidePreview();
         if (!Switcher.Step(delta)) return;
 
@@ -1874,7 +1894,7 @@ public sealed partial class MainWindow : Window
 
     private void OpenFindBar()
     {
-        if (_shell.CurrentTab is not { } tab || _fullscreen) return;
+        if (_shell.CurrentTab is not { } tab || !OverlaysAllowed) return;
         WatchFind(tab);
         FindBar.Visibility = Visibility.Visible;
         FindBox.Focus(FocusState.Programmatic);

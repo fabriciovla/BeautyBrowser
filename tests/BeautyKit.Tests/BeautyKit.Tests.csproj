@@ -9,6 +9,7 @@
     <!-- Only the pure logic is compiled in: BeautyKit itself needs CEF and WinUI. -->
     <Compile Include="..\..\src\BeautyKit\AddressInput.cs" Link="AddressInput.cs" />
     <Compile Include="..\..\src\BeautyKit\Blocking\PublicSuffix.cs" Link="PublicSuffix.cs" />
+    <Compile Include="..\..\src\BeautyKit\AddressDisplay.cs" Link="AddressDisplay.cs" />
     <Compile Include="..\..\src\BeautyKit\SearchSuggestions.cs" Link="SearchSuggestions.cs" />
   </ItemGroup>
   <ItemGroup>

@@ -104,6 +104,7 @@ public sealed partial class CommandPalette : UserControl
     public void OpenAttached(BrowserShell shell, PaletteMode mode, TextBox input, Rect anchor)
     {
         Detach();
+        _closing = false;
         _shell = shell;
         _mode = mode;
         _suggestions = [];
@@ -144,9 +145,18 @@ public sealed partial class CommandPalette : UserControl
 
     public event EventHandler? Closed;
 
+    /// <summary>
+    /// Attached to the address bar, the user is done with it (Enter, Esc or a result picked): the page takes the focus
+    /// back, so the bar shows the address again and the next click or Ctrl+L starts a fresh search.
+    /// </summary>
+    public event EventHandler? Dismissed;
+
+    private bool _closing; // fading out: a second Close (the address bar losing the focus) must not restart it
+
     public void Open(BrowserShell shell, PaletteMode mode, string initialText = "")
     {
         Detach();
+        _closing = false;
         _shell = shell;
         _mode = mode;
         _suggestions = [];
@@ -169,7 +179,8 @@ public sealed partial class CommandPalette : UserControl
 
     public void Close()
     {
-        if (!IsOpen) return;
+        if (!IsOpen || _closing) return;
+        _closing = true;
         if (_external is { } input)
         {
             // The address bar gets its text back right away; that must not search again while the list fades.
@@ -182,10 +193,19 @@ public sealed partial class CommandPalette : UserControl
             CardScale.ScaleX = CardScale.ScaleY = Motion.Lerp(1, 0.98, t);
         }, completed: () =>
         {
+            _closing = false;
             Visibility = Visibility.Collapsed;
             Detach();
             Closed?.Invoke(this, EventArgs.Empty);
         });
+    }
+
+    /// <summary>The user finished with the palette: it closes and, attached to the address bar, lets go of it.</summary>
+    private void Finish()
+    {
+        var attached = _external is not null;
+        Close();
+        if (attached) Dismissed?.Invoke(this, EventArgs.Empty);
     }
 
 
@@ -343,7 +363,7 @@ public sealed partial class CommandPalette : UserControl
         else if (query.Length > 0) _shell.Open(query, inNewTab: _mode == PaletteMode.NewTab);
         else return;
 
-        Close();
+        Finish();
     }
 
 
@@ -386,13 +406,13 @@ public sealed partial class CommandPalette : UserControl
                 break;
             case VirtualKey.Enter when CtrlDown() && CompleteDotCom(Input.Text) is { } completed:
                 _shell?.Open(completed, inNewTab: _mode == PaletteMode.NewTab);
-                Close();
+                Finish();
                 break;
             case VirtualKey.Enter:
                 Execute(Results.SelectedItem as PaletteResult);
                 break;
             case VirtualKey.Escape:
-                Close();
+                Finish();
                 break;
             // Tab completes the box with the highlighted result ("you" → "youtube.com"), to keep typing after it.
             case VirtualKey.Tab when Completion(Results.SelectedItem as PaletteResult) is { } completion
