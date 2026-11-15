@@ -5,6 +5,7 @@ using BeautyKit;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
+using Microsoft.UI.Xaml.Media;
 
 namespace BeautyBrowser.Controls;
 
@@ -44,10 +45,14 @@ public sealed partial class HistoryPanel : UserControl
 
     public event EventHandler<string>? UrlSelected;
 
+    /// <summary>Ctrl+click or middle click: the visit opens in a tab behind the current one.</summary>
+    public event EventHandler<string>? UrlOpenedInBackground;
+
     public HistoryPanel()
     {
         InitializeComponent();
         Rows.ItemsSource = _rows;
+        Rows.AddHandler(PointerReleasedEvent, new PointerEventHandler(Rows_PointerReleased), true);
         UpdateRangeChips();
     }
 
@@ -182,7 +187,24 @@ public sealed partial class HistoryPanel : UserControl
 
     private void Entry_Click(object sender, RoutedEventArgs e)
     {
-        if ((sender as FrameworkElement)?.Tag is HistoryEntry entry) UrlSelected?.Invoke(this, entry.Url);
+        if ((sender as FrameworkElement)?.Tag is not HistoryEntry entry) return;
+        var ctrl = Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(Windows.System.VirtualKey.Control)
+            .HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down);
+        if (ctrl) UrlOpenedInBackground?.Invoke(this, entry.Url);
+        else UrlSelected?.Invoke(this, entry.Url);
+    }
+
+    // A Button never raises Click for the middle button, and it marks its pointer events handled: listen to those too.
+    private void Rows_PointerReleased(object sender, PointerRoutedEventArgs e)
+    {
+        if (e.GetCurrentPoint(Rows).Properties.PointerUpdateKind != Microsoft.UI.Input.PointerUpdateKind.MiddleButtonReleased) return;
+        for (var element = e.OriginalSource as DependencyObject; element is not null && element != Rows; element = VisualTreeHelper.GetParent(element))
+        {
+            if (element is not FrameworkElement { Tag: HistoryEntry entry }) continue;
+            UrlOpenedInBackground?.Invoke(this, entry.Url);
+            e.Handled = true;
+            return;
+        }
     }
 
     private void DeleteItem_Click(object sender, RoutedEventArgs e)

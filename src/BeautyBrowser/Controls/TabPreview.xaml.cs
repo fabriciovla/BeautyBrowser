@@ -59,7 +59,7 @@ public sealed partial class TabPreview : UserControl
     {
         if (Tab is null) return;
         var package = new DataPackage();
-        package.SetText(Tab.Url);
+        package.SetText(ReaderMode.PageUrl(Tab.Url));
         Clipboard.SetContent(package);
         CopyIcon.Glyph = ""; // a check mark for a moment
         await Task.Delay(1200);

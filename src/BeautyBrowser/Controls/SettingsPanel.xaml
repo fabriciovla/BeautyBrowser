@@ -121,7 +121,10 @@
                                     <StackPanel Spacing="10">
                                         <TextBlock Style="{StaticResource SettingsGroupTitle}" Text="{app:T En='Search engine', Es='Buscador'}" />
                                         <Border Style="{StaticResource SettingsBox}">
-                                            <StackPanel x:Name="EngineRows" />
+                                            <StackPanel>
+                                                <StackPanel x:Name="EngineRows" />
+                                                <StackPanel x:Name="SuggestionToggles" />
+                                            </StackPanel>
                                         </Border>
                                     </StackPanel>
                                     <StackPanel Spacing="10">

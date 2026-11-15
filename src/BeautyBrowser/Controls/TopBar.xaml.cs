@@ -27,6 +27,7 @@ public sealed partial class TopBar : UserControl
     private const double MaxTabWidth = 220;
     private const double MinTabWidth = 28;
     private const double CompactBelow = 84;   // narrower than this, a tab shows its icon only
+    private const double KeepCloseFrom = 56;  // ...except the current one, which keeps its X while it is this wide
     private const double FreeDragWidth = 40;  // always left free before the window buttons, to drag the window by
     private const double PinnedTabWidth = 40;
     private const double TabGap = 2;
@@ -50,6 +51,7 @@ public sealed partial class TopBar : UserControl
         Strip.SizeChanged += (_, _) => Layout(animate: false);
         // Too many tabs never spill over the + and the window buttons: what does not fit is cut.
         TabsViewport.SizeChanged += (_, e) => TabsViewport.Clip = new RectangleGeometry { Rect = new Rect(0, 0, e.NewSize.Width, e.NewSize.Height) };
+        TabsViewport.PointerWheelChanged += TabsViewport_PointerWheelChanged;
     }
 
     public event EventHandler<PaletteMode>? PaletteRequested;
@@ -253,6 +255,7 @@ public sealed partial class TopBar : UserControl
         TabsViewport.MaxWidth = viewport;
         var available = Strip.ActualWidth - reserved - pinned * (PinnedTabWidth + TabGap);
         var tabWidth = regular == 0 ? MaxTabWidth : Math.Clamp(available / regular - TabGap, MinTabWidth, MaxTabWidth);
+        _tabWidth = tabWidth;
         foreach (var item in _items.Values) SetCompact(item, tabWidth < CompactBelow);
 
         var plan = Tabs.Children.OfType<Grid>().Select(item =>
@@ -288,31 +291,53 @@ public sealed partial class TopBar : UserControl
     }
 
     private double _scroll; // how far the tabs are slid left inside their window
+    private double _scrollMax; // the most it can slide: what does not fit
+    private BrowserTab? _scrolledFor; // the current tab and window width the strip last slid for
+    private double _scrolledViewport = -1;
 
     /// <summary>
     /// When the tabs are wider than the window they run in, they slide so the current one is whole in view (and not
-    /// further than the last one's edge).
+    /// further than the last one's edge). That only happens when the current tab or the window's width changes: in
+    /// between, the wheel's scroll stays where the user left it.
     /// </summary>
     private void KeepCurrentInView(List<(Grid Item, double Width)> plan, double viewport)
     {
         var total = plan.Sum(step => step.Width) + Math.Max(0, plan.Count - 1) * TabGap;
-        if (total <= viewport) _scroll = 0;
+        _scrollMax = Math.Max(0, total - viewport);
+        if (_scrollMax == 0) _scroll = 0;
         else
         {
-            var x = 0.0;
-            foreach (var (item, width) in plan)
+            var current = _shell?.CurrentTab;
+            if (current != _scrolledFor || Math.Abs(viewport - _scrolledViewport) > 0.5)
             {
-                if (IsCurrent(item))
+                var x = 0.0;
+                foreach (var (item, width) in plan)
                 {
-                    if (x + width > _scroll + viewport) _scroll = x + width - viewport;
-                    if (x < _scroll) _scroll = x;
-                    break;
+                    if (IsCurrent(item))
+                    {
+                        if (x + width > _scroll + viewport) _scroll = x + width - viewport;
+                        if (x < _scroll) _scroll = x;
+                        break;
+                    }
+                    x += width + TabGap;
                 }
-                x += width + TabGap;
             }
-            _scroll = Math.Clamp(_scroll, 0, total - viewport);
+            _scroll = Math.Clamp(_scroll, 0, _scrollMax);
         }
+        _scrolledFor = _shell?.CurrentTab;
+        _scrolledViewport = viewport;
         Tabs.Margin = new Thickness(-_scroll, 0, 0, 0);
+    }
+
+    // The wheel over the strip slides the tabs sideways when they do not all fit.
+    private void TabsViewport_PointerWheelChanged(object sender, PointerRoutedEventArgs e)
+    {
+        if (_scrollMax <= 0) return;
+        var delta = e.GetCurrentPoint(TabsViewport).Properties.MouseWheelDelta;
+        if (delta == 0) return;
+        _scroll = Math.Clamp(_scroll - delta, 0, _scrollMax);
+        Tabs.Margin = new Thickness(-_scroll, 0, 0, 0);
+        e.Handled = true;
     }
 
     /// <summary>Narrow tabs (many open) show only the icon, centered; the close button waits for a wider tab.</summary>
@@ -342,6 +367,7 @@ public sealed partial class TopBar : UserControl
     }
 
     private readonly HashSet<Grid> _compact = [];
+    private double _tabWidth = MaxTabWidth;
 
     private void UpdateAudio(Grid item, BrowserTab tab)
     {
@@ -357,12 +383,24 @@ public sealed partial class TopBar : UserControl
     {
         if (item.Tag is not BrowserTab tab) return;
         if (compact) _compact.Add(item); else _compact.Remove(item);
+        ApplyCompact(item, tab);
+    }
+
+    /// <summary>
+    /// A compact tab shows its icon only, except the current one: it keeps its X (icon on the left, X on the right) while
+    /// it is wide enough, so the tab you are on can always be closed.
+    /// </summary>
+    private void ApplyCompact(Grid item, BrowserTab tab)
+    {
+        var compact = _compact.Contains(item);
+        var keepClose = compact && IsCurrent(item) && _tabWidth >= KeepCloseFrom;
+        var iconOnly = compact && !keepClose;
         var content = ContentOf(item);
-        content.ColumnSpacing = compact ? 0 : 8;
-        content.HorizontalAlignment = compact ? HorizontalAlignment.Center : HorizontalAlignment.Stretch;
-        CardOf(item).Padding = compact ? new Thickness(0) : new Thickness(10, 0, 4, 0);
+        content.ColumnSpacing = iconOnly ? 0 : 8;
+        content.HorizontalAlignment = iconOnly ? HorizontalAlignment.Center : HorizontalAlignment.Stretch;
+        CardOf(item).Padding = iconOnly ? new Thickness(0) : keepClose ? new Thickness(8, 0, 2, 0) : new Thickness(10, 0, 4, 0);
         content.Children[1].Visibility = compact ? Visibility.Collapsed : Visibility.Visible;
-        content.Children[^1].Visibility = compact ? Visibility.Collapsed : Visibility.Visible;
+        content.Children[^1].Visibility = iconOnly ? Visibility.Collapsed : Visibility.Visible;
         UpdateAudio(item, tab);
     }
 
@@ -409,7 +447,11 @@ public sealed partial class TopBar : UserControl
             : hovered ? Res("BeautySubtleFillBrush")
             : Res("BeautyTransparentBrush");
         card.BorderBrush = current ? Res("BeautyFillLowBrush") : Res("BeautyTransparentBrush");
-        if (item.Tag is BrowserTab && ContentOf(item).Children[^1] is Button close) close.Opacity = current || hovered ? 1 : 0;
+        if (item.Tag is BrowserTab tab && ContentOf(item).Children[^1] is Button close)
+        {
+            close.Opacity = current || hovered ? 1 : 0;
+            if (_compact.Contains(item)) ApplyCompact(item, tab); // the current compact tab keeps its X
+        }
     }
 
     private Grid NewItem(object key, double padLeft)
@@ -679,7 +721,7 @@ public sealed partial class TopBar : UserControl
         Add(L.T("Copy link", "Copiar enlace"), () =>
         {
             var package = new DataPackage();
-            package.SetText(tab.Url);
+            package.SetText(ReaderMode.PageUrl(tab.Url));
             Clipboard.SetContent(package);
         });
         Add(L.T("Reload", "Volver a cargar"), () => tab.Reload());
@@ -832,9 +874,10 @@ public sealed partial class TopBar : UserControl
         RefreshReader();
         if (_editing) return; // the user is typing: the box is theirs
         var url = ReaderMode.PageUrl(tab?.Url);
-        AddressBox.Text = StartPage.Is(url) ? "" : Sidebar.ShortUrl(url);
-        UrlSearchIcon.Visibility = StartPage.Is(url) ? Visibility.Visible : Visibility.Collapsed;
         var scheme = Uri.TryCreate(url, UriKind.Absolute, out var uri) ? uri.Scheme : "";
+        // Domain and path, without scheme or www ("youtube.com/watch?v=..."); the sidebar keeps just the domain.
+        AddressBox.Text = StartPage.Is(url) ? "" : scheme is "http" or "https" ? AddressDisplay.ToShort(url) : Sidebar.ShortUrl(url);
+        UrlSearchIcon.Visibility = StartPage.Is(url) ? Visibility.Visible : Visibility.Collapsed;
         UrlInsecureIcon.Visibility = scheme == "http" ? Visibility.Visible : Visibility.Collapsed;
         UrlSecureIcon.Visibility = scheme == "https" ? Visibility.Visible : Visibility.Collapsed;
     }

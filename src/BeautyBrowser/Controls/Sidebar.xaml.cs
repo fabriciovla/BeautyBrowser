@@ -201,10 +201,20 @@ public sealed partial class Sidebar : UserControl
             : Visibility.Collapsed;
     }
 
+    // The wheel scrolls the row of spaces sideways.
+    private void SpaceScroll_PointerWheelChanged(object sender, PointerRoutedEventArgs e)
+    {
+        var delta = e.GetCurrentPoint(SpaceScroll).Properties.MouseWheelDelta;
+        if (delta == 0 || SpaceScroll.ScrollableWidth <= 0) return;
+        SpaceScroll.ChangeView(Math.Clamp(SpaceScroll.HorizontalOffset - delta, 0, SpaceScroll.ScrollableWidth), null, null, true);
+        e.Handled = true;
+    }
+
     private void RefreshDots()
     {
         if (_shell is null) return;
         SpaceDots.Children.Clear();
+        Button? currentDot = null;
         foreach (var space in _shell.Spaces)
         {
             // Every space with its icon: the current one on a white card, the rest dimmed.
@@ -223,6 +233,14 @@ public sealed partial class Sidebar : UserControl
             ToolTipService.SetToolTip(dot, space.Name);
             dot.Click += (_, _) => _shell.SwitchSpace(space);
             SpaceDots.Children.Add(dot);
+            if (current) currentDot = dot;
+        }
+        // With many spaces the current one may be off to the side: bring it into view.
+        if (currentDot is not null)
+        {
+            var target = currentDot;
+            SpaceScroll.UpdateLayout();
+            target.StartBringIntoView(new BringIntoViewOptions { AnimationDesired = false });
         }
     }
 
@@ -708,6 +726,11 @@ public sealed partial class Sidebar : UserControl
         if (TabList.SelectedItem is BrowserTab tab) _shell.SelectTab(tab);
     }
 
+    private void TabSpeaker_Click(object sender, RoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.DataContext is BrowserTab tab) tab.SetAudioMuted(!tab.IsAudioMuted);
+    }
+
     private void CloseTab_Click(object sender, RoutedEventArgs e)
     {
         if ((sender as FrameworkElement)?.DataContext is BrowserTab tab) _shell?.CloseTab(tab);
@@ -789,11 +812,19 @@ public sealed partial class Sidebar : UserControl
         Add(L.T("Copy link", "Copiar enlace"), () =>
         {
             var package = new DataPackage();
-            package.SetText(tab.Url);
+            package.SetText(ReaderMode.PageUrl(tab.Url));
             Clipboard.SetContent(package);
         });
+        Add(L.T("Reload", "Volver a cargar"), () => tab.Reload());
+        Add(tab.IsAudioMuted ? L.T("Unmute tab", "Activar sonido") : L.T("Mute tab", "Silenciar pestaña"), () => tab.SetAudioMuted(!tab.IsAudioMuted));
         menu.Items.Add(new MenuFlyoutSeparator());
         Add(L.T("Close tab", "Cerrar pestaña"), () => _shell.CloseTab(tab));
+        // The list runs top to bottom: "below" is what comes after this tab.
+        var shown = _shell.CurrentSpace.Tabs.ToList();
+        var others = shown.Where(t => t != tab).ToList();
+        var below = shown.Skip(shown.IndexOf(tab) + 1).ToList();
+        if (others.Count > 0) Add(L.T("Close other tabs", "Cerrar las demás pestañas"), () => others.ForEach(_shell.CloseTab));
+        if (below.Count > 0) Add(L.T("Close tabs below", "Cerrar las pestañas de abajo"), () => below.ForEach(_shell.CloseTab));
 
         ShowMenu(menu, (FrameworkElement)sender, e);
     }
